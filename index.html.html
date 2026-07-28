@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Reyhani Cam & Hırdavat — Canlı QR Stok Paneli</title>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+
+<!-- QR Code Generator & Scanner Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode"></script>
+
+<!-- Firebase CDNs (v8) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<style>
+  :root{
+    --concrete:#EDE8DF;
+    --paper:#FFFFFF;
+    --charcoal:#22262A;
+    --charcoal-soft:#3A3F45;
+    --steel:#6B7178;
+    --steel-line:#D8D2C6;
+    --safety:#F5B700;
+    --rust:#C1440E;
+    --radius:4px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--concrete);color:var(--charcoal);font-family:'Inter',sans-serif;}
+  
+  .app{max-width:900px;margin:0 auto;padding-bottom:60px;}
+
+  header{
+    background:var(--charcoal);color:#F5F3EF;padding:16px 20px;
+    display:flex;justify-content:space-between;align-items:center;
+    position:sticky;top:0;z-index:40;box-shadow:0 4px 12px rgba(0,0,0,0.15);
+  }
+  .brand h1{font-family:'Oswald',sans-serif;font-size:18px;margin:0;letter-spacing:0.5px;text-transform:uppercase;}
+  .brand span{display:block;font-size:11px;color:#B9BEC4;}
+  .status-badge{background:#28a745;color:#fff;font-size:10px;padding:4px 8px;border-radius:12px;font-weight:600;}
+
+  /* NAV TABS */
+  .nav-tabs{display:flex;background:var(--paper);border-bottom:1px solid var(--steel-line);}
+  .tab-btn{
+    flex:1;padding:12px;text-align:center;font-family:'Oswald',sans-serif;
+    font-size:14px;text-transform:uppercase;border:none;background:none;
+    cursor:pointer;color:var(--steel);border-bottom:3px solid transparent;
+  }
+  .tab-btn.active{color:var(--charcoal);border-bottom-color:var(--safety);font-weight:600;}
+
+  main{padding:16px;}
+  .tab-content{display:none;}
+  .tab-content.active{display:block;}
+
+  /* SUMMARY CARDS */
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+  .summary .card{background:var(--paper);border:1px solid var(--steel-line);padding:10px;border-radius:var(--radius);text-align:center;}
+  .summary .num{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:18px;}
+  .summary .lbl{font-size:10px;color:var(--steel);text-transform:uppercase;margin-top:2px;}
+
+  /* FORM */
+  .form-card{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:16px;margin-bottom:16px;}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  label{display:block;font-size:11px;color:var(--steel);margin-bottom:4px;text-transform:uppercase;}
+  input,select{
+    width:100%;padding:10px;border:1px solid var(--steel-line);border-radius:var(--radius);
+    font-family:'Inter';font-size:14px;background:#FCFBF9;
+  }
+  .btn{
+    font-family:'Oswald',sans-serif;text-transform:uppercase;
+    font-size:13px;border:none;padding:12px;border-radius:var(--radius);cursor:pointer;width:100%;
+  }
+  .btn-primary{background:var(--safety);color:var(--charcoal);font-weight:600;}
+  .btn-dark{background:var(--charcoal);color:#fff;}
+
+  /* GRID & CARDS */
+  .search-wrap{margin-bottom:12px;}
+  .grid{display:grid;grid-template-columns:1fr;gap:12px;}
+  @media(min-width:600px){.grid{grid-template-columns:1fr 1fr;}}
+
+  .tag{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:14px;position:relative;}
+  .tag.low{border-color:var(--rust);}
+  .tag-header{display:flex;justify-content:space-between;align-items:flex-start;}
+  .tag-title{font-weight:600;font-size:15px;}
+  .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);}
+  .qr-box{display:flex;justify-content:center;margin:12px 0;padding:8px;background:#fff;border:1px dashed var(--steel-line);}
+  
+  .qty-control{display:flex;align-items:center;justify-content:space-between;margin-top:10px;background:var(--concrete);padding:6px 10px;border-radius:var(--radius);}
+  .qty-btn{width:32px;height:32px;border:1px solid var(--steel-line);background:#fff;font-weight:bold;cursor:pointer;}
+  .qty-val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
+  
+  .tag-actions{display:flex;justify-content:space-between;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--steel-line);}
+  .sm-btn{background:none;border:none;color:var(--steel);font-size:11px;text-decoration:underline;cursor:pointer;}
+
+  /* SCANNER */
+  #reader{width:100%;max-width:500px;margin:0 auto;border:2px dashed var(--steel-line);border-radius:var(--radius);}
+  #scan-result{margin-top:16px;}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--charcoal);color:#fff;padding:10px 20px;border-radius:20px;
+    font-size:12px;z-index:100;display:none;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header>
+    <div class="brand">
+      <h1>Reyhani Cam &amp; Hırdavat</h1>
+      <span>Canlı Bulut &amp; QR Stok Sistemi</span>
+    </div>
+    <div class="status-badge" id="status">CANLI</div>
+  </header>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="switchTab('stok')">Stok Listesi</button>
+    <button class="tab-btn" onclick="switchTab('ekle')">+ Ürün Ekle</button>
+    <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
+  </div>
+
+  <main>
+    <!-- TAB 1: STOK LISTESI -->
+    <div id="tab-stok" class="tab-content active">
+      <div class="summary">
+        <div class="card"><div class="num" id="sum-count">0</div><div class="lbl">Çeşit</div></div>
+        <div class="card"><div class="num" id="sum-units">0</div><div class="lbl">Toplam Adet</div></div>
+        <div class="card"><div class="num" id="sum-value">₺0</div><div class="lbl">Envanter Değeri</div></div>
+      </div>
+
+      <div class="search-wrap">
+        <input type="text" id="search" placeholder="Ürün adı veya QR koda göre ara..." oninput="renderGrid()">
+      </div>
+
+      <div id="grid" class="grid"></div>
+    </div>
+
+    <!-- TAB 2: URUN EKLE -->
+    <div id="tab-ekle" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">Yeni Ürün Ekle</h3>
+        <div class="form-row">
+          <div>
+            <label>Ürün Adı</label>
+            <input type="text" id="f-name" placeholder="Örn: Akfix Silikon 280ml">
+          </div>
+          <div>
+            <label>Adet</label>
+            <input type="number" id="f-qty" placeholder="0">
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Birim Fiyat (₺)</label>
+            <input type="number" id="f-price" step="0.01" placeholder="0.00">
+          </div>
+          <div>
+            <label>Kategori</label>
+            <select id="f-category">
+              <option>Cam & Aksesuar</option>
+              <option>Silikon & Mastik</option>
+              <option>Vida & Civata</option>
+              <option>El Aletleri</option>
+              <option>Elektrik Malzemeleri</option>
+              <option>Diğer</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label>Özel QR Kodu No (Boş bırakırsanız otomatik üretilir)</label>
+          <input type="text" id="f-code" placeholder="Otomatik kod verilsin">
+        </div>
+        <button class="btn btn-primary" onclick="addProduct()">Ürünü Canlı Sisteme Kaydet</button>
+      </div>
+    </div>
+
+    <!-- TAB 3: QR OKUT -->
+    <div id="tab-okut" class="tab-content">
+      <div style="text-align:center;">
+        <p style="font-size:13px;color:var(--steel);">Kamerayı açarak ürün üzerindeki QR kodu okutun:</p>
+        <div id="reader"></div>
+        <div id="scan-result"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // FIREBASE BAGLANTISI
+  const firebaseConfig = {
+    databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.database().ref('products');
+
+  let productsData = {};
+  let html5QrcodeScanner = null;
+
+  // CANLI VERİ DİNLENİYOR
+  db.on('value', (snapshot) => {
+    productsData = snapshot.val() || {};
+    renderGrid();
+  });
+
+  function switchTab(tabName) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    
+    if(tabName === 'stok') {
+      document.querySelectorAll('.tab-btn')[0].classList.add('active');
+      document.getElementById('tab-stok').classList.add('active');
+      stopScanner();
+    } else if(tabName === 'ekle') {
+      document.querySelectorAll('.tab-btn')[1].classList.add('active');
+      document.getElementById('tab-ekle').classList.add('active');
+      stopScanner();
+    } else if(tabName === 'okut') {
+      document.querySelectorAll('.tab-btn')[2].classList.add('active');
+      document.getElementById('tab-okut').classList.add('active');
+      startScanner();
+    }
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2000);
+  }
+
+  function addProduct() {
+    const name = document.getElementById('f-name').value.trim();
+    const qty = parseInt(document.getElementById('f-qty').value) || 0;
+    const price = parseFloat(document.getElementById('f-price').value) || 0;
+    let code = document.getElementById('f-code').value.trim().toUpperCase();
+    const category = document.getElementById('f-category').value;
+
+    if(!name) { alert("Lütfen ürün adını giriniz."); return; }
+    if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
+
+    db.child(code).set({ name, qty, price, category, code }, (error) => {
+      if(!error) {
+        showToast("Ürün eklendi ve canlı sisteme işlendi!");
+        document.getElementById('f-name').value = '';
+        document.getElementById('f-qty').value = '';
+        document.getElementById('f-price').value = '';
+        document.getElementById('f-code').value = '';
+        switchTab('stok');
+      }
+    });
+  }
+
+  function updateQty(code, change) {
+    if(!productsData[code]) return;
+    const newQty = Math.max(0, (productsData[code].qty || 0) + change);
+    db.child(code).update({ qty: newQty });
+  }
+
+  function deleteProduct(code) {
+    if(confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
+      db.child(code).remove();
+      showToast("Ürün silindi.");
+    }
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    const search = (document.getElementById('search').value || '').toLowerCase();
+    grid.innerHTML = '';
+
+    let totalCount = 0;
+    let totalUnits = 0;
+    let totalVal = 0;
+
+    Object.keys(productsData).forEach(code => {
+      const p = productsData[code];
+      if(search && !p.name.toLowerCase().includes(search) && !p.code.toLowerCase().includes(search)) {
+        return;
+      }
+
+      totalCount++;
+      totalUnits += Number(p.qty || 0);
+      totalVal += Number(p.qty || 0) * Number(p.price || 0);
+
+      const card = document.createElement('div');
+      card.className = 'tag' + (p.qty <= 5 ? ' low' : '');
+      card.innerHTML = `
+        <div class="tag-header">
+          <div>
+            <div class="tag-title">${p.name}</div>
+            <div class="tag-code">${p.code} — <small>${p.category}</small></div>
+          </div>
+          <div style="font-family:'IBM Plex Mono';font-weight:600;">₺${Number(p.price).toFixed(2)}</div>
+        </div>
+        
+        <div class="qr-box" id="qr-${p.code}"></div>
+
+        <div class="qty-control">
+          <span>Stok Adedi:</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button class="qty-btn" onclick="updateQty('${p.code}', -1)">-</button>
+            <span class="qty-val">${p.qty}</span>
+            <button class="qty-btn" onclick="updateQty('${p.code}', 1)">+</button>
+          </div>
+        </div>
+
+        <div class="tag-actions">
+          <button class="btn btn-dark" style="padding:6px;font-size:11px;" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
+          <button class="sm-btn" onclick="deleteProduct('${p.code}')">Sil</button>
+        </div>
+      `;
+
+      grid.appendChild(card);
+
+      // QR KODU OLUSTUR
+      setTimeout(() => {
+        const qrContainer = document.getElementById(`qr-${p.code}`);
+        if(qrContainer && qrContainer.innerHTML === "") {
+          new QRCode(qrContainer, {
+            text: p.code,
+            width: 90,
+            height: 90
+          });
+        }
+      }, 50);
+    });
+
+    document.getElementById('sum-count').textContent = totalCount;
+    document.getElementById('sum-units').textContent = totalUnits;
+    document.getElementById('sum-value').textContent = "₺" + totalVal.toFixed(2);
+  }
+
+  // CAMERA SCANNER
+  function startScanner() {
+    if(html5QrcodeScanner) return;
+    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
+    html5QrcodeScanner.render((decodedText) => {
+      const code = decodedText.trim().toUpperCase();
+      const resDiv = document.getElementById('scan-result');
+      
+      if(productsData[code]) {
+        const p = productsData[code];
+        resDiv.innerHTML = `
+          <div class="tag" style="margin-top:10px;text-align:left;">
+            <h3>${p.name}</h3>
+            <p><strong>Barkod:</strong> ${p.code}</p>
+            <p><strong>Mevcut Stok:</strong> ${p.qty} Adet</p>
+            <p><strong>Fiyat:</strong> ₺${p.price}</p>
+            <button class="btn btn-primary" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
+          </div>
+        `;
+      } else {
+        resDiv.innerHTML = `
+          <div style="color:var(--rust);margin-top:10px;">
+            <strong>QR Bulunamadı!</strong> (${code})<br>
+            <button class="btn btn-dark" style="margin-top:8px;" onclick="document.getElementById('f-code').value='${code}'; switchTab('ekle');">Bu Kodu Yeni Ürün Olarak Ekle</button>
+          </div>
+        `;
+      }
+    });
+  }
+
+  function stopScanner() {
+    if(html5QrcodeScanner) {
+      html5QrcodeScanner.clear().catch(()=>{});
+      html5QrcodeScanner = null;
+    }
+  }
+</script>
+</body>
+</html>
