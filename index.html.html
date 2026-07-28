@@ -22,7 +22,6 @@
     --concrete:#EDE8DF;
     --paper:#FFFFFF;
     --charcoal:#22262A;
-    --charcoal-soft:#3A3F45;
     --steel:#6B7178;
     --steel-line:#D8D2C6;
     --safety:#F5B700;
@@ -41,9 +40,12 @@
   }
   .brand h1{font-family:'Oswald',sans-serif;font-size:18px;margin:0;letter-spacing:0.5px;text-transform:uppercase;}
   .brand span{display:block;font-size:11px;color:#B9BEC4;}
-  .status-badge{background:#28a745;color:#fff;font-size:10px;padding:4px 8px;border-radius:12px;font-weight:600;}
+  
+  .auth-status{display:flex;align-items:center;gap:10px;}
+  .admin-badge{font-size:11px;padding:4px 10px;border-radius:12px;font-weight:600;}
+  .admin-badge.logged-in{background:#28a745;color:#fff;}
+  .admin-badge.logged-out{background:var(--steel);color:#fff;}
 
-  /* NAV TABS */
   .nav-tabs{display:flex;background:var(--paper);border-bottom:1px solid var(--steel-line);}
   .tab-btn{
     flex:1;padding:12px;text-align:center;font-family:'Oswald',sans-serif;
@@ -56,13 +58,11 @@
   .tab-content{display:none;}
   .tab-content.active{display:block;}
 
-  /* SUMMARY CARDS */
   .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
   .summary .card{background:var(--paper);border:1px solid var(--steel-line);padding:10px;border-radius:var(--radius);text-align:center;}
   .summary .num{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:18px;}
   .summary .lbl{font-size:10px;color:var(--steel);text-transform:uppercase;margin-top:2px;}
 
-  /* FORM */
   .form-card{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:16px;margin-bottom:16px;}
   .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
   label{display:block;font-size:11px;color:var(--steel);margin-bottom:4px;text-transform:uppercase;}
@@ -76,14 +76,15 @@
   }
   .btn-primary{background:var(--safety);color:var(--charcoal);font-weight:600;}
   .btn-dark{background:var(--charcoal);color:#fff;}
+  .btn-sm{padding:6px 10px;font-size:11px;width:auto;}
 
-  /* GRID & CARDS */
-  .search-wrap{margin-bottom:12px;}
+  .search-wrap{margin-bottom:12px;display:flex;gap:8px;}
   .grid{display:grid;grid-template-columns:1fr;gap:12px;}
   @media(min-width:600px){.grid{grid-template-columns:1fr 1fr;}}
 
   .tag{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:14px;position:relative;}
   .tag.low{border-color:var(--rust);}
+  .tag.highlight{border:2px solid var(--safety);box-shadow:0 0 10px rgba(245,183,0,0.5);}
   .tag-header{display:flex;justify-content:space-between;align-items:flex-start;}
   .tag-title{font-weight:600;font-size:15px;}
   .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);}
@@ -96,7 +97,6 @@
   .tag-actions{display:flex;justify-content:space-between;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--steel-line);}
   .sm-btn{background:none;border:none;color:var(--steel);font-size:11px;text-decoration:underline;cursor:pointer;}
 
-  /* SCANNER */
   #reader{width:100%;max-width:500px;margin:0 auto;border:2px dashed var(--steel-line);border-radius:var(--radius);}
   #scan-result{margin-top:16px;}
 
@@ -105,6 +105,7 @@
     background:var(--charcoal);color:#fff;padding:10px 20px;border-radius:20px;
     font-size:12px;z-index:100;display:none;
   }
+  .disabled-action{opacity:0.4;pointer-events:none;}
 </style>
 </head>
 <body>
@@ -115,7 +116,10 @@
       <h1>Reyhani Cam &amp; Hırdavat</h1>
       <span>Canlı Bulut &amp; QR Stok Sistemi</span>
     </div>
-    <div class="status-badge" id="status">CANLI</div>
+    <div class="auth-status">
+      <span class="admin-badge logged-out" id="admin-status">Ziyaretçi Modu</span>
+      <button class="btn btn-primary btn-sm" id="auth-btn" onclick="toggleAuth()">Giriş Yap</button>
+    </div>
   </header>
 
   <div class="nav-tabs">
@@ -125,7 +129,6 @@
   </div>
 
   <main>
-    <!-- TAB 1: STOK LISTESI -->
     <div id="tab-stok" class="tab-content active">
       <div class="summary">
         <div class="card"><div class="num" id="sum-count">0</div><div class="lbl">Çeşit</div></div>
@@ -134,15 +137,15 @@
       </div>
 
       <div class="search-wrap">
-        <input type="text" id="search" placeholder="Ürün adı veya QR koda göre ara..." oninput="renderGrid()">
+        <input type="text" id="search" placeholder="Ürün adı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
+        <button class="btn btn-dark btn-sm" onclick="exportBackup()" title="Tüm Stoğu Yedekle">📥 Yedek İndir</button>
       </div>
 
       <div id="grid" class="grid"></div>
     </div>
 
-    <!-- TAB 2: URUN EKLE -->
     <div id="tab-ekle" class="tab-content">
-      <div class="form-card">
+      <div class="form-card" id="add-form-card">
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Ürün Ekle</h3>
         <div class="form-row">
           <div>
@@ -175,11 +178,10 @@
           <label>Özel QR Kodu No (Boş bırakırsanız otomatik üretilir)</label>
           <input type="text" id="f-code" placeholder="Otomatik kod verilsin">
         </div>
-        <button class="btn btn-primary" onclick="addProduct()">Ürünü Canlı Sisteme Kaydet</button>
+        <button class="btn btn-primary" id="add-btn" onclick="addProduct()">Ürünü Canlı Sisteme Kaydet</button>
       </div>
     </div>
 
-    <!-- TAB 3: QR OKUT -->
     <div id="tab-okut" class="tab-content">
       <div style="text-align:center;">
         <p style="font-size:13px;color:var(--steel);">Kamerayı açarak ürün üzerindeki QR kodu okutun:</p>
@@ -202,12 +204,57 @@
 
   let productsData = {};
   let html5QrcodeScanner = null;
+  let isAdmin = false;
+  const ADMIN_PASS = "1234"; // YÖNETİCİ ŞİFRESİ
 
-  // CANLI VERİ DİNLENİYOR
+  // URL'den parametre kontrolü (Telefon kamerasından okutulduğunda doğrudan açılmak için)
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetCode = urlParams.get('item');
+
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
+
+    if (targetCode && productsData[targetCode]) {
+      document.getElementById('search').value = targetCode;
+      renderGrid();
+    }
   });
+
+  function toggleAuth() {
+    if(!isAdmin) {
+      const p = prompt("Yönetici Şifresini Giriniz:");
+      if(p === ADMIN_PASS) {
+        isAdmin = true;
+        showToast("Yönetici girişi başarılı!");
+      } else if(p !== null) {
+        alert("Hatalı Şifre!");
+      }
+    } else {
+      isAdmin = false;
+      showToast("Çıkış yapıldı.");
+    }
+    updateAuthUI();
+  }
+
+  function updateAuthUI() {
+    const statusBadge = document.getElementById('admin-status');
+    const authBtn = document.getElementById('auth-btn');
+    const addCard = document.getElementById('add-form-card');
+
+    if(isAdmin) {
+      statusBadge.textContent = "Admin Yetkili";
+      statusBadge.className = "admin-badge logged-in";
+      authBtn.textContent = "Çıkış Yap";
+      addCard.classList.remove('disabled-action');
+    } else {
+      statusBadge.textContent = "Ziyaretçi Modu";
+      statusBadge.className = "admin-badge logged-out";
+      authBtn.textContent = "Giriş Yap";
+      addCard.classList.add('disabled-action');
+    }
+    renderGrid();
+  }
 
   function switchTab(tabName) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -236,6 +283,8 @@
   }
 
   function addProduct() {
+    if(!isAdmin) { alert("Ürün eklemek için Yönetici Girişi yapmalısınız!"); return; }
+    
     const name = document.getElementById('f-name').value.trim();
     const qty = parseInt(document.getElementById('f-qty').value) || 0;
     const price = parseFloat(document.getElementById('f-price').value) || 0;
@@ -258,16 +307,30 @@
   }
 
   function updateQty(code, change) {
+    if(!isAdmin) { alert("Stok değiştirmek için Yönetici Girişi yapmalısınız!"); return; }
     if(!productsData[code]) return;
     const newQty = Math.max(0, (productsData[code].qty || 0) + change);
     db.child(code).update({ qty: newQty });
   }
 
   function deleteProduct(code) {
+    if(!isAdmin) { alert("Ürün silmek için Yönetici Girişi yapmalısınız!"); return; }
     if(confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
       db.child(code).remove();
       showToast("Ürün silindi.");
     }
+  }
+
+  function exportBackup() {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(productsData, null, 2));
+    const downloadAnchor = document.createElement('a');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `reyhani-stok-yedek-${dateStr}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+    showToast("Tüm stok yedeği indirildi!");
   }
 
   function renderGrid() {
@@ -279,6 +342,8 @@
     let totalUnits = 0;
     let totalVal = 0;
 
+    const baseUrl = "https://emirreis2018.github.io/reyhani-stok/";
+
     Object.keys(productsData).forEach(code => {
       const p = productsData[code];
       if(search && !p.name.toLowerCase().includes(search) && !p.code.toLowerCase().includes(search)) {
@@ -289,8 +354,12 @@
       totalUnits += Number(p.qty || 0);
       totalVal += Number(p.qty || 0) * Number(p.price || 0);
 
+      const isTarget = targetCode === p.code;
       const card = document.createElement('div');
-      card.className = 'tag' + (p.qty <= 5 ? ' low' : '');
+      card.className = 'tag' + (p.qty <= 5 ? ' low' : '') + (isTarget ? ' highlight' : '');
+      
+      const adminControlClass = isAdmin ? '' : 'disabled-action';
+
       card.innerHTML = `
         <div class="tag-header">
           <div>
@@ -302,7 +371,7 @@
         
         <div class="qr-box" id="qr-${p.code}"></div>
 
-        <div class="qty-control">
+        <div class="qty-control ${adminControlClass}">
           <span>Stok Adedi:</span>
           <div style="display:flex;align-items:center;gap:8px;">
             <button class="qty-btn" onclick="updateQty('${p.code}', -1)">-</button>
@@ -312,19 +381,20 @@
         </div>
 
         <div class="tag-actions">
-          <button class="btn btn-dark" style="padding:6px;font-size:11px;" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
-          <button class="sm-btn" onclick="deleteProduct('${p.code}')">Sil</button>
+          <button class="btn btn-dark ${adminControlClass}" style="padding:6px;font-size:11px;" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
+          ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')">Sil</button>` : ''}
         </div>
       `;
 
       grid.appendChild(card);
 
-      // QR KODU OLUSTUR
+      // CANLI SITE UYUMLU QR KOD
       setTimeout(() => {
         const qrContainer = document.getElementById(`qr-${p.code}`);
         if(qrContainer && qrContainer.innerHTML === "") {
+          const qrUrl = `${baseUrl}?item=${p.code}`;
           new QRCode(qrContainer, {
-            text: p.code,
+            text: qrUrl,
             width: 90,
             height: 90
           });
@@ -337,30 +407,35 @@
     document.getElementById('sum-value').textContent = "₺" + totalVal.toFixed(2);
   }
 
-  // CAMERA SCANNER
   function startScanner() {
     if(html5QrcodeScanner) return;
     html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
-      const code = decodedText.trim().toUpperCase();
+      let code = decodedText.trim();
+      if(code.includes('item=')) {
+        code = code.split('item=')[1];
+      }
+      code = code.toUpperCase();
+
       const resDiv = document.getElementById('scan-result');
       
       if(productsData[code]) {
         const p = productsData[code];
+        const adminControlClass = isAdmin ? '' : 'disabled-action';
         resDiv.innerHTML = `
           <div class="tag" style="margin-top:10px;text-align:left;">
             <h3>${p.name}</h3>
             <p><strong>Barkod:</strong> ${p.code}</p>
             <p><strong>Mevcut Stok:</strong> ${p.qty} Adet</p>
             <p><strong>Fiyat:</strong> ₺${p.price}</p>
-            <button class="btn btn-primary" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
+            <button class="btn btn-primary ${adminControlClass}" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
           </div>
         `;
       } else {
         resDiv.innerHTML = `
           <div style="color:var(--rust);margin-top:10px;">
             <strong>QR Bulunamadı!</strong> (${code})<br>
-            <button class="btn btn-dark" style="margin-top:8px;" onclick="document.getElementById('f-code').value='${code}'; switchTab('ekle');">Bu Kodu Yeni Ürün Olarak Ekle</button>
+            ${isAdmin ? `<button class="btn btn-dark" style="margin-top:8px;" onclick="document.getElementById('f-code').value='${code}'; switchTab('ekle');">Bu Kodu Yeni Ürün Olarak Ekle</button>` : ''}
           </div>
         `;
       }
@@ -373,6 +448,8 @@
       html5QrcodeScanner = null;
     }
   }
+
+  updateAuthUI();
 </script>
 </body>
 </html>
