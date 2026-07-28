@@ -139,7 +139,7 @@
 
       <div class="search-wrap">
         <input type="text" id="search" placeholder="Ürün adı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
-        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak Yedekle">📊 Excel Yedeği İndir</button>
+        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel Tablosu İndir</button>
       </div>
 
       <div id="grid" class="grid"></div>
@@ -362,13 +362,24 @@
     }
   }
 
-  // ANLAŞILIR VE EXCEL UYUMLU YEDEKLEME FONKSİYONU
+  // DOĞRUDAN EXCEL TABLOSU OLARAK İNDİRME (.xls)
   function exportBackup() {
     if(currentRole !== 'admin') { alert("Yedek indirme yetkisi sadece YÖNETİCİ hesaptadır!"); return; }
     
-    // Excel için Türkçe Karakter Desteği (BOM) ve Sütun Başlıkları
-    let csvContent = "\uFEFF"; 
-    csvContent += "Barkod Kodu;Ürün Adı;Kategori;Stok Adedi;Birim Fiyat (TL);Toplam Değer (TL)\n";
+    let htmlTable = `
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+      <head><meta charset="utf-8"></head>
+      <body>
+        <table border="1">
+          <tr style="background:#f5b700;font-weight:bold;">
+            <th>Barkod Kodu</th>
+            <th>Ürün Adı</th>
+            <th>Kategori</th>
+            <th>Stok Adedi</th>
+            <th>Birim Fiyat (TL)</th>
+            <th>Toplam Değer (TL)</th>
+          </tr>
+    `;
 
     Object.keys(productsData).forEach(code => {
       const p = productsData[code];
@@ -376,18 +387,25 @@
       const price = Number(p.price || 0);
       const total = qty * price;
 
-      const cleanName = (p.name || '').replace(/;/g, ' ');
-      const cleanCat = (p.category || '').replace(/;/g, ' ');
-
-      csvContent += `${p.code};${cleanName};${cleanCat};${qty};${price.toFixed(2)};${total.toFixed(2)}\n`;
+      htmlTable += `
+        <tr>
+          <td>${p.code || ''}</td>
+          <td>${p.name || ''}</td>
+          <td>${p.category || ''}</td>
+          <td>${qty}</td>
+          <td>${price.toFixed(2)}</td>
+          <td>${total.toFixed(2)}</td>
+        </tr>
+      `;
     });
+
+    htmlTable += `</table></body></html>`;
 
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
-    const timeStr = now.toTimeString().slice(0, 5).replace(':', '-');
-    const fileName = `reyhani-stok-yedek_${dateStr}_${timeStr}.csv`;
+    const fileName = `reyhani-stok-yedek_${dateStr}.xls`;
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const link = document.createElement("a");
     const url = URL.createObjectURL(blob);
     
@@ -397,7 +415,7 @@
     link.click();
     document.body.removeChild(link);
 
-    showToast("Anlaşılır Excel yedeği indirildi!");
+    showToast("Excel tablosu başarıyla indirildi!");
   }
 
   function renderGrid() {
