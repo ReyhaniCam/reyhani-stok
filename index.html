@@ -139,7 +139,7 @@
 
       <div class="search-wrap">
         <input type="text" id="search" placeholder="Ürün adı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
-        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Yedekle">📥 Yedek İndir</button>
+        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak Yedekle">📊 Excel Yedeği İndir</button>
       </div>
 
       <div id="grid" class="grid"></div>
@@ -264,7 +264,7 @@
       authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action');
       backupBtn.classList.add('disabled-action');
-      navAddBtn.style.display = 'none'; // Çalışandan + Ürün Ekle sekmesini de gizliyoruz
+      navAddBtn.style.display = 'none';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu";
       statusBadge.className = "admin-badge role-guest";
@@ -362,17 +362,42 @@
     }
   }
 
+  // ANLAŞILIR VE EXCEL UYUMLU YEDEKLEME FONKSİYONU
   function exportBackup() {
     if(currentRole !== 'admin') { alert("Yedek indirme yetkisi sadece YÖNETİCİ hesaptadır!"); return; }
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(productsData, null, 2));
-    const downloadAnchor = document.createElement('a');
-    const dateStr = new Date().toISOString().slice(0, 10);
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", `reyhani-stok-yedek-${dateStr}.json`);
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
-    showToast("Tüm stok yedeği indirildi!");
+    
+    // Excel için Türkçe Karakter Desteği (BOM) ve Sütun Başlıkları
+    let csvContent = "\uFEFF"; 
+    csvContent += "Barkod Kodu;Ürün Adı;Kategori;Stok Adedi;Birim Fiyat (TL);Toplam Değer (TL)\n";
+
+    Object.keys(productsData).forEach(code => {
+      const p = productsData[code];
+      const qty = Number(p.qty || 0);
+      const price = Number(p.price || 0);
+      const total = qty * price;
+
+      const cleanName = (p.name || '').replace(/;/g, ' ');
+      const cleanCat = (p.category || '').replace(/;/g, ' ');
+
+      csvContent += `${p.code};${cleanName};${cleanCat};${qty};${price.toFixed(2)};${total.toFixed(2)}\n`;
+    });
+
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const timeStr = now.toTimeString().slice(0, 5).replace(':', '-');
+    const fileName = `reyhani-stok-yedek_${dateStr}_${timeStr}.csv`;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast("Anlaşılır Excel yedeği indirildi!");
   }
 
   function renderGrid() {
