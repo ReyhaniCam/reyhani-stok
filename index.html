@@ -160,6 +160,7 @@
     <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')">+ Ürün Ekle</button>
     <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
+    <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Siparişler</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
   </div>
 
@@ -247,6 +248,52 @@
       <div id="wholesalers-grid" class="grid"></div>
     </div>
 
+    <!-- SİPARİŞLER TABI (YENİ) -->
+    <div id="tab-siparis" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">Yeni Sipariş Listesi (Sepet)</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Dükkanın eksiklerini sepete ekleyerek toplam maliyet çıkarabilirsin.</p>
+        
+        <div class="form-row" style="grid-template-columns: 2fr 1fr;">
+          <div>
+            <label>Ürün Ara (İsme veya Koda Göre)</label>
+            <input list="order-product-list" id="cart-product" placeholder="Ürünü yazmaya başlayın...">
+            <datalist id="order-product-list"></datalist>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-end;">
+            <div style="flex:1;">
+               <label>Miktar</label>
+               <input type="number" id="cart-qty" placeholder="1" value="1" min="1">
+            </div>
+            <button class="btn btn-primary" style="width:auto; padding:10px 15px;" onclick="addToCart()">Sepete Ekle</button>
+          </div>
+        </div>
+      </div>
+      
+      <div id="cart-container" class="form-card" style="display:none; padding:12px;">
+        <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Sepetteki Ürünler</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width: 400px;" id="cart-table">
+             <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
+               <th style="padding-bottom:5px;">Ürün Bilgisi</th>
+               <th>B.Fiyat</th>
+               <th>Miktar</th>
+               <th>Ara Toplam</th>
+               <th>İşlem</th>
+             </tr></thead>
+             <tbody id="cart-items"></tbody>
+          </table>
+        </div>
+        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
+           Genel Toplam: <span id="cart-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
+        </div>
+        <button class="btn btn-success" style="margin-top:15px;" onclick="completeOrder()">Siparişi Tamamla & Excel Olarak İndir</button>
+      </div>
+
+      <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Geçmiş Sipariş Listeleri (Son 40 Gün)</h3>
+      <div id="past-orders-list"></div>
+    </div>
+
     <!-- RAPORLAR TABI -->
     <div id="tab-raporlar" class="tab-content">
       <div class="report-box">
@@ -282,16 +329,19 @@
   const db = dbRoot.child('products');
   const dbMovements = dbRoot.child('daily_movements');
   const dbWholesalers = dbRoot.child('wholesalers');
+  const dbOrders = dbRoot.child('orders'); // YENİ: Siparişler için veritabanı dalı
 
   let productsData = {};
   let wholesalersData = {};
+  let globalPastOrders = {}; // Kaydedilmiş siparişleri hafızada tutmak için
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
+  let cart = []; // Yeni oluşturulan sipariş sepeti
 
   const ADMIN_PASS = "5358";
   const STAFF_PASS = "5323";
 
-  // Sayı Formatlama Fonksiyonu (100.000,00 ₺ stili için)
+  // Sayı Formatlama
   function formatMoney(amount) {
     return amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
@@ -302,6 +352,7 @@
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
+    updateOrderProductList(); // Sepet araması için listeyi güncelle
     if (targetCode && productsData[targetCode]) {
       document.getElementById('search').value = targetCode;
       renderGrid();
@@ -311,6 +362,52 @@
   dbWholesalers.on('value', (snapshot) => {
     wholesalersData = snapshot.val() || {};
     renderWholesalers();
+  });
+
+  // Geçmiş Siparişleri Dinleme ve 40 Gün Temizliği
+  dbOrders.on('value', snapshot => {
+    const data = snapshot.val() || {};
+    const listDiv = document.getElementById('past-orders-list');
+    if(!listDiv) return;
+    listDiv.innerHTML = '';
+    globalPastOrders = {}; // Sıfırla
+    
+    // 40 gün hesaplaması
+    const cutoffDate = new Date(); 
+    cutoffDate.setDate(cutoffDate.getDate() - 40);
+    const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+    
+    let hasOrders = false;
+    
+    Object.keys(data).sort().reverse().forEach(dateStr => {
+      // Eğer sipariş 40 günden eskiyse otomatik sil
+      if(dateStr < cutoffStr) {
+        dbOrders.child(dateStr).remove();
+        return;
+      }
+      
+      const ordersOnDate = data[dateStr];
+      Object.keys(ordersOnDate).reverse().forEach(orderId => {
+        hasOrders = true;
+        const order = ordersOnDate[orderId];
+        globalPastOrders[orderId] = { orderData: order, date: dateStr }; // İndirmek için hafızaya al
+
+        listDiv.innerHTML += `
+          <div class="tag" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+             <div>
+                <div class="tag-title">Sipariş: ${dateStr}</div>
+                <div class="tag-code">🕒 ${order.time} | 📦 ${order.items.length} Çeşit Ürün</div>
+             </div>
+             <div style="text-align:right;">
+                <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--charcoal);">₺${formatMoney(order.total)}</div>
+                <button class="btn btn-info btn-sm" onclick="downloadOrderById('${orderId}')">İndir (Excel)</button>
+             </div>
+          </div>
+        `;
+      });
+    });
+    
+    if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş sipariş bulunamadı veya 40 gün dolduğu için temizlendi.</p>';
   });
 
   function logMovement(code, name, change, type) {
@@ -340,6 +437,7 @@
     
     document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
     document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+    document.getElementById('nav-siparis-btn').style.display = (currentRole === 'admin') ? 'block' : 'none'; // Siparişler sadece yöneticiye açık
     document.getElementById('nav-reports-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
 
     if(currentRole === 'admin') {
@@ -363,6 +461,7 @@
     if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
     if(tabName === 'raporlar' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
     if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+    if(tabName === 'siparis' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
 
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -382,9 +481,154 @@
   function showToast(msg) {
     const t = document.getElementById('toast');
     t.textContent = msg; t.style.display = 'block';
-    setTimeout(() => t.style.display = 'none', 2000);
+    setTimeout(() => t.style.display = 'none', 2500);
   }
 
+  // --- SİPARİŞ / SEPET FONKSİYONLARI ---
+  function updateOrderProductList() {
+    const dl = document.getElementById('order-product-list');
+    if(!dl) return;
+    dl.innerHTML = '';
+    Object.values(productsData).forEach(p => {
+        const opt = document.createElement('option');
+        // Kodu ve ismi birleştirerek gösteriyoruz
+        opt.value = `${p.code} - ${p.name}`;
+        dl.appendChild(opt);
+    });
+  }
+
+  function addToCart() {
+    if(currentRole !== 'admin') return;
+    const inputVal = document.getElementById('cart-product').value;
+    const qty = parseInt(document.getElementById('cart-qty').value);
+    
+    if(!inputVal || isNaN(qty) || qty <= 0) {
+      alert("Lütfen geçerli bir ürün ve miktar girin.");
+      return;
+    }
+    
+    // Değerden ürün kodunu ayıklama ("KOD123 - Ürün Adı" formatı)
+    const code = inputVal.split(' - ')[0].trim();
+    const p = productsData[code];
+    
+    if(!p) { 
+      alert("Ürün bulunamadı! Lütfen listeden seçin."); 
+      return; 
+    }
+    
+    // Sepette zaten varsa miktarını artır
+    const existingIndex = cart.findIndex(item => item.code === code);
+    if(existingIndex !== -1) {
+        cart[existingIndex].qty += qty;
+        cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
+    } else {
+        const price = Number(p.price || 0);
+        cart.push({
+          code: p.code, 
+          name: p.name, 
+          price: price, 
+          qty: qty, 
+          total: price * qty
+        });
+    }
+    
+    document.getElementById('cart-product').value = '';
+    document.getElementById('cart-qty').value = '1';
+    renderCart();
+    showToast("Ürün sepete eklendi!");
+  }
+
+  function renderCart() {
+    const container = document.getElementById('cart-container');
+    const tbody = document.getElementById('cart-items');
+    
+    if(cart.length === 0) { 
+      container.style.display = 'none'; 
+      return; 
+    }
+    
+    container.style.display = 'block';
+    tbody.innerHTML = '';
+    let grandTotal = 0;
+    
+    cart.forEach((item, index) => {
+        grandTotal += item.total;
+        tbody.innerHTML += `
+          <tr style="border-bottom:1px dashed var(--steel-line);">
+            <td style="padding:10px 0; line-height:1.3;">
+              <strong>${item.name}</strong><br>
+              <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code}</small>
+            </td>
+            <td>₺${formatMoney(item.price)}</td>
+            <td style="font-weight:bold;">${item.qty}</td>
+            <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
+            <td><button class="btn btn-dark btn-sm" onclick="removeFromCart(${index})">Çıkar</button></td>
+          </tr>
+        `;
+    });
+    
+    document.getElementById('cart-total').textContent = "₺" + formatMoney(grandTotal);
+  }
+
+  function removeFromCart(index) {
+    cart.splice(index, 1);
+    renderCart();
+  }
+
+  function completeOrder() {
+    if(cart.length === 0) return;
+    
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const orderId = "SİPARİŞ-" + new Date().getTime();
+    
+    let grandTotal = 0;
+    cart.forEach(i => grandTotal += i.total);
+    
+    const orderData = { time: timeStr, items: cart, total: grandTotal };
+    
+    // Firebase'e kaydet
+    dbOrders.child(dateStr).child(orderId).set(orderData, (err) => {
+        if(!err) {
+            generateOrderExcel(orderData, orderId, dateStr);
+            cart = []; // Sepeti temizle
+            renderCart();
+            showToast("Sipariş kaydedildi ve Excel indiriliyor!");
+        }
+    });
+  }
+
+  function downloadOrderById(orderId) {
+    const target = globalPastOrders[orderId];
+    if(target) {
+      generateOrderExcel(target.orderData, orderId, target.date);
+      showToast("Eski sipariş excel olarak indiriliyor!");
+    } else {
+      alert("Bu siparişin detayları bulunamadı.");
+    }
+  }
+
+  function generateOrderExcel(order, orderId, dateStr) {
+    let htmlTable = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><h2>Reyhani Cam - Sipariş Listesi</h2><p><strong>Tarih:</strong> ${dateStr} ${order.time}</p><p><strong>Sipariş Kodu:</strong> ${orderId}</p><table border="1"><tr style="background:#28a745;color:white;font-weight:bold;"><th>Sıra</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>Birim Fiyat (TL)</th><th>Miktar</th><th>Toplam (TL)</th></tr>`;
+    
+    order.items.forEach((item, idx) => {
+        htmlTable += `<tr><td>${idx+1}</td><td>${item.code}</td><td>${item.name}</td><td>${formatMoney(item.price)}</td><td style="font-weight:bold;color:red;">${item.qty}</td><td>${formatMoney(item.total)}</td></tr>`;
+    });
+    
+    htmlTable += `<tr><td colspan="5" style="text-align:right;font-weight:bold;">GENEL TOPLAM:</td><td style="font-weight:bold;background:#F5B700;">${formatMoney(order.total)} TL</td></tr>`;
+    htmlTable += `</table></body></html>`;
+    
+    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a"); 
+    link.href = URL.createObjectURL(blob); 
+    link.download = `Reyhani_Siparis_${dateStr}.xls`;
+    document.body.appendChild(link); 
+    link.click(); 
+    document.body.removeChild(link);
+  }
+  // --- SİPARİŞ FONKSİYONLARI SONU ---
+
+  // ... (Geri kalan eski fonksiyonlar aynen duruyor)
   function addProduct() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('f-name').value.trim();
@@ -423,8 +667,8 @@
     if(currentRole !== 'admin') return;
     const currentPrice = productsData[code] ? productsData[code].price : 0;
     const newPriceStr = prompt("Yeni Birim Fiyatı Giriniz (₺):", currentPrice);
-    if(newPriceStr !== null && !isNaN(parseFloat(newPriceStr)) && parseFloat(newPriceStr) >= 0) {
-      db.child(code).update({ price: parseFloat(newPriceStr), lastPriceUpdate: new Date().toISOString() });
+    if(newPriceStr !== null && !isNaN(parseFloat(newPriceStr.replace(',','.'))) && parseFloat(newPriceStr.replace(',','.')) >= 0) {
+      db.child(code).update({ price: parseFloat(newPriceStr.replace(',','.')), lastPriceUpdate: new Date().toISOString() });
       showToast("Fiyat yenilendi!");
     }
   }
@@ -520,7 +764,6 @@
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   }
 
-  // --- TOPTANCI İŞLEMLERİ (GÜNCELLENDİ) ---
   function addWholesaler() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('w-name').value.trim();
@@ -547,7 +790,6 @@
     const amountStr = prompt(promptMsg);
     
     if(amountStr !== null) {
-      // Virgülü noktaya çevir ki ondalıklı sayılarda hata olmasın (ör: 10,50 -> 10.50)
       const formattedAmountStr = amountStr.replace(',', '.');
       const amount = parseFloat(formattedAmountStr);
 
@@ -557,10 +799,8 @@
         const currentBalance = w.balance || 0;
         const newBalance = type === 'ALIM' ? currentBalance + amount : currentBalance - amount;
         
-        // Bakiyeyi Güncelle
         dbWholesalers.child(id).update({ balance: newBalance });
         
-        // İşlem Logu Ekle (Ekstre için)
         const dateStr = new Date().toLocaleString('tr-TR');
         dbWholesalers.child(id).child('transactions').push({
           date: dateStr,
@@ -586,7 +826,6 @@
     list.innerHTML = '';
 
     if(w.transactions) {
-      // İşlemleri yeniden eskiye sıralamak için diziye çeviriyoruz
       const txArray = Object.values(w.transactions).reverse();
       
       txArray.forEach(tx => {
