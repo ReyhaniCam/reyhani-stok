@@ -434,8 +434,9 @@
     let totalUnits = 0;
     let totalVal = 0;
 
-    // QR Kodlar ve yönlendirmeler için güncellenmiş adres tabanı
-    const baseUrl = "https://reyhani-cam-hirdavat.github.io/reyhani-stok/";
+    // ÜCRETSİZ GİTHUB PAGES ADRESİ (BURASI KONTROL EDİLİR)
+    const baseUrl = "https://emirreis2018.github.io/reyhani-stok/";
+    
     const nowTime = new Date().getTime();
     const twoMonthsMs = 60 * 24 * 60 * 60 * 1000; // 60 gün (2 ay)
 
@@ -469,7 +470,6 @@
         isOutdated = true;
       }
 
-      // Admin veya Çalışan modundaysa bilgi kutularını oluştur
       let adminStaffExtraInfo = '';
       if (currentRole === 'admin' || currentRole === 'staff') {
         if (p.lastPriceUpdate) {
