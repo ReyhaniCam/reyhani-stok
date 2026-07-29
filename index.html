@@ -77,7 +77,7 @@
   .btn-danger{background:var(--rust);color:#fff;}
   .btn-sm{padding:6px 10px;font-size:11px;width:auto;}
 
-  .search-wrap{margin-bottom:12px;display:flex;gap:8px;}
+  .search-wrap{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;}
   .grid{display:grid;grid-template-columns:1fr;gap:12px;}
   @media(min-width:600px){.grid{grid-template-columns:1fr 1fr;}}
 
@@ -96,7 +96,7 @@
   .qty-btn{width:32px;height:32px;border:1px solid var(--steel-line);background:#fff;font-weight:bold;cursor:pointer;}
   .qty-val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
   
-  .tag-actions{display:flex;justify-content:space-between;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--steel-line);}
+  .tag-actions{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--steel-line);}
   .sm-btn{background:none;border:none;color:var(--steel);font-size:11px;text-decoration:underline;cursor:pointer;}
 
   #reader{width:100%;max-width:500px;margin:0 auto;border:2px dashed var(--steel-line);border-radius:var(--radius);}
@@ -113,11 +113,43 @@
   .report-box h3 { margin-top:0; font-family:'Oswald'; }
   .report-box p { font-size:13px; color:var(--steel); margin-bottom:16px; }
 
-  /* Toptancı Kartları İçin Ekstra Stil */
   .balance-box { background:#F7F5F0; padding:10px; border-radius:3px; margin-top:10px; text-align:center; font-family:'IBM Plex Mono'; font-size:16px; font-weight:bold; border:1px solid var(--steel-line);}
-  .balance-negative { color:var(--rust); } /* Borçluysak Kırmızımsı */
+  .balance-negative { color:var(--rust); }
   .balance-positive { color:var(--success); }
   .action-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:10px; }
+
+  /* YAZDIRMA ALANI STİLLERİ (EKRANDA GİZLİ) */
+  #print-area { display: none; }
+
+  /* BARKOD YAZICI İÇİN ÖZEL YAZDIRMA STİLİ */
+  @media print {
+    body * { visibility: hidden; }
+    #print-area, #print-area * { visibility: visible; }
+    #print-area {
+      display: flex !important;
+      flex-wrap: wrap;
+      gap: 4mm;
+      position: absolute;
+      left: 0; top: 0; width: 100%;
+      background: #fff;
+    }
+    .sticker-label {
+      width: 50mm;
+      height: 30mm;
+      border: 1px dashed #000;
+      padding: 2mm;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      page-break-inside: avoid;
+      text-align: center;
+    }
+    .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
+    .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; }
+    .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
+  }
 </style>
 </head>
 <body>
@@ -126,7 +158,7 @@
   <header>
     <div class="brand">
       <h1>Reyhani Cam Hırdavat</h1>
-      <span>Canlı Bulut &amp; QR Stok Sistemi</span>
+      <span>Canlı Bulut &amp; QR Stok Paneli</span>
     </div>
     <div class="auth-status">
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
@@ -152,7 +184,8 @@
       </div>
       <div class="search-wrap">
         <input type="text" id="search" placeholder="Ürün adı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
-        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Tüm Liste</button>
+        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
+        <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
       </div>
       <div id="grid" class="grid"></div>
     </div>
@@ -195,7 +228,7 @@
       </div>
     </div>
 
-    <!-- TOPTANCILAR TABI (YENİ) -->
+    <!-- TOPTANCILAR TABI -->
     <div id="tab-toptanci" class="tab-content">
       <div class="form-card">
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Toptancı / Firma Ekle</h3>
@@ -221,6 +254,9 @@
   </main>
 </div>
 
+<!-- GİZLİ YAZDIRMA ŞABLON ALANI -->
+<div id="print-area"></div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -231,10 +267,10 @@
   const dbRoot = firebase.database().ref();
   const db = dbRoot.child('products');
   const dbMovements = dbRoot.child('daily_movements');
-  const dbWholesalers = dbRoot.child('wholesalers'); // YENİ: TOPTANCILAR VERİTABANI
+  const dbWholesalers = dbRoot.child('wholesalers');
 
   let productsData = {};
-  let wholesalersData = {}; // YENİ
+  let wholesalersData = {};
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
 
@@ -244,7 +280,6 @@
   const urlParams = new URLSearchParams(window.location.search);
   const targetCode = urlParams.get('item');
 
-  // STOK VERİLERİNİ DİNLE
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
@@ -254,20 +289,17 @@
     }
   });
 
-  // TOPTANCI VERİLERİNİ DİNLE (YENİ)
   dbWholesalers.on('value', (snapshot) => {
     wholesalersData = snapshot.val() || {};
     renderWholesalers();
   });
 
-  // HAREKET LOGLAMA SİSTEMİ
   function logMovement(code, name, change, type) {
     const dateStr = new Date().toISOString().slice(0, 10);
     const timeStr = new Date().toLocaleTimeString('tr-TR');
     dbMovements.child(dateStr).push({ time: timeStr, code: code, name: name, change: change, type: type });
   }
 
-  // --- KİMLİK DOĞRULAMA ---
   function toggleAuth() {
     if(currentRole === 'guest') {
       const p = prompt("Giriş Şifresini Giriniz:");
@@ -285,8 +317,8 @@
     const authBtn = document.getElementById('auth-btn');
     const addCard = document.getElementById('add-form-card');
     const backupBtn = document.getElementById('backup-btn');
+    const printAllBtn = document.getElementById('print-all-btn');
     
-    // Sekmelerin görünürlüğü
     document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
     document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
     document.getElementById('nav-reports-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
@@ -294,12 +326,15 @@
     if(currentRole === 'admin') {
       statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
+      printAllBtn.style.display = 'inline-block';
     } else if(currentRole === 'staff') {
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
+      printAllBtn.style.display = 'inline-block';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
+      printAllBtn.style.display = 'none';
     }
     renderGrid();
     renderWholesalers();
@@ -331,7 +366,6 @@
     setTimeout(() => t.style.display = 'none', 2000);
   }
 
-  // --- STOK İŞLEMLERİ --- (Aynı Kalıyor)
   function addProduct() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('f-name').value.trim();
@@ -384,6 +418,67 @@
     }
   }
 
+  // --- ETIKET YAZDIRMA SISTEMI (YENİ) ---
+  function printSingleLabel(code) {
+    const p = productsData[code];
+    if(!p) return;
+    const countStr = prompt(`"${p.name}" için kaç adet etiket basılsın?`, "1");
+    const count = parseInt(countStr);
+    if(isNaN(count) || count <= 0) return;
+
+    preparePrintArea([{ code: p.code, name: p.name, price: p.price, count: count }]);
+  }
+
+  function printAllLabels() {
+    const items = [];
+    Object.keys(productsData).forEach(code => {
+      const p = productsData[code];
+      items.push({ code: p.code, name: p.name, price: p.price, count: 1 });
+    });
+    if(items.length === 0) { alert("Yazdırılacak ürün bulunamadı."); return; }
+    if(confirm(`Toplam ${items.length} çeşit ürün için 1'er adet etiket yazdırılacak. Onaylıyor musunuz?`)) {
+      preparePrintArea(items);
+    }
+  }
+
+  function preparePrintArea(itemList) {
+    const printArea = document.getElementById('print-area');
+    printArea.innerHTML = '';
+    const baseUrl = "https://reyhanicam.github.io/reyhani-stok/";
+
+    let labelIdx = 0;
+    itemList.forEach(item => {
+      for(let i = 0; i < item.count; i++) {
+        labelIdx++;
+        const labelDiv = document.createElement('div');
+        labelDiv.className = 'sticker-label';
+        const qrId = `print-qr-${labelIdx}`;
+        
+        labelDiv.innerHTML = `
+          <div class="sticker-title">${item.name}</div>
+          <div class="sticker-qr" id="${qrId}"></div>
+          <div class="sticker-footer">
+            <span>${item.code}</span>
+            <span>₺${Number(item.price).toFixed(2)}</span>
+          </div>
+        `;
+        printArea.appendChild(labelDiv);
+
+        // QR oluştur
+        new QRCode(document.getElementById(qrId), {
+          text: `${baseUrl}?item=${item.code}`,
+          width: 65,
+          height: 65
+        });
+      }
+    });
+
+    // QR kodların çizilmesi için kısa gecikme sonra yazdır
+    setTimeout(() => {
+      window.print();
+    }, 500);
+  }
+
   // --- Z RAPORU ---
   function exportZReport() {
     if(currentRole !== 'admin') return;
@@ -425,14 +520,14 @@
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   }
 
-  // --- TOPTANCI İŞLEMLERİ (YENİ SİSTEM) ---
+  // --- TOPTANCI İŞLEMLERİ ---
   function addWholesaler() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('w-name').value.trim();
     const phone = document.getElementById('w-phone').value.trim();
     if(!name) { alert("Lütfen toptancı adını giriniz."); return; }
 
-    const id = "W-" + new Date().getTime(); // Benzersiz Toptancı ID'si
+    const id = "W-" + new Date().getTime();
     dbWholesalers.child(id).set({ name: name, phone: phone, balance: 0 }, (err) => {
       if(!err) {
         showToast("Toptancı eklendi!");
@@ -451,7 +546,6 @@
     
     if(amountStr !== null && !isNaN(parseFloat(amountStr)) && parseFloat(amountStr) > 0) {
       const amount = parseFloat(amountStr);
-      // Mal alıyorsak borcumuz artar (+), Ödeme yapıyorsak borcumuz azalır (-)
       const currentBalance = w.balance || 0;
       const newBalance = type === 'ALIM' ? currentBalance + amount : currentBalance - amount;
       
@@ -464,7 +558,7 @@
 
   function deleteWholesaler(id) {
     if(currentRole !== 'admin') return;
-    if(confirm("Bu toptancıyı tamamen silmek istediğinize emin misiniz? Bakiyesi de silinecektir.")) {
+    if(confirm("Bu toptancıyı tamamen silmek istediğinize emin misiniz?")) {
       dbWholesalers.child(id).remove();
       showToast("Toptancı silindi.");
     }
@@ -474,14 +568,12 @@
     const grid = document.getElementById('wholesalers-grid');
     if(!grid) return;
     grid.innerHTML = '';
-    
     if(currentRole !== 'admin') return;
 
     Object.keys(wholesalersData).forEach(id => {
       const w = wholesalersData[id];
       const bal = parseFloat(w.balance || 0);
       
-      // Bakiye gösterimi: Borçluysak (bal > 0) kırmızı "Borç", Alacaklıysak (bal < 0) yeşil "Alacak"
       let balanceHtml = '';
       if(bal === 0) {
         balanceHtml = `<div class="balance-box">Bakiye: ₺0.00 <br><span style="font-size:11px; color:var(--steel);">Borç/Alacak Yok</span></div>`;
@@ -501,9 +593,7 @@
           </div>
           <button class="sm-btn" style="color:var(--rust);" onclick="deleteWholesaler('${id}')">Sil</button>
         </div>
-        
         ${balanceHtml}
-
         <div class="action-grid">
           <button class="btn btn-danger btn-sm" onclick="addTransaction('${id}', 'ALIM')">📦 Mal Alımı Gir</button>
           <button class="btn btn-success btn-sm" onclick="addTransaction('${id}', 'ODEME')">💸 Ödeme Çık</button>
@@ -561,7 +651,8 @@
         </div>
         <div class="tag-actions">
           <button class="btn btn-dark ${qtyControlClass}" style="padding:6px;font-size:11px;" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
-          ${currentRole === 'admin' ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')">Sil</button>` : ''}
+          ${canUpdateQty ? `<button class="sm-btn" onclick="printSingleLabel('${p.code}')">🖨️ Etiket Bas</button>` : ''}
+          ${currentRole === 'admin' ? `<button class="sm-btn" style="color:var(--rust);" onclick="deleteProduct('${p.code}')">Sil</button>` : ''}
         </div>
       `;
       grid.appendChild(card);
