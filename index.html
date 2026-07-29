@@ -91,8 +91,8 @@
   .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);}
   .qr-box{display:flex;justify-content:center;margin:12px 0;padding:8px;background:#fff;border:1px dashed var(--steel-line);}
   
-  .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:4px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
-  .price-warning{color:var(--rust);font-weight:600;margin-top:4px;font-size:11px;background:#FDF2F0;padding:4px 8px;border-radius:3px;border:1px dashed var(--rust);}
+  .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
+  .price-warning{color:var(--rust);font-weight:600;margin-top:4px;font-size:11px;background:#FDF2F0;padding:6px 8px;border-radius:3px;border:1px dashed var(--rust);}
 
   .qty-control{display:flex;align-items:center;justify-content:space-between;margin-top:10px;background:var(--concrete);padding:6px 10px;border-radius:var(--radius);}
   .qty-btn{width:32px;height:32px;border:1px solid var(--steel-line);background:#fff;font-weight:bold;cursor:pointer;}
@@ -319,7 +319,7 @@
     const price = parseFloat(document.getElementById('f-price').value) || 0;
     let code = document.getElementById('f-code').value.trim().toUpperCase();
     const category = document.getElementById('f-category').value;
-    const nowTimestamp = new Date().toISOString(); // Son fiyat güncelleme tarihi
+    const nowTimestamp = new Date().toISOString();
 
     if(!name) { alert("Lütfen ürün adını giriniz."); return; }
     if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
@@ -350,7 +350,7 @@
     if(newPriceStr !== null) {
       const newPrice = parseFloat(newPriceStr);
       if(!isNaN(newPrice) && newPrice >= 0) {
-        const nowTimestamp = new Date().toISOString(); // Fiyat değiştiği anı kaydet
+        const nowTimestamp = new Date().toISOString();
         db.child(code).update({ price: newPrice, lastPriceUpdate: nowTimestamp });
         showToast("Fiyat ve güncelleme tarihi yenilendi!");
       } else {
@@ -367,7 +367,6 @@
     }
   }
 
-  // EXCEL TABLOSU OLARAK İNDİRME (Son güncelleme tarihi de eklenmiştir)
   function exportBackup() {
     if(currentRole !== 'admin') { alert("Yedek indirme yetkisi sadece YÖNETİCİ hesaptadır!"); return; }
     
@@ -392,7 +391,7 @@
       const qty = Number(p.qty || 0);
       const price = Number(p.price || 0);
       const total = qty * price;
-      const updateDate = p.lastPriceUpdate ? new Date(p.lastPriceUpdate).toLocaleString('tr-TR') : 'Bilinmiyor';
+      const updateDate = p.lastPriceUpdate ? new Date(p.lastPriceUpdate).toLocaleString('tr-TR') : 'Kayıt Yok';
 
       htmlTable += `
         <tr>
@@ -437,7 +436,7 @@
 
     const baseUrl = "https://emirreis2018.github.io/reyhani-stok/";
     const nowTime = new Date().getTime();
-    const twoMonthsMs = 60 * 24 * 60 * 60 * 1000; // 60 gün (2 ay) milisaniye cinsinden
+    const twoMonthsMs = 60 * 24 * 60 * 60 * 1000; // 60 gün (2 ay)
 
     Object.keys(productsData).forEach(code => {
       const p = productsData[code];
@@ -456,9 +455,9 @@
       const canUpdateQty = currentRole === 'admin' || currentRole === 'staff';
       const qtyControlClass = canUpdateQty ? '' : 'disabled-action';
 
-      // 2 Ay (60 gün) kontrolü
+      // Tarih Hesaplama ve Kontrolü
       let isOutdated = false;
-      let updateDateStr = "Tarih Yok";
+      let updateDateStr = "";
       if (p.lastPriceUpdate) {
         const updateTime = new Date(p.lastPriceUpdate).getTime();
         updateDateStr = new Date(p.lastPriceUpdate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -466,17 +465,26 @@
           isOutdated = true;
         }
       } else {
-        isOutdated = true; // Hiç tarih kaydedilmemişse eski sayılır
+        isOutdated = true; // Daha önce tarih kaydedilmemişse
       }
 
-      // Admin veya Çalışan modunda ise tarih ve uyarıları göster
+      // Admin veya Çalışan modundaysa bilgi kutularını oluştur
       let adminStaffExtraInfo = '';
       if (currentRole === 'admin' || currentRole === 'staff') {
-        adminStaffExtraInfo = `
-          <div class="price-info-box">
-            <span>Son Fiyat Güncelleme: <strong>${updateDateStr}</strong></span>
-          </div>
-        `;
+        if (p.lastPriceUpdate) {
+          adminStaffExtraInfo = `
+            <div class="price-info-box">
+              <span>Son Fiyat Güncelleme: <strong>${updateDateStr}</strong></span>
+            </div>
+          `;
+        } else {
+          adminStaffExtraInfo = `
+            <div class="price-info-box" style="color:var(--rust);">
+              <span>⚠️ Bu üründe eski sistemden kalan tarih kaydı yok.</span>
+            </div>
+          `;
+        }
+
         if (isOutdated) {
           adminStaffExtraInfo += `
             <div class="price-warning">
@@ -494,7 +502,7 @@
           </div>
           <div style="font-family:'IBM Plex Mono';font-weight:600;display:flex;align-items:center;gap:4px;">
             ₺${Number(p.price).toFixed(2)}
-            ${currentRole === 'admin' ? `<button class="sm-btn" style="padding:0;margin-left:4px;" onclick="updatePrice('${p.code}')">✏️</button>` : ''}
+            ${currentRole === 'admin' ? `<button class="sm-btn" style="padding:0;margin-left:4px;" onclick="updatePrice('${p.code}')" title="Fiyatı Güncelle">✏️</button>` : ''}
           </div>
         </div>
         
@@ -535,7 +543,6 @@
     document.getElementById('sum-count').textContent = totalCount;
     document.getElementById('sum-units').textContent = totalUnits;
     
-    // ENVANTER DEĞERİ SADECE ADMİN'E GÖRÜNÜR
     if(currentRole === 'admin') {
       document.getElementById('sum-value').textContent = "₺" + totalVal.toFixed(2);
     } else if(currentRole === 'staff') {
