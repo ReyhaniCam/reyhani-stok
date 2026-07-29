@@ -26,6 +26,7 @@
     --steel-line:#D8D2C6;
     --safety:#F5B700;
     --rust:#C1440E;
+    --success:#28a745;
     --radius:4px;
   }
   *{box-sizing:border-box;}
@@ -43,15 +44,15 @@
   
   .auth-status{display:flex;align-items:center;gap:10px;}
   .admin-badge{font-size:11px;padding:4px 10px;border-radius:12px;font-weight:600;}
-  .admin-badge.role-admin{background:#28a745;color:#fff;}
+  .admin-badge.role-admin{background:var(--success);color:#fff;}
   .admin-badge.role-staff{background:#17a2b8;color:#fff;}
   .admin-badge.role-guest{background:var(--steel);color:#fff;}
 
-  .nav-tabs{display:flex;background:var(--paper);border-bottom:1px solid var(--steel-line);}
+  .nav-tabs{display:flex;background:var(--paper);border-bottom:1px solid var(--steel-line);overflow-x:auto;}
   .tab-btn{
     flex:1;padding:12px;text-align:center;font-family:'Oswald',sans-serif;
     font-size:14px;text-transform:uppercase;border:none;background:none;
-    cursor:pointer;color:var(--steel);border-bottom:3px solid transparent;
+    cursor:pointer;color:var(--steel);border-bottom:3px solid transparent; white-space:nowrap;
   }
   .tab-btn.active{color:var(--charcoal);border-bottom-color:var(--safety);font-weight:600;}
 
@@ -77,6 +78,7 @@
   }
   .btn-primary{background:var(--safety);color:var(--charcoal);font-weight:600;}
   .btn-dark{background:var(--charcoal);color:#fff;}
+  .btn-success{background:var(--success);color:#fff;}
   .btn-sm{padding:6px 10px;font-size:11px;width:auto;}
 
   .search-wrap{margin-bottom:12px;display:flex;gap:8px;}
@@ -110,6 +112,10 @@
     font-size:12px;z-index:100;display:none;
   }
   .disabled-action{opacity:0.4;pointer-events:none;}
+
+  .report-box { background:var(--paper); border:1px solid var(--steel-line); padding:16px; border-radius:var(--radius); text-align:center; }
+  .report-box h3 { margin-top:0; font-family:'Oswald'; }
+  .report-box p { font-size:13px; color:var(--steel); margin-bottom:16px; }
 </style>
 </head>
 <body>
@@ -130,44 +136,35 @@
     <button class="tab-btn active" onclick="switchTab('stok')">Stok Listesi</button>
     <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')">+ Ürün Ekle</button>
     <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
+    <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
   </div>
 
   <main>
+    <!-- STOK LİSTESİ TABI -->
     <div id="tab-stok" class="tab-content active">
       <div class="summary">
         <div class="card"><div class="num" id="sum-count">0</div><div class="lbl">Çeşit</div></div>
         <div class="card"><div class="num" id="sum-units">0</div><div class="lbl">Toplam Adet</div></div>
         <div class="card"><div class="num" id="sum-value">***</div><div class="lbl">Envanter Değeri</div></div>
       </div>
-
       <div class="search-wrap">
         <input type="text" id="search" placeholder="Ürün adı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
-        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel Tablosu İndir</button>
+        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Tüm Liste</button>
       </div>
-
       <div id="grid" class="grid"></div>
     </div>
 
+    <!-- ÜRÜN EKLE TABI -->
     <div id="tab-ekle" class="tab-content">
       <div class="form-card" id="add-form-card">
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Ürün Ekle</h3>
         <div class="form-row">
-          <div>
-            <label>Ürün Adı</label>
-            <input type="text" id="f-name" placeholder="Örn: Akfix Silikon 280ml">
-          </div>
-          <div>
-            <label>Adet</label>
-            <input type="number" id="f-qty" placeholder="0">
-          </div>
+          <div><label>Ürün Adı</label><input type="text" id="f-name" placeholder="Örn: Akfix Silikon 280ml"></div>
+          <div><label>Adet</label><input type="number" id="f-qty" placeholder="0"></div>
         </div>
         <div class="form-row">
-          <div>
-            <label>Birim Fiyat (₺)</label>
-            <input type="number" id="f-price" step="0.01" placeholder="0.00">
-          </div>
-          <div>
-            <label>Kategori</label>
+          <div><label>Birim Fiyat (₺)</label><input type="number" id="f-price" step="0.01" placeholder="0.00"></div>
+          <div><label>Kategori</label>
             <select id="f-category">
               <option>Cam & Aksesuar</option>
               <option>Silikon & Mastik</option>
@@ -186,6 +183,7 @@
       </div>
     </div>
 
+    <!-- QR OKUT TABI -->
     <div id="tab-okut" class="tab-content">
       <div style="text-align:center;">
         <p style="font-size:13px;color:var(--steel);">Kamerayı açarak ürün üzerindeki QR kodu okutun:</p>
@@ -193,6 +191,16 @@
         <div id="scan-result"></div>
       </div>
     </div>
+
+    <!-- RAPORLAR TABI (YENİ) -->
+    <div id="tab-raporlar" class="tab-content">
+      <div class="report-box">
+        <h3>GÜN SONU Z RAPORU</h3>
+        <p>Bugün dükkanda yapılan tüm satışlar ve stoka yeni eklenen ürünler listelenir. Raporu aldığınızda eski kayıtlar (40 günden öncekiler) sistemden otomatik temizlenir.</p>
+        <button class="btn btn-success" onclick="exportZReport()">Z Raporunu İndir (Excel)</button>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -200,20 +208,19 @@
 
 <script>
   // FIREBASE BAGLANTISI
-  const firebaseConfig = {
-    databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/"
-  };
+  const firebaseConfig = { databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/" };
   firebase.initializeApp(firebaseConfig);
-  const db = firebase.database().ref('products');
+  
+  const dbRoot = firebase.database().ref();
+  const db = dbRoot.child('products');
+  const dbMovements = dbRoot.child('daily_movements');
 
   let productsData = {};
   let html5QrcodeScanner = null;
-
-  // ROL YÖNETİMİ: 'guest', 'staff', 'admin'
   let currentRole = 'guest';
 
-  const ADMIN_PASS = "5358";  // YÖNETİCİ ŞİFRESİ (GÜNCELLENDİ)
-  const STAFF_PASS = "5323";  // ÇALIŞAN ŞİFRESİ (GÜNCELLENDİ)
+  const ADMIN_PASS = "5358";
+  const STAFF_PASS = "5323";
 
   const urlParams = new URLSearchParams(window.location.search);
   const targetCode = urlParams.get('item');
@@ -221,28 +228,34 @@
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
-
     if (targetCode && productsData[targetCode]) {
       document.getElementById('search').value = targetCode;
       renderGrid();
     }
   });
 
+  // HAREKET LOGLAMA SİSTEMİ (YENİ)
+  function logMovement(code, name, change, type) {
+    const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const timeStr = new Date().toLocaleTimeString('tr-TR');
+    
+    dbMovements.child(dateStr).push({
+      time: timeStr,
+      code: code,
+      name: name,
+      change: change, 
+      type: type 
+    });
+  }
+
   function toggleAuth() {
     if(currentRole === 'guest') {
-      const p = prompt("Giriş Şifresini Giriniz (Çalışan veya Yönetici):");
-      if(p === ADMIN_PASS) {
-        currentRole = 'admin';
-        showToast("Yönetici girişi başarılı!");
-      } else if(p === STAFF_PASS) {
-        currentRole = 'staff';
-        showToast("Çalışan girişi başarılı!");
-      } else if(p !== null) {
-        alert("Hatalı Şifre!");
-      }
+      const p = prompt("Giriş Şifresini Giriniz:");
+      if(p === ADMIN_PASS) { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
+      else if(p === STAFF_PASS) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
+      else if(p !== null) { alert("Hatalı Şifre!"); }
     } else {
-      currentRole = 'guest';
-      showToast("Çıkış yapıldı.");
+      currentRole = 'guest'; showToast("Çıkış yapıldı.");
     }
     updateAuthUI();
   }
@@ -253,348 +266,264 @@
     const addCard = document.getElementById('add-form-card');
     const backupBtn = document.getElementById('backup-btn');
     const navAddBtn = document.getElementById('nav-add-btn');
+    const navReportsBtn = document.getElementById('nav-reports-btn');
 
     if(currentRole === 'admin') {
-      statusBadge.textContent = "Yönetici";
-      statusBadge.className = "admin-badge role-admin";
-      authBtn.textContent = "Çıkış Yap";
-      addCard.classList.remove('disabled-action');
-      backupBtn.classList.remove('disabled-action');
-      navAddBtn.style.display = 'block';
+      statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
+      addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
+      navAddBtn.style.display = 'block'; navReportsBtn.style.display = 'block';
     } else if(currentRole === 'staff') {
-      statusBadge.textContent = "Çalışan Modu";
-      statusBadge.className = "admin-badge role-staff";
-      authBtn.textContent = "Çıkış Yap";
-      addCard.classList.add('disabled-action');
-      backupBtn.classList.add('disabled-action');
-      navAddBtn.style.display = 'none';
+      statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
+      addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
+      navAddBtn.style.display = 'none'; navReportsBtn.style.display = 'none';
     } else {
-      statusBadge.textContent = "Ziyaretçi Modu";
-      statusBadge.className = "admin-badge role-guest";
-      authBtn.textContent = "Giriş Yap";
-      addCard.classList.add('disabled-action');
-      backupBtn.classList.add('disabled-action');
-      navAddBtn.style.display = 'none';
+      statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
+      addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
+      navAddBtn.style.display = 'none'; navReportsBtn.style.display = 'none';
     }
     renderGrid();
   }
 
   function switchTab(tabName) {
-    if(tabName === 'ekle' && currentRole !== 'admin') {
-      alert("Ürün ekleme yetkisi sadece YÖNETİCİ hesaptadır!");
-      return;
-    }
+    if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+    if(tabName === 'raporlar' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
 
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     
-    if(tabName === 'stok') {
-      document.querySelectorAll('.tab-btn')[0].classList.add('active');
-      document.getElementById('tab-stok').classList.add('active');
-      stopScanner();
-    } else if(tabName === 'ekle') {
-      document.querySelectorAll('.tab-btn')[1].classList.add('active');
-      document.getElementById('tab-ekle').classList.add('active');
-      stopScanner();
-    } else if(tabName === 'okut') {
-      const okutBtnIndex = currentRole === 'admin' ? 2 : 1;
-      document.querySelectorAll('.tab-btn')[okutBtnIndex].classList.add('active');
-      document.getElementById('tab-okut').classList.add('active');
-      startScanner();
+    document.getElementById('tab-' + tabName).classList.add('active');
+    
+    let tabIndex = { 'stok': 0, 'ekle': 1, 'okut': 2, 'raporlar': 3 };
+    
+    // Ziyaretçi ve çalışan için buton sırası kaydığı için ufak düzeltme:
+    const allBtns = document.querySelectorAll('.tab-btn');
+    for(let i=0; i<allBtns.length; i++) {
+        if(allBtns[i].textContent.toLowerCase().includes(tabName)) {
+            allBtns[i].classList.add('active');
+        }
     }
+
+    if(tabName === 'okut') startScanner(); else stopScanner();
   }
 
   function showToast(msg) {
     const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.style.display = 'block';
+    t.textContent = msg; t.style.display = 'block';
     setTimeout(() => t.style.display = 'none', 2000);
   }
 
   function addProduct() {
-    if(currentRole !== 'admin') { alert("Ürün ekleme yetkisi sadece YÖNETİCİ hesaptadır!"); return; }
-    
+    if(currentRole !== 'admin') return;
     const name = document.getElementById('f-name').value.trim();
     const qty = parseInt(document.getElementById('f-qty').value) || 0;
     const price = parseFloat(document.getElementById('f-price').value) || 0;
     let code = document.getElementById('f-code').value.trim().toUpperCase();
     const category = document.getElementById('f-category').value;
-    const nowTimestamp = new Date().toISOString();
-
+    
     if(!name) { alert("Lütfen ürün adını giriniz."); return; }
     if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
 
-    db.child(code).set({ name, qty, price, category, code, lastPriceUpdate: nowTimestamp }, (error) => {
+    db.child(code).set({ name, qty, price, category, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
       if(!error) {
-        showToast("Ürün eklendi ve canlı sisteme işlendi!");
-        document.getElementById('f-name').value = '';
-        document.getElementById('f-qty').value = '';
-        document.getElementById('f-price').value = '';
-        document.getElementById('f-code').value = '';
+        if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ'); // Log eklendi
+        showToast("Ürün eklendi!");
+        document.getElementById('f-name').value = ''; document.getElementById('f-qty').value = ''; document.getElementById('f-price').value = ''; document.getElementById('f-code').value = '';
         switchTab('stok');
       }
     });
   }
 
   function updateQty(code, change) {
-    if(currentRole === 'guest') { alert("Stok güncellemek için Çalışan veya Yönetici girişi yapmalısınız!"); return; }
+    if(currentRole === 'guest') return;
     if(!productsData[code]) return;
-    const newQty = Math.max(0, (productsData[code].qty || 0) + change);
-    db.child(code).update({ qty: newQty });
+    
+    const currentQty = productsData[code].qty || 0;
+    const newQty = Math.max(0, currentQty + change);
+    const actualChange = newQty - currentQty; // Eğer 0'dan eksiye düşmeye çalışırsa değişim olmaz.
+
+    if(actualChange !== 0) {
+      db.child(code).update({ qty: newQty });
+      const moveType = actualChange > 0 ? 'STOK EKLENDİ' : 'SATIŞ YAPILDI';
+      logMovement(code, productsData[code].name, actualChange, moveType); // Log eklendi
+    }
   }
 
   function updatePrice(code) {
-    if(currentRole !== 'admin') { alert("Fiyat değiştirme yetkisi sadece YÖNETİCİ hesaptadır!"); return; }
+    if(currentRole !== 'admin') return;
     const currentPrice = productsData[code] ? productsData[code].price : 0;
     const newPriceStr = prompt("Yeni Birim Fiyatı Giriniz (₺):", currentPrice);
-    if(newPriceStr !== null) {
-      const newPrice = parseFloat(newPriceStr);
-      if(!isNaN(newPrice) && newPrice >= 0) {
-        const nowTimestamp = new Date().toISOString();
-        db.child(code).update({ price: newPrice, lastPriceUpdate: nowTimestamp });
-        showToast("Fiyat ve güncelleme tarihi yenilendi!");
-      } else {
-        alert("Geçersiz fiyat girdiniz!");
-      }
+    if(newPriceStr !== null && !isNaN(parseFloat(newPriceStr)) && parseFloat(newPriceStr) >= 0) {
+      db.child(code).update({ price: parseFloat(newPriceStr), lastPriceUpdate: new Date().toISOString() });
+      showToast("Fiyat yenilendi!");
     }
   }
 
   function deleteProduct(code) {
-    if(currentRole !== 'admin') { alert("Ürün silme yetkisi sadece YÖNETİCİ hesaptadır!"); return; }
+    if(currentRole !== 'admin') return;
     if(confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
-      db.child(code).remove();
-      showToast("Ürün silindi.");
+      logMovement(code, productsData[code].name, -(productsData[code].qty||0), 'ÜRÜN SİLİNDİ');
+      db.child(code).remove(); showToast("Ürün silindi.");
     }
   }
 
-  function exportBackup() {
-    if(currentRole !== 'admin') { alert("Yedek indirme yetkisi sadece YÖNETİCİ hesaptadır!"); return; }
+  // --- Z RAPORU VE TEMİZLİK (YENİ SİSTEM) ---
+  function exportZReport() {
+    if(currentRole !== 'admin') return;
+    const dateStr = new Date().toISOString().slice(0, 10);
     
-    let htmlTable = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="utf-8"></head>
-      <body>
-        <table border="1">
-          <tr style="background:#f5b700;font-weight:bold;">
-            <th>Barkod Kodu</th>
-            <th>Ürün Adı</th>
-            <th>Kategori</th>
-            <th>Stok Adedi</th>
-            <th>Birim Fiyat (TL)</th>
-            <th>Toplam Değer (TL)</th>
-            <th>Son Fiyat Güncelleme Tarihi</th>
-          </tr>
-    `;
+    dbMovements.child(dateStr).once('value', snapshot => {
+      const data = snapshot.val();
+      if(!data) {
+        alert("Bugün için herhangi bir stok hareketi (satış veya giriş) bulunamadı.");
+        return;
+      }
 
-    Object.keys(productsData).forEach(code => {
-      const p = productsData[code];
-      const qty = Number(p.qty || 0);
-      const price = Number(p.price || 0);
-      const total = qty * price;
-      const updateDate = p.lastPriceUpdate ? new Date(p.lastPriceUpdate).toLocaleString('tr-TR') : 'Kayıt Yok';
-
-      htmlTable += `
-        <tr>
-          <td>${p.code || ''}</td>
-          <td>${p.name || ''}</td>
-          <td>${p.category || ''}</td>
-          <td>${qty}</td>
-          <td>${price.toFixed(2)}</td>
-          <td>${total.toFixed(2)}</td>
-          <td>${updateDate}</td>
-        </tr>
+      let htmlTable = `
+        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8"></head>
+        <body>
+          <h2>Tarih: ${dateStr} - Gün Sonu Z Raporu</h2>
+          <table border="1">
+            <tr style="background:#f5b700;font-weight:bold;">
+              <th>Saat</th>
+              <th>İşlem Tipi</th>
+              <th>Ürün Kodu</th>
+              <th>Ürün Adı</th>
+              <th>Adet Değişimi</th>
+            </tr>
       `;
+
+      Object.values(data).forEach(move => {
+        const rowColor = move.change > 0 ? '#d4edda' : '#f8d7da'; // Girişler yeşil, satışlar kırmızımsı
+        htmlTable += `
+          <tr style="background:${rowColor};">
+            <td>${move.time || ''}</td>
+            <td>${move.type || ''}</td>
+            <td>${move.code || ''}</td>
+            <td>${move.name || ''}</td>
+            <td style="font-weight:bold;">${move.change > 0 ? '+'+move.change : move.change}</td>
+          </tr>
+        `;
+      });
+
+      htmlTable += `</table></body></html>`;
+
+      const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `z_raporu_${dateStr}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      showToast("Z Raporu İndirildi! Eski kayıtlar temizleniyor...");
+      cleanupOldReports(); // 40 gün temizliğini tetikle
     });
+  }
 
-    htmlTable += `</table></body></html>`;
-
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    const fileName = `reyhani-cam-hirdavat-yedek_${dateStr}.xls`;
-
-    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
+  function cleanupOldReports() {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 40); // 40 gün öncesi
+    const cutoffStr = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
     
-    link.setAttribute("href", url);
-    link.setAttribute("download", fileName);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    dbMovements.once('value', snap => {
+      snap.forEach(childSnap => {
+        if (childSnap.key < cutoffStr) {
+          childSnap.ref.remove(); // 40 günden eskiyse sil
+        }
+      });
+    });
+  }
 
-    showToast("Excel tablosu başarıyla indirildi!");
+  // YEDEK ALMA (TÜM LİSTE)
+  function exportBackup() {
+    if(currentRole !== 'admin') return;
+    let htmlTable = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><table border="1"><tr style="background:#f5b700;font-weight:bold;"><th>Barkod Kodu</th><th>Ürün Adı</th><th>Kategori</th><th>Stok Adedi</th><th>Birim Fiyat (TL)</th><th>Toplam Değer (TL)</th><th>Son Fiyat Güncelleme Tarihi</th></tr>`;
+    Object.keys(productsData).forEach(code => {
+      const p = productsData[code]; const qty = Number(p.qty || 0); const price = Number(p.price || 0); const total = qty * price;
+      const updateDate = p.lastPriceUpdate ? new Date(p.lastPriceUpdate).toLocaleString('tr-TR') : 'Kayıt Yok';
+      htmlTable += `<tr><td>${p.code || ''}</td><td>${p.name || ''}</td><td>${p.category || ''}</td><td>${qty}</td><td>${price.toFixed(2)}</td><td>${total.toFixed(2)}</td><td>${updateDate}</td></tr>`;
+    });
+    htmlTable += `</table></body></html>`;
+    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `reyhani-cam-hirdavat-yedek_${new Date().toISOString().slice(0, 10)}.xls`;
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
   }
 
   function renderGrid() {
     const grid = document.getElementById('grid');
     const search = (document.getElementById('search').value || '').toLowerCase();
-    grid.innerHTML = '';
-
-    let totalCount = 0;
-    let totalUnits = 0;
-    let totalVal = 0;
-
-    // GÜNCELLENMİŞ GİTHUB PAGES ADRESİ
+    grid.innerHTML = ''; let totalCount = 0; let totalUnits = 0; let totalVal = 0;
     const baseUrl = "https://reyhanicam.github.io/reyhani-stok/";
-    
-    const nowTime = new Date().getTime();
-    const twoMonthsMs = 60 * 24 * 60 * 60 * 1000; // 60 gün (2 ay)
+    const nowTime = new Date().getTime(); const twoMonthsMs = 60 * 24 * 60 * 60 * 1000;
 
     Object.keys(productsData).forEach(code => {
       const p = productsData[code];
-      if(search && !p.name.toLowerCase().includes(search) && !p.code.toLowerCase().includes(search)) {
-        return;
-      }
-
-      totalCount++;
-      totalUnits += Number(p.qty || 0);
-      totalVal += Number(p.qty || 0) * Number(p.price || 0);
-
-      const isTarget = targetCode === p.code;
-      const card = document.createElement('div');
-      card.className = 'tag' + (p.qty <= 5 ? ' low' : '') + (isTarget ? ' highlight' : '');
+      if(search && !p.name.toLowerCase().includes(search) && !p.code.toLowerCase().includes(search)) return;
+      totalCount++; totalUnits += Number(p.qty || 0); totalVal += Number(p.qty || 0) * Number(p.price || 0);
       
       const canUpdateQty = currentRole === 'admin' || currentRole === 'staff';
       const qtyControlClass = canUpdateQty ? '' : 'disabled-action';
-
-      // Tarih Hesaplama ve Kontrolü
-      let isOutdated = false;
-      let updateDateStr = "";
+      let isOutdated = false; let updateDateStr = "";
       if (p.lastPriceUpdate) {
-        const updateTime = new Date(p.lastPriceUpdate).getTime();
         updateDateStr = new Date(p.lastPriceUpdate).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
-        if ((nowTime - updateTime) > twoMonthsMs) {
-          isOutdated = true;
-        }
-      } else {
-        isOutdated = true;
-      }
+        if ((nowTime - new Date(p.lastPriceUpdate).getTime()) > twoMonthsMs) isOutdated = true;
+      } else isOutdated = true;
 
       let adminStaffExtraInfo = '';
       if (currentRole === 'admin' || currentRole === 'staff') {
-        if (p.lastPriceUpdate) {
-          adminStaffExtraInfo = `
-            <div class="price-info-box">
-              <span>Son Fiyat Güncelleme: <strong>${updateDateStr}</strong></span>
-            </div>
-          `;
-        } else {
-          adminStaffExtraInfo = `
-            <div class="price-info-box" style="color:var(--rust);">
-              <span>⚠️ Bu üründe eski sistemden kalan tarih kaydı yok.</span>
-            </div>
-          `;
-        }
-
-        if (isOutdated) {
-          adminStaffExtraInfo += `
-            <div class="price-warning">
-              ⚠️ Bu ürünün fiyatı 2 aydır güncellenmedi! Lütfen gözden geçirin.
-            </div>
-          `;
-        }
+        adminStaffExtraInfo = `<div class="price-info-box"><span>Son Fiyat Güncelleme: <strong>${p.lastPriceUpdate ? updateDateStr : 'Kayıt Yok'}</strong></span></div>`;
+        if (isOutdated) adminStaffExtraInfo += `<div class="price-warning">⚠️ Bu ürünün fiyatı 2 aydır güncellenmedi! Lütfen gözden geçirin.</div>`;
       }
 
+      const card = document.createElement('div');
+      card.className = 'tag' + (p.qty <= 5 ? ' low' : '') + (targetCode === p.code ? ' highlight' : '');
       card.innerHTML = `
         <div class="tag-header">
-          <div>
-            <div class="tag-title">${p.name}</div>
-            <div class="tag-code">${p.code} — <small>${p.category}</small></div>
-          </div>
+          <div><div class="tag-title">${p.name}</div><div class="tag-code">${p.code} — <small>${p.category}</small></div></div>
           <div style="font-family:'IBM Plex Mono';font-weight:600;display:flex;align-items:center;gap:4px;">
             ₺${Number(p.price).toFixed(2)}
             ${currentRole === 'admin' ? `<button class="sm-btn" style="padding:0;margin-left:4px;" onclick="updatePrice('${p.code}')" title="Fiyatı Güncelle">✏️</button>` : ''}
           </div>
         </div>
-        
         ${adminStaffExtraInfo}
-
         <div class="qr-box" id="qr-${p.code}"></div>
-
         <div class="qty-control ${qtyControlClass}">
           <span>Stok Adedi:</span>
           <div style="display:flex;align-items:center;gap:8px;">
-            <button class="qty-btn" onclick="updateQty('${p.code}', -1)">-</button>
-            <span class="qty-val">${p.qty}</span>
-            <button class="qty-btn" onclick="updateQty('${p.code}', 1)">+</button>
+            <button class="qty-btn" onclick="updateQty('${p.code}', -1)">-</button><span class="qty-val">${p.qty}</span><button class="qty-btn" onclick="updateQty('${p.code}', 1)">+</button>
           </div>
         </div>
-
         <div class="tag-actions">
           <button class="btn btn-dark ${qtyControlClass}" style="padding:6px;font-size:11px;" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
           ${currentRole === 'admin' ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')">Sil</button>` : ''}
         </div>
       `;
-
       grid.appendChild(card);
-
-      setTimeout(() => {
-        const qrContainer = document.getElementById(`qr-${p.code}`);
-        if(qrContainer && qrContainer.innerHTML === "") {
-          const qrUrl = `${baseUrl}?item=${p.code}`;
-          new QRCode(qrContainer, {
-            text: qrUrl,
-            width: 90,
-            height: 90
-          });
-        }
-      }, 50);
+      setTimeout(() => { const qc = document.getElementById(`qr-${p.code}`); if(qc && qc.innerHTML === "") new QRCode(qc, { text: `${baseUrl}?item=${p.code}`, width: 90, height: 90 }); }, 50);
     });
 
-    document.getElementById('sum-count').textContent = totalCount;
-    document.getElementById('sum-units').textContent = totalUnits;
-    
-    if(currentRole === 'admin') {
-      document.getElementById('sum-value').textContent = "₺" + totalVal.toFixed(2);
-    } else if(currentRole === 'staff') {
-      document.getElementById('sum-value').textContent = "Gizli";
-    } else {
-      document.getElementById('sum-value').textContent = "***";
-    }
+    document.getElementById('sum-count').textContent = totalCount; document.getElementById('sum-units').textContent = totalUnits;
+    if(currentRole === 'admin') document.getElementById('sum-value').textContent = "₺" + totalVal.toFixed(2);
+    else if(currentRole === 'staff') document.getElementById('sum-value').textContent = "Gizli";
+    else document.getElementById('sum-value').textContent = "***";
   }
 
   function startScanner() {
     if(html5QrcodeScanner) return;
     html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
     html5QrcodeScanner.render((decodedText) => {
-      let code = decodedText.trim();
-      if(code.includes('item=')) {
-        code = code.split('item=')[1];
-      }
-      code = code.toUpperCase();
-
+      let code = decodedText.trim().split('item=')[1] || decodedText.trim(); code = code.toUpperCase();
       const resDiv = document.getElementById('scan-result');
-      
       if(productsData[code]) {
-        const p = productsData[code];
-        const canUpdateQty = currentRole === 'admin' || currentRole === 'staff';
-        const qtyControlClass = canUpdateQty ? '' : 'disabled-action';
-        resDiv.innerHTML = `
-          <div class="tag" style="margin-top:10px;text-align:left;">
-            <h3>${p.name}</h3>
-            <p><strong>Barkod:</strong> ${p.code}</p>
-            <p><strong>Mevcut Stok:</strong> ${p.qty} Adet</p>
-            <p><strong>Fiyat:</strong> ₺${p.price}</p>
-            <button class="btn btn-primary ${qtyControlClass}" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button>
-          </div>
-        `;
+        const p = productsData[code]; const canUpdateQty = currentRole === 'admin' || currentRole === 'staff';
+        resDiv.innerHTML = `<div class="tag" style="margin-top:10px;text-align:left;"><h3>${p.name}</h3><p><strong>Barkod:</strong> ${p.code}</p><p><strong>Mevcut Stok:</strong> ${p.qty} Adet</p><p><strong>Fiyat:</strong> ₺${p.price}</p><button class="btn btn-primary ${canUpdateQty ? '' : 'disabled-action'}" onclick="updateQty('${p.code}', -1); showToast('1 Adet Satıldı');">1 Adet Sat</button></div>`;
       } else {
-        resDiv.innerHTML = `
-          <div style="color:var(--rust);margin-top:10px;">
-            <strong>QR Bulunamadı!</strong> (${code})<br>
-            ${currentRole === 'admin' ? `<button class="btn btn-dark" style="margin-top:8px;" onclick="document.getElementById('f-code').value='${code}'; switchTab('ekle');">Bu Kodu Yeni Ürün Olarak Ekle</button>` : ''}
-          </div>
-        `;
+        resDiv.innerHTML = `<div style="color:var(--rust);margin-top:10px;"><strong>QR Bulunamadı!</strong> (${code})<br>${currentRole === 'admin' ? `<button class="btn btn-dark" style="margin-top:8px;" onclick="document.getElementById('f-code').value='${code}'; switchTab('ekle');">Bu Kodu Yeni Ürün Olarak Ekle</button>` : ''}</div>`;
       }
     });
   }
-
-  function stopScanner() {
-    if(html5QrcodeScanner) {
-      html5QrcodeScanner.clear().catch(()=>{});
-      html5QrcodeScanner = null;
-    }
-  }
+  function stopScanner() { if(html5QrcodeScanner) { html5QrcodeScanner.clear().catch(()=>{}); html5QrcodeScanner = null; } }
 
   updateAuthUI();
 </script>
