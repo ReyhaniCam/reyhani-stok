@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Reyhani Cam & Hırdavat — Canlı QR Stok Paneli</title>
+<title>Reyhani Cam Hırdavat — Canlı QR Stok Paneli</title>
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -117,7 +117,7 @@
 <div class="app">
   <header>
     <div class="brand">
-      <h1>Reyhani Cam &amp; Hırdavat</h1>
+      <h1>Reyhani Cam Hırdavat</h1>
       <span>Canlı Bulut &amp; QR Stok Sistemi</span>
     </div>
     <div class="auth-status">
@@ -410,7 +410,7 @@
 
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
-    const fileName = `reyhani-stok-yedek_${dateStr}.xls`;
+    const fileName = `reyhani-cam-hirdavat-yedek_${dateStr}.xls`;
 
     const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
     const link = document.createElement("a");
@@ -434,7 +434,8 @@
     let totalUnits = 0;
     let totalVal = 0;
 
-    const baseUrl = "https://emirreis2018.github.io/reyhani-stok/";
+    // QR Kodlar ve yönlendirmeler için güncellenmiş adres tabanı
+    const baseUrl = "https://reyhani-cam-hirdavat.github.io/reyhani-stok/";
     const nowTime = new Date().getTime();
     const twoMonthsMs = 60 * 24 * 60 * 60 * 1000; // 60 gün (2 ay)
 
@@ -465,7 +466,7 @@
           isOutdated = true;
         }
       } else {
-        isOutdated = true; // Daha önce tarih kaydedilmemişse
+        isOutdated = true;
       }
 
       // Admin veya Çalışan modundaysa bilgi kutularını oluştur
