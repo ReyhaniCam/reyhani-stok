@@ -19,15 +19,9 @@
 
 <style>
   :root{
-    --concrete:#EDE8DF;
-    --paper:#FFFFFF;
-    --charcoal:#22262A;
-    --steel:#6B7178;
-    --steel-line:#D8D2C6;
-    --safety:#F5B700;
-    --rust:#C1440E;
-    --success:#28a745;
-    --radius:4px;
+    --concrete:#EDE8DF; --paper:#FFFFFF; --charcoal:#22262A; 
+    --steel:#6B7178; --steel-line:#D8D2C6; --safety:#F5B700; 
+    --rust:#C1440E; --success:#28a745; --info:#17a2b8; --radius:4px;
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--concrete);color:var(--charcoal);font-family:'Inter',sans-serif;}
@@ -45,14 +39,14 @@
   .auth-status{display:flex;align-items:center;gap:10px;}
   .admin-badge{font-size:11px;padding:4px 10px;border-radius:12px;font-weight:600;}
   .admin-badge.role-admin{background:var(--success);color:#fff;}
-  .admin-badge.role-staff{background:#17a2b8;color:#fff;}
+  .admin-badge.role-staff{background:var(--info);color:#fff;}
   .admin-badge.role-guest{background:var(--steel);color:#fff;}
 
   .nav-tabs{display:flex;background:var(--paper);border-bottom:1px solid var(--steel-line);overflow-x:auto;}
   .tab-btn{
-    flex:1;padding:12px;text-align:center;font-family:'Oswald',sans-serif;
-    font-size:14px;text-transform:uppercase;border:none;background:none;
-    cursor:pointer;color:var(--steel);border-bottom:3px solid transparent; white-space:nowrap;
+    flex:1; padding:12px; text-align:center; font-family:'Oswald',sans-serif;
+    font-size:14px; text-transform:uppercase; border:none; background:none;
+    cursor:pointer; color:var(--steel); border-bottom:3px solid transparent; white-space:nowrap;
   }
   .tab-btn.active{color:var(--charcoal);border-bottom-color:var(--safety);font-weight:600;}
 
@@ -79,6 +73,8 @@
   .btn-primary{background:var(--safety);color:var(--charcoal);font-weight:600;}
   .btn-dark{background:var(--charcoal);color:#fff;}
   .btn-success{background:var(--success);color:#fff;}
+  .btn-info{background:var(--info);color:#fff;}
+  .btn-danger{background:var(--rust);color:#fff;}
   .btn-sm{padding:6px 10px;font-size:11px;width:auto;}
 
   .search-wrap{margin-bottom:12px;display:flex;gap:8px;}
@@ -116,6 +112,12 @@
   .report-box { background:var(--paper); border:1px solid var(--steel-line); padding:16px; border-radius:var(--radius); text-align:center; }
   .report-box h3 { margin-top:0; font-family:'Oswald'; }
   .report-box p { font-size:13px; color:var(--steel); margin-bottom:16px; }
+
+  /* Toptancı Kartları İçin Ekstra Stil */
+  .balance-box { background:#F7F5F0; padding:10px; border-radius:3px; margin-top:10px; text-align:center; font-family:'IBM Plex Mono'; font-size:16px; font-weight:bold; border:1px solid var(--steel-line);}
+  .balance-negative { color:var(--rust); } /* Borçluysak Kırmızımsı */
+  .balance-positive { color:var(--success); }
+  .action-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -136,6 +138,7 @@
     <button class="tab-btn active" onclick="switchTab('stok')">Stok Listesi</button>
     <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')">+ Ürün Ekle</button>
     <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
+    <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
   </div>
 
@@ -192,7 +195,21 @@
       </div>
     </div>
 
-    <!-- RAPORLAR TABI (YENİ) -->
+    <!-- TOPTANCILAR TABI (YENİ) -->
+    <div id="tab-toptanci" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">Yeni Toptancı / Firma Ekle</h3>
+        <div class="form-row">
+          <div><label>Firma / Toptancı Adı</label><input type="text" id="w-name" placeholder="Örn: Koçtaş Hırdavat"></div>
+          <div><label>Telefon</label><input type="text" id="w-phone" placeholder="0555..."></div>
+        </div>
+        <button class="btn btn-dark" onclick="addWholesaler()">Toptancıyı Kaydet</button>
+      </div>
+      <h3 style="font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Cari Hesaplar</h3>
+      <div id="wholesalers-grid" class="grid"></div>
+    </div>
+
+    <!-- RAPORLAR TABI -->
     <div id="tab-raporlar" class="tab-content">
       <div class="report-box">
         <h3>GÜN SONU Z RAPORU</h3>
@@ -214,8 +231,10 @@
   const dbRoot = firebase.database().ref();
   const db = dbRoot.child('products');
   const dbMovements = dbRoot.child('daily_movements');
+  const dbWholesalers = dbRoot.child('wholesalers'); // YENİ: TOPTANCILAR VERİTABANI
 
   let productsData = {};
+  let wholesalersData = {}; // YENİ
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
 
@@ -225,6 +244,7 @@
   const urlParams = new URLSearchParams(window.location.search);
   const targetCode = urlParams.get('item');
 
+  // STOK VERİLERİNİ DİNLE
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
@@ -234,20 +254,20 @@
     }
   });
 
-  // HAREKET LOGLAMA SİSTEMİ (YENİ)
+  // TOPTANCI VERİLERİNİ DİNLE (YENİ)
+  dbWholesalers.on('value', (snapshot) => {
+    wholesalersData = snapshot.val() || {};
+    renderWholesalers();
+  });
+
+  // HAREKET LOGLAMA SİSTEMİ
   function logMovement(code, name, change, type) {
-    const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const dateStr = new Date().toISOString().slice(0, 10);
     const timeStr = new Date().toLocaleTimeString('tr-TR');
-    
-    dbMovements.child(dateStr).push({
-      time: timeStr,
-      code: code,
-      name: name,
-      change: change, 
-      type: type 
-    });
+    dbMovements.child(dateStr).push({ time: timeStr, code: code, name: name, change: change, type: type });
   }
 
+  // --- KİMLİK DOĞRULAMA ---
   function toggleAuth() {
     if(currentRole === 'guest') {
       const p = prompt("Giriş Şifresini Giriniz:");
@@ -265,40 +285,39 @@
     const authBtn = document.getElementById('auth-btn');
     const addCard = document.getElementById('add-form-card');
     const backupBtn = document.getElementById('backup-btn');
-    const navAddBtn = document.getElementById('nav-add-btn');
-    const navReportsBtn = document.getElementById('nav-reports-btn');
+    
+    // Sekmelerin görünürlüğü
+    document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+    document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+    document.getElementById('nav-reports-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
 
     if(currentRole === 'admin') {
       statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
-      navAddBtn.style.display = 'block'; navReportsBtn.style.display = 'block';
     } else if(currentRole === 'staff') {
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
-      navAddBtn.style.display = 'none'; navReportsBtn.style.display = 'none';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
-      navAddBtn.style.display = 'none'; navReportsBtn.style.display = 'none';
     }
     renderGrid();
+    renderWholesalers();
   }
 
   function switchTab(tabName) {
     if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
     if(tabName === 'raporlar' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+    if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
 
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     
     document.getElementById('tab-' + tabName).classList.add('active');
     
-    let tabIndex = { 'stok': 0, 'ekle': 1, 'okut': 2, 'raporlar': 3 };
-    
-    // Ziyaretçi ve çalışan için buton sırası kaydığı için ufak düzeltme:
     const allBtns = document.querySelectorAll('.tab-btn');
     for(let i=0; i<allBtns.length; i++) {
-        if(allBtns[i].textContent.toLowerCase().includes(tabName)) {
+        if(allBtns[i].id === 'nav-' + tabName + '-btn' || (tabName === 'stok' && i===0) || (tabName==='okut' && allBtns[i].textContent.includes('QR'))) {
             allBtns[i].classList.add('active');
         }
     }
@@ -312,6 +331,7 @@
     setTimeout(() => t.style.display = 'none', 2000);
   }
 
+  // --- STOK İŞLEMLERİ --- (Aynı Kalıyor)
   function addProduct() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('f-name').value.trim();
@@ -325,7 +345,7 @@
 
     db.child(code).set({ name, qty, price, category, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
       if(!error) {
-        if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ'); // Log eklendi
+        if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
         showToast("Ürün eklendi!");
         document.getElementById('f-name').value = ''; document.getElementById('f-qty').value = ''; document.getElementById('f-price').value = ''; document.getElementById('f-code').value = '';
         switchTab('stok');
@@ -336,15 +356,13 @@
   function updateQty(code, change) {
     if(currentRole === 'guest') return;
     if(!productsData[code]) return;
-    
     const currentQty = productsData[code].qty || 0;
     const newQty = Math.max(0, currentQty + change);
-    const actualChange = newQty - currentQty; // Eğer 0'dan eksiye düşmeye çalışırsa değişim olmaz.
-
+    const actualChange = newQty - currentQty;
     if(actualChange !== 0) {
       db.child(code).update({ qty: newQty });
       const moveType = actualChange > 0 ? 'STOK EKLENDİ' : 'SATIŞ YAPILDI';
-      logMovement(code, productsData[code].name, actualChange, moveType); // Log eklendi
+      logMovement(code, productsData[code].name, actualChange, moveType);
     }
   }
 
@@ -366,76 +384,33 @@
     }
   }
 
-  // --- Z RAPORU VE TEMİZLİK (YENİ SİSTEM) ---
+  // --- Z RAPORU ---
   function exportZReport() {
     if(currentRole !== 'admin') return;
     const dateStr = new Date().toISOString().slice(0, 10);
-    
     dbMovements.child(dateStr).once('value', snapshot => {
       const data = snapshot.val();
-      if(!data) {
-        alert("Bugün için herhangi bir stok hareketi (satış veya giriş) bulunamadı.");
-        return;
-      }
+      if(!data) { alert("Bugün için herhangi bir stok hareketi bulunamadı."); return; }
 
-      let htmlTable = `
-        <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-        <head><meta charset="utf-8"></head>
-        <body>
-          <h2>Tarih: ${dateStr} - Gün Sonu Z Raporu</h2>
-          <table border="1">
-            <tr style="background:#f5b700;font-weight:bold;">
-              <th>Saat</th>
-              <th>İşlem Tipi</th>
-              <th>Ürün Kodu</th>
-              <th>Ürün Adı</th>
-              <th>Adet Değişimi</th>
-            </tr>
-      `;
-
+      let htmlTable = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><h2>Tarih: ${dateStr} - Gün Sonu Z Raporu</h2><table border="1"><tr style="background:#f5b700;font-weight:bold;"><th>Saat</th><th>İşlem Tipi</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>Adet Değişimi</th></tr>`;
       Object.values(data).forEach(move => {
-        const rowColor = move.change > 0 ? '#d4edda' : '#f8d7da'; // Girişler yeşil, satışlar kırmızımsı
-        htmlTable += `
-          <tr style="background:${rowColor};">
-            <td>${move.time || ''}</td>
-            <td>${move.type || ''}</td>
-            <td>${move.code || ''}</td>
-            <td>${move.name || ''}</td>
-            <td style="font-weight:bold;">${move.change > 0 ? '+'+move.change : move.change}</td>
-          </tr>
-        `;
+        const rowColor = move.change > 0 ? '#d4edda' : '#f8d7da';
+        htmlTable += `<tr style="background:${rowColor};"><td>${move.time || ''}</td><td>${move.type || ''}</td><td>${move.code || ''}</td><td>${move.name || ''}</td><td style="font-weight:bold;">${move.change > 0 ? '+'+move.change : move.change}</td></tr>`;
       });
-
       htmlTable += `</table></body></html>`;
 
       const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `z_raporu_${dateStr}.xls`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `z_raporu_${dateStr}.xls`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
 
       showToast("Z Raporu İndirildi! Eski kayıtlar temizleniyor...");
-      cleanupOldReports(); // 40 gün temizliğini tetikle
+      
+      const cutoffDate = new Date(); cutoffDate.setDate(cutoffDate.getDate() - 40);
+      const cutoffStr = cutoffDate.toISOString().slice(0, 10);
+      dbMovements.once('value', snap => { snap.forEach(childSnap => { if (childSnap.key < cutoffStr) childSnap.ref.remove(); }); });
     });
   }
 
-  function cleanupOldReports() {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - 40); // 40 gün öncesi
-    const cutoffStr = cutoffDate.toISOString().slice(0, 10); // YYYY-MM-DD
-    
-    dbMovements.once('value', snap => {
-      snap.forEach(childSnap => {
-        if (childSnap.key < cutoffStr) {
-          childSnap.ref.remove(); // 40 günden eskiyse sil
-        }
-      });
-    });
-  }
-
-  // YEDEK ALMA (TÜM LİSTE)
   function exportBackup() {
     if(currentRole !== 'admin') return;
     let htmlTable = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><table border="1"><tr style="background:#f5b700;font-weight:bold;"><th>Barkod Kodu</th><th>Ürün Adı</th><th>Kategori</th><th>Stok Adedi</th><th>Birim Fiyat (TL)</th><th>Toplam Değer (TL)</th><th>Son Fiyat Güncelleme Tarihi</th></tr>`;
@@ -446,12 +421,102 @@
     });
     htmlTable += `</table></body></html>`;
     const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `reyhani-cam-hirdavat-yedek_${new Date().toISOString().slice(0, 10)}.xls`;
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `reyhani-cam-yedek_${new Date().toISOString().slice(0, 10)}.xls`;
     document.body.appendChild(link); link.click(); document.body.removeChild(link);
   }
 
+  // --- TOPTANCI İŞLEMLERİ (YENİ SİSTEM) ---
+  function addWholesaler() {
+    if(currentRole !== 'admin') return;
+    const name = document.getElementById('w-name').value.trim();
+    const phone = document.getElementById('w-phone').value.trim();
+    if(!name) { alert("Lütfen toptancı adını giriniz."); return; }
+
+    const id = "W-" + new Date().getTime(); // Benzersiz Toptancı ID'si
+    dbWholesalers.child(id).set({ name: name, phone: phone, balance: 0 }, (err) => {
+      if(!err) {
+        showToast("Toptancı eklendi!");
+        document.getElementById('w-name').value = ''; document.getElementById('w-phone').value = '';
+      }
+    });
+  }
+
+  function addTransaction(id, type) {
+    if(currentRole !== 'admin') return;
+    const w = wholesalersData[id];
+    if(!w) return;
+
+    let promptMsg = type === 'ALIM' ? `${w.name} firmasından mal alımı tutarı (Borçlanma):` : `${w.name} firmasına yapılan ödeme tutarı (Borç Düşme):`;
+    const amountStr = prompt(promptMsg);
+    
+    if(amountStr !== null && !isNaN(parseFloat(amountStr)) && parseFloat(amountStr) > 0) {
+      const amount = parseFloat(amountStr);
+      // Mal alıyorsak borcumuz artar (+), Ödeme yapıyorsak borcumuz azalır (-)
+      const currentBalance = w.balance || 0;
+      const newBalance = type === 'ALIM' ? currentBalance + amount : currentBalance - amount;
+      
+      dbWholesalers.child(id).update({ balance: newBalance });
+      showToast("Cari hesap güncellendi!");
+    } else if(amountStr !== null) {
+      alert("Geçersiz bir tutar girdiniz.");
+    }
+  }
+
+  function deleteWholesaler(id) {
+    if(currentRole !== 'admin') return;
+    if(confirm("Bu toptancıyı tamamen silmek istediğinize emin misiniz? Bakiyesi de silinecektir.")) {
+      dbWholesalers.child(id).remove();
+      showToast("Toptancı silindi.");
+    }
+  }
+
+  function renderWholesalers() {
+    const grid = document.getElementById('wholesalers-grid');
+    if(!grid) return;
+    grid.innerHTML = '';
+    
+    if(currentRole !== 'admin') return;
+
+    Object.keys(wholesalersData).forEach(id => {
+      const w = wholesalersData[id];
+      const bal = parseFloat(w.balance || 0);
+      
+      // Bakiye gösterimi: Borçluysak (bal > 0) kırmızı "Borç", Alacaklıysak (bal < 0) yeşil "Alacak"
+      let balanceHtml = '';
+      if(bal === 0) {
+        balanceHtml = `<div class="balance-box">Bakiye: ₺0.00 <br><span style="font-size:11px; color:var(--steel);">Borç/Alacak Yok</span></div>`;
+      } else if(bal > 0) {
+        balanceHtml = `<div class="balance-box balance-negative">Bakiye: ₺${bal.toFixed(2)} <br><span style="font-size:11px; color:var(--rust);">Bizim Borcumuz</span></div>`;
+      } else {
+        balanceHtml = `<div class="balance-box balance-positive">Bakiye: ₺${Math.abs(bal).toFixed(2)} <br><span style="font-size:11px; color:var(--success);">Bizim Alacağımız</span></div>`;
+      }
+
+      const card = document.createElement('div');
+      card.className = 'tag';
+      card.innerHTML = `
+        <div class="tag-header">
+          <div>
+            <div class="tag-title">${w.name}</div>
+            <div class="tag-code">📞 ${w.phone || 'Telefon Yok'}</div>
+          </div>
+          <button class="sm-btn" style="color:var(--rust);" onclick="deleteWholesaler('${id}')">Sil</button>
+        </div>
+        
+        ${balanceHtml}
+
+        <div class="action-grid">
+          <button class="btn btn-danger btn-sm" onclick="addTransaction('${id}', 'ALIM')">📦 Mal Alımı Gir</button>
+          <button class="btn btn-success btn-sm" onclick="addTransaction('${id}', 'ODEME')">💸 Ödeme Çık</button>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  // --- ARAYÜZ (STOK RENDER) ---
   function renderGrid() {
     const grid = document.getElementById('grid');
+    if(!grid) return;
     const search = (document.getElementById('search').value || '').toLowerCase();
     grid.innerHTML = ''; let totalCount = 0; let totalUnits = 0; let totalVal = 0;
     const baseUrl = "https://reyhanicam.github.io/reyhani-stok/";
@@ -509,6 +574,7 @@
     else document.getElementById('sum-value').textContent = "***";
   }
 
+  // --- QR OKUYUCU ---
   function startScanner() {
     if(html5QrcodeScanner) return;
     html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
