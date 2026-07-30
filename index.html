@@ -283,10 +283,17 @@
         <h3 style="margin-top:0;font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:8px;">📋 Günlük İş / Görev Listesi &amp; Takibi</h3>
         <p style="font-size:12px; color:var(--steel); margin-bottom:12px;">Çalışanlar düzenlemeler bittikten sonra <strong>Yeşil Tik</strong> ile görevi işaretleyebilir, yönetici anlık olarak durumunu görebilir.</p>
         
+        <!-- Toplu İşlem Paneli -->
+        <div id="bulk-task-actions" style="display:none; justify-content:space-between; align-items:center; background:#F7F5F0; padding:8px 12px; border:1px solid var(--steel-line); border-radius:3px; margin-bottom:10px;">
+          <span style="font-size:12px; font-weight:600; color:var(--charcoal);" id="selected-task-count">0 görev seçildi</span>
+          <button class="btn btn-danger btn-sm" id="bulk-del-btn" onclick="deleteSelectedTasks()" style="display:none;">🗑️ Seçilen Görevleri Sil</button>
+        </div>
+
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:450px;">
             <thead>
               <tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
+                <th style="width:30px; padding-bottom:6px; text-align:center;"><input type="checkbox" id="select-all-tasks" onclick="toggleSelectAllTasks(this)" title="Tümünü Seç"></th>
                 <th style="padding-bottom:6px;">Görev / İş Açıklaması</th>
                 <th>Atanan Personel</th>
                 <th>Durum</th>
@@ -488,6 +495,7 @@
   let movementsData = {};
   let notificationsData = {};
   let tasksData = {};
+  let selectedTaskIds = new Set();
   
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
@@ -785,24 +793,101 @@
     }
   }
 
+  function toggleSelectAllTasks(masterCheckbox) {
+    selectedTaskIds.clear();
+    if (masterCheckbox.checked) {
+      Object.keys(tasksData).forEach(id => selectedTaskIds.add(id));
+    }
+    renderTasks();
+  }
+
+  function toggleTaskSelection(taskId, checkbox) {
+    if (checkbox.checked) {
+      selectedTaskIds.add(taskId);
+    } else {
+      selectedTaskIds.delete(taskId);
+    }
+    updateBulkDeleteUI();
+
+    const master = document.getElementById('select-all-tasks');
+    const allKeys = Object.keys(tasksData);
+    if (master) {
+      master.checked = allKeys.length > 0 && allKeys.every(k => selectedTaskIds.has(k));
+    }
+  }
+
+  function updateBulkDeleteUI() {
+    const actionContainer = document.getElementById('bulk-task-actions');
+    const bulkBtn = document.getElementById('bulk-del-btn');
+    const countSpan = document.getElementById('selected-task-count');
+    
+    if (!actionContainer || !bulkBtn) return;
+
+    if (currentRole === 'admin') {
+      actionContainer.style.display = 'flex';
+      countSpan.textContent = `${selectedTaskIds.size} görev seçildi`;
+      if (selectedTaskIds.size > 0) {
+        bulkBtn.style.display = 'inline-block';
+      } else {
+        bulkBtn.style.display = 'none';
+      }
+    } else {
+      actionContainer.style.display = 'none';
+    }
+  }
+
+  function deleteSelectedTasks() {
+    if (currentRole !== 'admin') return;
+    if (selectedTaskIds.size === 0) return;
+
+    if (confirm(`Seçilen ${selectedTaskIds.size} görevi kalıcı olarak silmek istediğinize emin misiniz?`)) {
+      const updates = {};
+      selectedTaskIds.forEach(id => {
+        updates[id] = null;
+      });
+
+      dbTasks.update(updates, (err) => {
+        if (!err) {
+          showToast(`${selectedTaskIds.size} görev silindi.`);
+          selectedTaskIds.clear();
+          renderTasks();
+        }
+      });
+    }
+  }
+
   function renderTasks() {
     const tbody = document.getElementById('tasks-table-body');
     if(!tbody) return;
     tbody.innerHTML = '';
     
     const keys = Object.keys(tasksData);
+    
+    // Clear selections that no longer exist
+    selectedTaskIds.forEach(id => {
+      if(!tasksData[id]) selectedTaskIds.delete(id);
+    });
+
+    updateBulkDeleteUI();
+
     if(keys.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:15px; color:var(--steel);">Kayıtlı görev bulunmuyor.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:var(--steel);">Kayıtlı görev bulunmuyor.</td></tr>`;
+      const master = document.getElementById('select-all-tasks');
+      if(master) master.checked = false;
       return;
     }
     
     keys.reverse().forEach(key => {
       const t = tasksData[key];
       const isDone = t.status === 'Tamamlandı';
+      const isSelected = selectedTaskIds.has(key);
       const isAdmin = currentRole === 'admin';
       
       tbody.innerHTML += `
         <tr style="border-bottom:1px dashed var(--steel-line);">
+          <td style="padding:10px 4px; text-align:center;">
+            <input type="checkbox" value="${key}" ${isSelected ? 'checked' : ''} onclick="toggleTaskSelection('${key}', this)">
+          </td>
           <td style="padding:10px 4px;">
             <strong>${t.text}</strong><br>
             <span style="font-size:10px; color:var(--steel);">Kategori: ${t.category || 'Genel'}</span>
@@ -820,6 +905,11 @@
         </tr>
       `;
     });
+
+    const master = document.getElementById('select-all-tasks');
+    if(master) {
+      master.checked = keys.length > 0 && keys.every(k => selectedTaskIds.has(k));
+    }
   }
 
   // SİPARİŞ & SEPET İŞLEMLERİ
@@ -908,7 +998,6 @@
     let grandTotal = 0;
     cart.forEach(i => grandTotal += i.total);
     
-    // Sepetteki ürünlerin stoklarını düş ve hareket kaydet
     cart.forEach(item => {
       if(productsData[item.code]) {
         const currentQty = productsData[item.code].qty || 0;
@@ -924,7 +1013,6 @@
         if(!err) {
             generateOrderExcel(orderData, orderId, dateStr);
             
-            // Fiş İsteği Sorgusu (Yalnızca sepet satışı tamamlandıktan sonra)
             if(confirm("Satış başarıyla tamamlandı ve Excel kaydedildi.\nMüşteri için fiş basılsın mı?")) {
               printThermalReceipt(cart, grandTotal);
             }
