@@ -924,7 +924,7 @@
         if(!err) {
             generateOrderExcel(orderData, orderId, dateStr);
             
-            // Fİş İsteği Sorgusu (Yalnızca sepet satışı tamamlandıktan sonra)
+            // Fiş İsteği Sorgusu (Yalnızca sepet satışı tamamlandıktan sonra)
             if(confirm("Satış başarıyla tamamlandı ve Excel kaydedildi.\nMüşteri için fiş basılsın mı?")) {
               printThermalReceipt(cart, grandTotal);
             }
