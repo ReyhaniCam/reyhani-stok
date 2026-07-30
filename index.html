@@ -13,6 +13,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://unpkg.com/html5-qrcode"></script>
 
+<!-- SheetJS (Gerçek Excel Çıktısı İçin) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
 <!-- Firebase CDNs (v8) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
@@ -121,9 +124,10 @@
   .day-badge { display:inline-block; background:var(--info); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-top:4px; font-weight:600;}
 
   /* Modal Stilleri */
-  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; }
-  .modal-content { background:var(--paper); width:90%; max-width:500px; margin:40px auto; border-radius:var(--radius); padding:20px; max-height:80vh; overflow-y:auto; position:relative; }
+  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;}
+  .modal-content { background:var(--paper); width:90%; max-width:500px; border-radius:var(--radius); padding:20px; max-height:85vh; overflow-y:auto; position:relative; }
   .modal-close { position:absolute; top:15px; right:15px; background:none; border:none; font-size:18px; cursor:pointer; font-weight:bold; color:var(--rust); }
+  
   .history-item { border-bottom:1px solid var(--steel-line); padding:10px 0; }
   .history-item:last-child { border-bottom:none; }
   .history-date { font-size:11px; color:var(--steel); }
@@ -157,7 +161,7 @@
 
   <div class="nav-tabs">
     <button class="tab-btn active" onclick="switchTab('stok')">Stok Listesi</button>
-    <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')">+ Ürün Ekle</button>
+    <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')" style="display:none;">+ Ürün Ekle</button>
     <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
     <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Siparişler</button>
@@ -174,7 +178,7 @@
       </div>
       <div class="search-wrap">
         <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
-        <button class="btn btn-dark btn-sm" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
+        <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
       </div>
       <div id="grid" class="grid"></div>
@@ -182,7 +186,7 @@
 
     <!-- ÜRÜN EKLE TABI -->
     <div id="tab-ekle" class="tab-content">
-      <div class="form-card" id="add-form-card">
+      <div class="form-card disabled-action" id="add-form-card">
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Ürün Ekle</h3>
         <div class="form-row">
           <div><label>Ürün Adı</label><input type="text" id="f-name" placeholder="Örn: Akfix Silikon 280ml"></div>
@@ -262,7 +266,7 @@
       <div id="wholesalers-grid" class="grid"></div>
     </div>
 
-    <!-- SİPARİŞLER TABI (ÇALIŞAN VE YÖNETİCİYE AKTİF EDİLDİ) -->
+    <!-- SİPARİŞLER TABI -->
     <div id="tab-siparis" class="tab-content">
       <div class="form-card">
         <h3 style="margin-top:0; font-family:'Oswald';">Yeni Sipariş Listesi (Sepet)</h3>
@@ -308,12 +312,12 @@
       <div id="past-orders-list"></div>
     </div>
 
-    <!-- RAPORLAR TABI (ÇALIŞAN VE YÖNETİCİYE AKTİF EDİLDİ) -->
+    <!-- RAPORLAR TABI -->
     <div id="tab-raporlar" class="tab-content">
       <div class="report-box">
         <h3>GÜN SONU Z RAPORU</h3>
         <p>Bugün dükkanda yapılan tüm işlemler ve stoka eklenen ürünler listelenir. Raporu aldığınızda eski kayıtlar sistemden temizlenir.</p>
-        <button class="btn btn-success" onclick="exportZReport()">Z Raporunu İndir (Excel)</button>
+        <button class="btn btn-success" onclick="exportZReport()">Z Raporunu İndir ve Temizle (Excel)</button>
       </div>
     </div>
 
@@ -324,7 +328,7 @@
 <div id="print-area"></div>
 
 <!-- GEÇMİŞ MODALI (HESAP EKSTRESİ) -->
-<div class="modal-overlay" id="history-modal">
+<div class="modal-overlay" id="history-modal" style="display:none;">
   <div class="modal-content">
     <button class="modal-close" onclick="closeHistory()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';" id="history-title">Hesap Dökümü</h3>
@@ -332,10 +336,51 @@
   </div>
 </div>
 
+<!-- DÜZENLEME MODALI (KAPSAMLI) -->
+<div class="modal-overlay" id="edit-modal" style="display:none;">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeEditModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">Ürün Düzenle</h3>
+    <input type="hidden" id="edit-code">
+    <div class="form-row">
+      <div><label>Ürün Adı</label><input type="text" id="edit-name"></div>
+      <div><label>Miktar</label><input type="number" id="edit-qty" step="any"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Fiyat (₺)</label><input type="number" id="edit-price" step="0.01"></div>
+      <div><label>Ölçü Birimi</label>
+        <select id="edit-unit">
+          <option value="Adet">Adet</option>
+          <option value="Kilogram">Kilogram</option>
+          <option value="Metre">Metre</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row" style="grid-template-columns: 1fr;">
+      <div><label>Ürün Sınıfı</label>
+        <select id="edit-category">
+          <option value="Banyo">Banyo</option>
+          <option value="Bahçe">Bahçe</option>
+          <option value="Mutfak">Mutfak</option>
+          <option value="Boya">Boya</option>
+          <option value="Toz Grubu">Toz Grubu</option>
+          <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
+          <option value="Cam & Aksesuar">Cam & Aksesuar</option>
+          <option value="Silikon & Mastik">Silikon & Mastik</option>
+          <option value="Vida & Civata">Vida & Civata</option>
+          <option value="El Aletleri">El Aletleri</option>
+          <option value="Diğer">Diğer</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="saveEditProduct()">Değişiklikleri Kaydet</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-  // FIREBASE BAGLANTISI
+  // FIREBASE BAĞLANTISI (Aynı kalıyor)
   const firebaseConfig = { databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/" };
   firebase.initializeApp(firebaseConfig);
   
@@ -348,6 +393,7 @@
   let productsData = {};
   let wholesalersData = {};
   let globalPastOrders = {};
+  let movementsData = {};
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
   let cart = [];
@@ -356,12 +402,13 @@
   const STAFF_PASS = "5323";
 
   function formatMoney(amount) {
-    return amount.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Number(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
 
   const urlParams = new URLSearchParams(window.location.search);
   const targetCode = urlParams.get('item');
 
+  // Dinleyiciler
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
@@ -374,7 +421,11 @@
 
   dbWholesalers.on('value', (snapshot) => {
     wholesalersData = snapshot.val() || {};
-    renderWholesalers();
+    if(currentRole === 'admin') renderWholesalers();
+  });
+
+  dbMovements.on('value', (snapshot) => {
+    movementsData = snapshot.val() || {};
   });
 
   dbOrders.on('value', snapshot => {
@@ -392,7 +443,7 @@
     
     Object.keys(data).sort().reverse().forEach(dateStr => {
       if(dateStr < cutoffStr) {
-        dbOrders.child(dateStr).remove();
+        dbOrders.child(dateStr).remove(); // Otomatik temizlik
         return;
       }
       
@@ -448,7 +499,6 @@
     document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
     document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
     
-    // ÇALIŞAN VE YÖNETİCİYE AKTİF EDİLDİ
     const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
     document.getElementById('nav-siparis-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
     document.getElementById('nav-reports-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
@@ -467,7 +517,7 @@
       printAllBtn.style.display = 'none';
     }
     renderGrid();
-    renderWholesalers();
+    if(currentRole === 'admin') renderWholesalers();
   }
 
   function switchTab(tabName) {
@@ -486,7 +536,6 @@
             allBtns[i].classList.add('active');
         }
     }
-
     if(tabName === 'okut') startScanner(); else stopScanner();
   }
 
@@ -496,6 +545,7 @@
     setTimeout(() => t.style.display = 'none', 2500);
   }
 
+  // SİPARİŞ & SEPET İŞLEMLERİ
   function updateOrderProductList() {
     const dl = document.getElementById('order-product-list');
     if(!dl) return;
@@ -520,10 +570,7 @@
     const code = inputVal.split(' - ')[0].trim();
     const p = productsData[code];
     
-    if(!p) { 
-      alert("Ürün bulunamadı! Lütfen listeden seçin."); 
-      return; 
-    }
+    if(!p) { alert("Ürün bulunamadı! Lütfen listeden seçin."); return; }
     
     const existingIndex = cart.findIndex(item => item.code === code);
     if(existingIndex !== -1) {
@@ -531,13 +578,7 @@
         cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
     } else {
         const price = Number(p.price || 0);
-        cart.push({
-          code: p.code, 
-          name: p.name, 
-          price: price, 
-          qty: qty, 
-          total: price * qty
-        });
+        cart.push({ code: p.code, name: p.name, price: price, qty: qty, total: price * qty });
     }
     
     document.getElementById('cart-product').value = '';
@@ -550,10 +591,7 @@
     const container = document.getElementById('cart-container');
     const tbody = document.getElementById('cart-items');
     
-    if(cart.length === 0) { 
-      container.style.display = 'none'; 
-      return; 
-    }
+    if(cart.length === 0) { container.style.display = 'none'; return; }
     
     container.style.display = 'block';
     tbody.innerHTML = '';
@@ -615,25 +653,76 @@
     }
   }
 
-  function generateOrderExcel(order, orderId, dateStr) {
-    let htmlTable = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><h2>Reyhani Cam - Sipariş Listesi</h2><p><strong>Tarih:</strong> ${dateStr} ${order.time}</p><p><strong>Sipariş Kodu:</strong> ${orderId}</p><table border="1"><tr style="background:#28a745;color:white;font-weight:bold;"><th>Sıra</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>Birim Fiyat (TL)</th><th>Miktar</th><th>Toplam (TL)</th></tr>`;
+  // STOK GÖRÜNTÜLEME VE YÖNETİM
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    const search = document.getElementById('search').value.toLowerCase();
+    grid.innerHTML = '';
     
-    order.items.forEach((item, idx) => {
-        htmlTable += `<tr><td>${idx+1}</td><td>${item.code}</td><td>${item.name}</td><td>${formatMoney(item.price)}</td><td style="font-weight:bold;color:red;">${item.qty}</td><td>${formatMoney(item.total)}</td></tr>`;
+    let count = 0, units = 0, value = 0;
+    const canEdit = (currentRole === 'admin' || currentRole === 'staff');
+    const isAdmin = (currentRole === 'admin');
+
+    Object.values(productsData).forEach(p => {
+      const pName = p.name ? p.name.toLowerCase() : '';
+      const pCat = p.category ? p.category.toLowerCase() : '';
+      const pCode = p.code ? p.code.toLowerCase() : '';
+      
+      if (pName.includes(search) || pCat.includes(search) || pCode.includes(search)) {
+        count++;
+        units += parseFloat(p.qty || 0);
+        value += parseFloat(p.qty || 0) * parseFloat(p.price || 0);
+        
+        const isLow = p.qty <= 5;
+        
+        // Düzenleme / Silme butonları (sadece Admin)
+        let adminActions = '';
+        if (isAdmin) {
+          adminActions = `
+            <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--steel-line); padding-top:8px;">
+              <button class="sm-btn" onclick="openEditModal('${p.code}')">✏️ Düzenle</button>
+              <button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--rust);">🗑️ Sil</button>
+            </div>
+          `;
+        }
+
+        grid.innerHTML += `
+          <div class="tag ${isLow ? 'low' : ''}" id="card-${p.code}">
+            <div class="tag-header">
+              <div>
+                <div class="tag-title">${p.name}</div>
+                <div class="tag-code">${p.code} • ${p.category || 'Belirtilmedi'}</div>
+              </div>
+              <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
+            </div>
+            
+            <div class="price-info-box">
+               <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
+               <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
+            </div>
+
+            <div class="qty-control">
+              <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
+              <div class="qty-val">${p.qty} <span style="font-size:10px;font-family:'Inter';color:var(--steel);">${p.unit || 'Adet'}</span></div>
+              <button class="qty-btn" onclick="updateQty('${p.code}', 1)" ${!canEdit ? 'disabled' : ''}>+</button>
+            </div>
+            ${adminActions}
+          </div>
+        `;
+      }
     });
+
+    document.getElementById('sum-count').textContent = count;
+    document.getElementById('sum-units').textContent = units.toFixed(1);
     
-    htmlTable += `<tr><td colspan="5" style="text-align:right;font-weight:bold;">GENEL TOPLAM:</td><td style="font-weight:bold;background:#F5B700;">${formatMoney(order.total)} TL</td></tr>`;
-    htmlTable += `</table></body></html>`;
-    
-    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement("a"); 
-    link.href = URL.createObjectURL(blob); 
-    link.download = `Reyhani_Siparis_${dateStr}.xls`;
-    document.body.appendChild(link); 
-    link.click(); 
-    document.body.removeChild(link);
+    if (isAdmin) {
+        document.getElementById('sum-value').textContent = "₺" + formatMoney(value);
+    } else {
+        document.getElementById('sum-value').textContent = "***";
+    }
   }
 
+  // --- ÜRÜN EKLEME (KOD ÇAKIŞMA KONTROLÜ İLE) ---
   function addProduct() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('f-name').value.trim();
@@ -646,17 +735,71 @@
     if(!name) { alert("Lütfen ürün adını giriniz."); return; }
     if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
 
-    db.child(code).set({ name, qty, price, unit, category, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
-      if(!error) {
-        if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
-        showToast("Ürün eklendi!");
-        document.getElementById('f-name').value = ''; 
-        document.getElementById('f-qty').value = ''; 
-        document.getElementById('f-price').value = ''; 
-        document.getElementById('f-code').value = '';
-        switchTab('stok');
-      }
+    // KOD ÇAKIŞMASINI ÖNLE
+    db.child(code).once('value', snapshot => {
+       if(snapshot.exists()) {
+           alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor! Lütfen farklı bir kod girin veya otomatik bırakın.`);
+       } else {
+           db.child(code).set({ name, qty, price, unit, category, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
+             if(!error) {
+               if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
+               showToast("Ürün eklendi!");
+               document.getElementById('f-name').value = ''; 
+               document.getElementById('f-qty').value = ''; 
+               document.getElementById('f-price').value = ''; 
+               document.getElementById('f-code').value = '';
+               switchTab('stok');
+             }
+           });
+       }
     });
+  }
+
+  function deleteProduct(code) {
+    if(currentRole !== 'admin') return;
+    if(confirm(`${productsData[code].name} ürününü tamamen silmek istediğinize emin misiniz?`)) {
+       db.child(code).remove();
+       showToast("Ürün silindi.");
+    }
+  }
+
+  // --- ÜRÜN DÜZENLEME MODALI ---
+  function openEditModal(code) {
+      if(currentRole !== 'admin') return;
+      const p = productsData[code];
+      if(!p) return;
+      
+      document.getElementById('edit-code').value = code;
+      document.getElementById('edit-name').value = p.name || '';
+      document.getElementById('edit-qty').value = p.qty || 0;
+      document.getElementById('edit-price').value = p.price || 0;
+      document.getElementById('edit-unit').value = p.unit || 'Adet';
+      document.getElementById('edit-category').value = p.category || 'Diğer';
+      
+      document.getElementById('edit-modal').style.display = 'flex';
+  }
+
+  function closeEditModal() {
+      document.getElementById('edit-modal').style.display = 'none';
+  }
+
+  function saveEditProduct() {
+      if(currentRole !== 'admin') return;
+      const code = document.getElementById('edit-code').value;
+      const name = document.getElementById('edit-name').value.trim();
+      const qty = parseFloat(document.getElementById('edit-qty').value) || 0;
+      const price = parseFloat(document.getElementById('edit-price').value) || 0;
+      const unit = document.getElementById('edit-unit').value;
+      const category = document.getElementById('edit-category').value;
+      
+      if(!name) { alert("Ürün adı boş olamaz."); return; }
+      
+      db.child(code).update({ name, qty, price, unit, category }, (err) => {
+          if(!err) {
+              showToast("Ürün bilgileri güncellendi!");
+              closeEditModal();
+          }
+      });
   }
 
   function updateQty(code, change) {
@@ -675,190 +818,153 @@
   function updatePrice(code) {
     if(currentRole !== 'admin') return;
     const currentPrice = productsData[code] ? productsData[code].price : 0;
-    const newPriceStr = prompt("Yeni Birim Fiyatı Giriniz (₺):", currentPrice);
-    if(newPriceStr !== null && !isNaN(parseFloat(newPriceStr.replace(',','.'))) && parseFloat(newPriceStr.replace(',','.')) >= 0) {
-      db.child(code).update({ price: parseFloat(newPriceStr.replace(',','.')), lastPriceUpdate: new Date().toISOString() });
+    const newPriceStr = prompt(`Yeni fiyatı giriniz (Mevcut: ₺${formatMoney(currentPrice)}):`, currentPrice);
+    if (newPriceStr !== null) {
+      const newPrice = parseFloat(newPriceStr.replace(',','.'));
+      if (!isNaN(newPrice) && newPrice >= 0) {
+         db.child(code).update({ price: newPrice, lastPriceUpdate: new Date().toISOString() });
+         showToast("Fiyat güncellendi!");
+      } else {
+         alert("Geçersiz fiyat!");
+      }
     }
   }
 
-  function deleteProduct(code) {
-    if(currentRole !== 'admin') return;
-    if(confirm("Bu ürünü tamamen silmek istediğinize emin misiniz?")) {
-      db.child(code).remove();
-      showToast("Ürün silindi.");
-    }
-  }
-
-  function renderGrid() {
-    const grid = document.getElementById('grid');
-    const search = document.getElementById('search').value.toLowerCase();
-    grid.innerHTML = '';
-
-    let totalCount = 0;
-    let totalUnits = 0;
-    let totalValuation = 0;
-
-    const list = Object.values(productsData).filter(p => {
-      return (p.name && p.name.toLowerCase().includes(search)) || 
-             (p.code && p.code.toLowerCase().includes(search)) ||
-             (p.category && p.category.toLowerCase().includes(search));
-    });
-
-    list.sort((a,b) => a.name.localeCompare(b.name));
-
-    list.forEach(p => {
-      totalCount++;
-      const qty = Number(p.qty || 0);
-      totalUnits += qty;
-      const price = Number(p.price || 0);
-      totalValuation += qty * price;
-      const unit = p.unit || 'Adet';
-
-      const isHighlighted = (targetCode && p.code === targetCode);
-
-      const card = document.createElement('div');
-      card.className = `tag ${isHighlighted ? 'highlight' : ''}`;
-      card.innerHTML = `
-        <div class="tag-header">
-          <div>
-            <div class="tag-title">${p.name}</div>
-            <div class="tag-code">${p.code} • <span style="color:var(--info); font-weight:600;">${p.category || 'Diğer'}</span></div>
-          </div>
-          ${currentRole === 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.code}')">Sil</button>` : ''}
-        </div>
-        <div class="qr-box" id="qr-${p.code}"></div>
-        <div class="price-info-box" onclick="updatePrice('${p.code}')" style="cursor:pointer;" title="Fiyatı Değiştirmek İçin Tıkla">
-          <span>Birim Fiyat: <strong>₺${formatMoney(price)}</strong></span>
-          ${currentRole === 'admin' ? '<span style="color:var(--info); text-decoration:underline;">Düzenle</span>' : ''}
-        </div>
-        <div class="qty-control">
-          <button class="qty-btn" ${currentRole==='guest'?'disabled':''} onclick="updateQty('${p.code}', -1)">-</button>
-          <span class="qty-val">${qty} ${unit}</span>
-          <button class="qty-btn" ${currentRole==='guest'?'disabled':''} onclick="updateQty('${p.code}', 1)">+</button>
-        </div>
-        <div class="tag-actions">
-          <button class="sm-btn" onclick="printSingleLabel('${p.code}')">🖨️ Etiket Bas</button>
-          <span style="font-size:11px; font-family:'IBM Plex Mono'; font-weight:bold;">Tutar: ₺${formatMoney(qty * price)}</span>
-        </div>
-      `;
-      grid.appendChild(card);
-
-      setTimeout(() => {
-        const qrContainer = document.getElementById(`qr-${p.code}`);
-        if(qrContainer && qrContainer.innerHTML === "") {
-          new QRCode(qrContainer, {
-            text: window.location.origin + window.location.pathname + "?item=" + p.code,
-            width: 90, height: 90,
-            colorDark : "#22262A",
-            colorLight : "#ffffff",
-            correctLevel : QRCode.CorrectLevel.H
-          });
-        }
-      }, 50);
-    });
-
-    document.getElementById('sum-count').textContent = totalCount;
-    document.getElementById('sum-units').textContent = totalUnits.toLocaleString('tr-TR');
-    document.getElementById('sum-value').textContent = currentRole === 'guest' ? '***' : "₺" + formatMoney(totalValuation);
-  }
-
-  function startScanner() {
-    if(html5QrcodeScanner) return;
-    try {
-      html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-      html5QrcodeScanner.render((decodedText) => {
-        let code = decodedText;
-        if(decodedText.includes("?item=")) {
-          code = decodedText.split("?item=")[1];
-        }
-        document.getElementById('search').value = code;
-        switchTab('stok');
-        showToast("QR Kod okundu: " + code);
-      }, (error) => {});
-    } catch(e) {}
-  }
-
-  function stopScanner() {
-    if(html5QrcodeScanner) {
-      html5QrcodeScanner.clear().catch(error => {});
-      html5QrcodeScanner = null;
-    }
-  }
-
-  function exportBackup() {
-    if(currentRole !== 'admin') return;
-    let htmlTable = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><table border="1"><tr><th>Ürün Kodu</th><th>Ürün Adı</th><th>Kategori</th><th>Miktar</th><th>Birim</th><th>Birim Fiyat (TL)</th><th>Toplam Değer (TL)</th></tr>`;
-    
-    Object.values(productsData).forEach(p => {
-      const qty = Number(p.qty || 0);
-      const price = Number(p.price || 0);
-      htmlTable += `<tr><td>${p.code}</td><td>${p.name}</td><td>${p.category || ''}</td><td>${qty}</td><td>${p.unit || 'Adet'}</td><td>${formatMoney(price)}</td><td>${formatMoney(qty * price)}</td></tr>`;
-    });
-    htmlTable += `</table></body></html>`;
-
-    const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `Reyhani_Stok_Raporu_${new Date().toISOString().slice(0,10)}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  function printSingleLabel(code) {
+  // YAZDIRMA İŞLEMLERİ
+  function printQR(code) {
+    if(currentRole === 'guest') return;
     const p = productsData[code];
     if(!p) return;
     const printArea = document.getElementById('print-area');
-    printArea.innerHTML = `
-      <div class="sticker-label">
-        <div class="sticker-title">${p.name}</div>
-        <div class="sticker-qr" id="print-qr"></div>
-        <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price || 0)}</span></div>
-      </div>
+    printArea.innerHTML = '';
+    
+    const sticker = document.createElement('div');
+    sticker.className = 'sticker-label';
+    sticker.innerHTML = `
+      <div class="sticker-title">${p.name}</div>
+      <div class="sticker-qr" id="qr-${code}"></div>
+      <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price)}</span></div>
     `;
-    new QRCode(document.getElementById('print-qr'), {
-      text: window.location.origin + window.location.pathname + "?item=" + p.code,
-      width: 68, height: 68
-    });
-    setTimeout(() => { window.print(); }, 300);
+    printArea.appendChild(sticker);
+    new QRCode(document.getElementById(`qr-${code}`), { text: `https://reyhani-stok.web.app/?item=${code}`, width: 68, height: 68 });
+    
+    setTimeout(() => window.print(), 300);
   }
 
   function printAllLabels() {
-    const printArea = document.getElementById('print-area');
-    printArea.innerHTML = '';
-    Object.values(productsData).forEach(p => {
-      printArea.innerHTML += `
-        <div class="sticker-label">
-          <div class="sticker-title">${p.name}</div>
-          <div class="sticker-qr" id="p-qr-${p.code}"></div>
-          <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price || 0)}</span></div>
-        </div>
-      `;
-    });
-    setTimeout(() => {
+      if(currentRole !== 'admin' && currentRole !== 'staff') return;
+      const printArea = document.getElementById('print-area');
+      printArea.innerHTML = '';
+      const search = document.getElementById('search').value.toLowerCase();
+      
       Object.values(productsData).forEach(p => {
-        new QRCode(document.getElementById(`p-qr-${p.code}`), {
-          text: window.location.origin + window.location.pathname + "?item=" + p.code,
-          width: 68, height: 68
-        });
+          const pName = p.name ? p.name.toLowerCase() : '';
+          const pCat = p.category ? p.category.toLowerCase() : '';
+          const pCode = p.code ? p.code.toLowerCase() : '';
+          
+          if (pName.includes(search) || pCat.includes(search) || pCode.includes(search)) {
+              const sticker = document.createElement('div');
+              sticker.className = 'sticker-label';
+              sticker.innerHTML = `
+                <div class="sticker-title">${p.name}</div>
+                <div class="sticker-qr" id="qrp-${p.code}"></div>
+                <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price)}</span></div>
+              `;
+              printArea.appendChild(sticker);
+              new QRCode(document.getElementById(`qrp-${p.code}`), { text: `https://reyhani-stok.web.app/?item=${p.code}`, width: 68, height: 68 });
+          }
       });
-      setTimeout(() => { window.print(); }, 500);
-    }, 100);
+      setTimeout(() => window.print(), 800);
   }
 
+  // EXCEL ÇIKTILARI (SheetJS Kullanılarak)
+  function exportBackup() {
+    if(currentRole !== 'admin') return;
+    const dataRow = [["Ürün Kodu", "Kategori", "Ürün Adı", "Miktar", "Birim", "Birim Fiyat", "Toplam Değer"]];
+    
+    Object.values(productsData).forEach(p => {
+        dataRow.push([
+            p.code, 
+            p.category || 'Belirtilmedi', 
+            p.name, 
+            p.qty, 
+            p.unit || 'Adet', 
+            p.price, 
+            (p.qty * p.price)
+        ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(dataRow);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Stok Durumu");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Reyhani_Stok_Yedegi_${dateStr}.xlsx`);
+  }
+
+  function generateOrderExcel(order, orderId, dateStr) {
+    const dataRow = [["Sıra", "Ürün Kodu", "Ürün Adı", "Birim Fiyat", "Miktar", "Toplam"]];
+    
+    order.items.forEach((item, idx) => {
+        dataRow.push([idx+1, item.code, item.name, item.price, item.qty, item.total]);
+    });
+    
+    dataRow.push(["", "", "", "", "GENEL TOPLAM:", order.total]);
+
+    const ws = XLSX.utils.aoa_to_sheet(dataRow);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sipariş");
+    XLSX.writeFile(wb, `Reyhani_Siparis_${dateStr}_${orderId}.xlsx`);
+  }
+
+  function exportZReport() {
+    if(currentRole !== 'admin' && currentRole !== 'staff') return;
+    
+    // SİLME ONAYI EKLENDİ
+    if(!confirm("Z Raporu almak, dükkandaki şu ana kadar kaydedilmiş gün içi hareket kayıtlarını excel olarak indirip veritabanından SİLECEKTİR. Onaylıyor musunuz?")) {
+        return; 
+    }
+
+    const dataRow = [["Tarih", "Saat", "İşlem Tipi", "Ürün Kodu", "Ürün Adı", "Değişim Miktarı"]];
+    
+    Object.keys(movementsData).forEach(date => {
+        const moves = movementsData[date];
+        Object.values(moves).forEach(m => {
+            dataRow.push([date, m.time, m.type, m.code, m.name, m.change]);
+        });
+    });
+
+    if(dataRow.length === 1) {
+        alert("Raporlanacak hareket bulunamadı.");
+        return;
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(dataRow);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Z_Raporu");
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `Reyhani_ZRaporu_${dateStr}.xlsx`);
+    
+    // Eski hareketleri temizle
+    dbMovements.remove();
+    showToast("Z Raporu alındı ve kayıtlar temizlendi.");
+  }
+
+  // TOPTANCI FONKSİYONLARI
   function addWholesaler() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('w-name').value.trim();
     const phone = document.getElementById('w-phone').value.trim();
     const day = document.getElementById('w-day').value;
-    if(!name) { alert("Firma adı giriniz."); return; }
-    const id = "W-" + Date.now();
-    dbWholesalers.child(id).set({ name, phone, day }, err => {
-      if(!err) {
-        showToast("Toptancı eklendi!");
-        document.getElementById('w-name').value = '';
-        document.getElementById('w-phone').value = '';
-      }
+    
+    if(!name) { alert("Firma adını giriniz."); return; }
+    
+    const id = "W-" + new Date().getTime();
+    dbWholesalers.child(id).set({ name, phone, day, balance: 0, history: [] }, (err) => {
+        if(!err) {
+            document.getElementById('w-name').value = '';
+            document.getElementById('w-phone').value = '';
+            showToast("Firma eklendi!");
+        }
     });
   }
 
@@ -866,121 +972,137 @@
     const grid = document.getElementById('wholesalers-grid');
     if(!grid) return;
     grid.innerHTML = '';
+    
+    if(currentRole !== 'admin') return;
+    
     Object.keys(wholesalersData).forEach(id => {
-      const w = wholesalersData[id];
-      grid.innerHTML += `
-        <div class="tag">
-          <div class="tag-title">${w.name}</div>
-          <div class="tag-code">📞 ${w.phone || 'Belirtilmemiş'}</div>
-          <span class="day-badge">Geliş Günü: ${w.day}</span>
-          <div class="action-grid">
-            <button class="btn btn-dark btn-sm" onclick="openHistory('${id}', '${w.name}')">Ekstre / Borç</button>
-            ${currentRole === 'admin' ? `<button class="btn btn-danger btn-sm" onclick="deleteWholesaler('${id}')">Sil</button>` : ''}
+        const w = wholesalersData[id];
+        const isNegative = w.balance < 0;
+        
+        grid.innerHTML += `
+          <div class="tag">
+            <div class="tag-header">
+               <div>
+                 <div class="tag-title">${w.name}</div>
+                 <div class="tag-code">📞 ${w.phone || 'Yok'}</div>
+                 <div class="day-badge">📅 Geldiği Gün: ${w.day || 'Belirsiz'}</div>
+               </div>
+               <button class="sm-btn" onclick="deleteWholesaler('${id}')" style="color:var(--rust);">Sil</button>
+            </div>
+            
+            <div class="balance-box ${isNegative ? 'balance-negative' : 'balance-positive'}">
+                Bakiye: ₺${formatMoney(w.balance || 0)}
+            </div>
+            
+            <div class="action-grid">
+               <button class="btn btn-dark btn-sm" onclick="addBalance('${id}', 'borc')">Borç Ekle (-)</button>
+               <button class="btn btn-success btn-sm" onclick="addBalance('${id}', 'odeme')">Ödeme Yap (+)</button>
+            </div>
+            <button class="btn btn-info btn-sm" style="width:100%; margin-top:6px;" onclick="showHistory('${id}')">Hesap Dökümünü Gör</button>
           </div>
-        </div>
-      `;
+        `;
     });
+  }
+
+  function addBalance(id, type) {
+      if(currentRole !== 'admin') return;
+      const w = wholesalersData[id];
+      const amountStr = prompt(`Ne kadar ${type === 'borc' ? 'Borç Eklenecek' : 'Ödeme Yapıldı'}?`);
+      if(!amountStr) return;
+      
+      const amount = parseFloat(amountStr.replace(',','.'));
+      if(isNaN(amount) || amount <= 0) return;
+      
+      let note = prompt("Açıklama / Not giriniz (İsteğe bağlı):") || (type === 'borc' ? 'Mal Alımı' : 'Nakit Ödeme');
+      const dateStr = new Date().toLocaleDateString('tr-TR') + " " + new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
+      
+      let newBalance = w.balance || 0;
+      if(type === 'borc') newBalance -= amount;
+      if(type === 'odeme') newBalance += amount;
+      
+      const newHistoryItem = { date: dateStr, amount: amount, type: type, note: note };
+      let newHistory = w.history ? [...w.history] : [];
+      newHistory.push(newHistoryItem);
+      
+      dbWholesalers.child(id).update({ balance: newBalance, history: newHistory });
   }
 
   function deleteWholesaler(id) {
-    if(currentRole !== 'admin') return;
-    if(confirm("Toptancıyı silmek istediğinize emin misiniz?")) {
-      dbWholesalers.child(id).remove();
-      showToast("Toptancı silindi.");
-    }
+      if(currentRole !== 'admin') return;
+      if(confirm(`${wholesalersData[id].name} firmasını ve hesap geçmişini tamamen silmek istiyor musunuz?`)) {
+          dbWholesalers.child(id).remove();
+      }
   }
 
-  let activeWholesalerId = null;
-  function openHistory(id, name) {
-    activeWholesalerId = id;
-    document.getElementById('history-title').textContent = name + " - Hesap Hareketleri";
-    document.getElementById('history-modal').style.display = 'block';
-    loadHistory(id);
+  function showHistory(id) {
+      if(currentRole !== 'admin') return;
+      const w = wholesalersData[id];
+      const modal = document.getElementById('history-modal');
+      const title = document.getElementById('history-title');
+      const list = document.getElementById('history-list');
+      
+      title.textContent = `${w.name} - Hesap Dökümü`;
+      list.innerHTML = '';
+      
+      if(!w.history || w.history.length === 0) {
+          list.innerHTML = '<p style="color:var(--steel);font-size:13px;">Geçmiş işlem bulunamadı.</p>';
+      } else {
+          [...w.history].reverse().forEach(h => {
+              const isBorc = h.type === 'borc';
+              list.innerHTML += `
+                 <div class="history-item">
+                    <div class="history-date">${h.date}</div>
+                    <div class="history-flex">
+                        <strong style="font-size:13px;">${h.note}</strong>
+                        <strong style="color: ${isBorc ? 'var(--rust)' : 'var(--success)'}">
+                           ${isBorc ? '-' : '+'}₺${formatMoney(h.amount)}
+                        </strong>
+                    </div>
+                 </div>
+              `;
+          });
+      }
+      modal.style.display = 'flex';
   }
 
   function closeHistory() {
-    document.getElementById('history-modal').style.display = 'none';
+      document.getElementById('history-modal').style.display = 'none';
   }
 
-  function loadHistory(id) {
-    const list = document.getElementById('history-list');
-    list.innerHTML = '<p style="font-size:12px; color:var(--steel);">Yükleniyor...</p>';
-    dbWholesalers.child(id).child('transactions').on('value', snap => {
-      const data = snap.val() || {};
-      list.innerHTML = `
-        <div style="margin-bottom:15px; background:var(--concrete); padding:10px; border-radius:4px;">
-           <label>İşlem Açıklaması</label>
-           <input type="text" id="h-desc" placeholder="Örn: Mal Alımı / Yapılan Ödeme" style="margin-bottom:8px;">
-           <div class="form-row" style="margin-bottom:8px;">
-             <div><label>Tutar (₺)</label><input type="number" id="h-amount" step="0.01" placeholder="0.00"></div>
-             <div><label>İşlem Türü</label>
-               <select id="h-type">
-                 <option value="borc">Borçlandır (+)</option>
-                 <option value="odeme">Ödeme Yapıldı (-)</option>
-               </select>
-             </div>
-           </div>
-           <button class="btn btn-primary btn-sm" onclick="addTransaction()">İşlemi Kaydet</button>
-        </div>
-      `;
-      let balance = 0;
-      let html = '';
-      Object.keys(data).forEach(tId => {
-        const t = data[tId];
-        if(t.type === 'borc') balance += Number(t.amount);
-        else balance -= Number(t.amount);
-
-        html += `
-          <div class="history-item">
-            <div class="history-date">${t.date}</div>
-            <div class="history-flex">
-              <div><strong>${t.desc}</strong></div>
-              <div style="font-family:'IBM Plex Mono'; font-weight:bold; color:${t.type==='borc'?'var(--rust)':'var(--success)'}">
-                ${t.type==='borc'?'+':'-'}₺${formatMoney(t.amount)}
-              </div>
-            </div>
-          </div>
-        `;
+  // QR OKUYUCU
+  function startScanner() {
+    if (!html5QrcodeScanner) {
+      html5QrcodeScanner = new Html5Qrcode("reader");
+    }
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
+      .catch(err => {
+        document.getElementById('scan-result').innerHTML = `<p style="color:red;font-size:12px;">Kamera başlatılamadı: ${err}</p>`;
       });
-      list.innerHTML += `<div class="balance-box ${balance>0?'balance-negative':'balance-positive'}">Güncel Bakiye: ₺${formatMoney(balance)}</div>` + html;
-    });
   }
 
-  function addTransaction() {
-    const desc = document.getElementById('h-desc').value.trim();
-    const amount = parseFloat(document.getElementById('h-amount').value);
-    const type = document.getElementById('h-type').value;
-    if(!desc || isNaN(amount) || amount <= 0) { alert("Lütfen geçerli açıklama ve tutar girin."); return; }
-    const date = new Date().toLocaleString('tr-TR');
-    dbWholesalers.child(activeWholesalerId).child('transactions').push({ desc, amount, type, date }, err => {
-      if(!err) { showToast("İşlem eklendi."); }
-    });
+  function stopScanner() {
+    if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
+      html5QrcodeScanner.stop().catch(console.error);
+    }
   }
 
-  function exportZReport() {
-    if(currentRole !== 'admin' && currentRole !== 'staff') return;
-    const dateStr = new Date().toISOString().slice(0, 10);
-    dbMovements.child(dateStr).once('value', snapshot => {
-      const movements = snapshot.val() || {};
-      let htmlTable = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8"></head><body><h2>Reyhani Cam Hırdavat - Gün Sonu Z Raporu</h2><p><strong>Tarih:</strong> ${dateStr}</p><table border="1"><tr style="background:#28a745;color:white;font-weight:bold;"><th>Saat</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>İşlem Miktarı</th><th>İşlem Türü</th></tr>`;
-      
-      Object.values(movements).forEach(m => {
-        htmlTable += `<tr><td>${m.time}</td><td>${m.code}</td><td>${m.name}</td><td>${m.change}</td><td>${m.type}</td></tr>`;
-      });
-      htmlTable += `</table></body></html>`;
-
-      const blob = new Blob([htmlTable], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = `Z_Raporu_${dateStr}.xls`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      // İsteğe bağlı olarak rapor alındığında bugünkü hareketleri temizlemek için:
-      dbMovements.child(dateStr).remove();
-    });
+  function onScanSuccess(decodedText) {
+    stopScanner();
+    document.getElementById('scan-result').innerHTML = `<p style="color:green;font-weight:bold;">Kod Okundu, Yönlendiriliyor...</p>`;
+    
+    let codeToSearch = decodedText;
+    if(decodedText.includes('item=')) {
+        codeToSearch = decodedText.split('item=')[1];
+    }
+    
+    switchTab('stok');
+    document.getElementById('search').value = codeToSearch;
+    setTimeout(() => { renderGrid(); showToast("Ürün Bulundu!"); }, 500);
   }
+
+  // Başlangıç Kurulumu
+  updateAuthUI();
 </script>
 </body>
 </html>
