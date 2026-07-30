@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Reyhani Cam Hırdavat — Canlı QR Stok Paneli</title>
+<title>Reyhani Cam Hırdavat — Canlı QR Stok ve Görev Paneli</title>
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -151,7 +151,7 @@
   <header>
     <div class="brand">
       <h1>Reyhani Cam Hırdavat</h1>
-      <span>Canlı Bulut &amp; QR Stok Paneli</span>
+      <span>Canlı Bulut &amp; QR Stok ve Görev Paneli</span>
     </div>
     <div class="auth-status">
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
@@ -163,6 +163,7 @@
     <button class="tab-btn active" onclick="switchTab('stok')">Stok Listesi</button>
     <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')" style="display:none;">+ Ürün Ekle</button>
     <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
+    <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Günlük Görevler</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
     <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Siparişler</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
@@ -233,6 +234,60 @@
         <p style="font-size:13px;color:var(--steel);">Kamerayı açarak ürün üzerindeki QR kodu okutun:</p>
         <div id="reader"></div>
         <div id="scan-result"></div>
+      </div>
+    </div>
+
+    <!-- GÜNLÜK GÖREVLER TABI -->
+    <div id="tab-gorevler" class="tab-content">
+      <!-- Yöneticiye Özel Bildirimler & Görev Oluşturma -->
+      <div id="manager-task-section" style="display:none;">
+        <div class="form-card" style="border-left: 4px solid var(--safety);">
+          <h3 style="margin-top:0;font-family:'Oswald'; display:flex; justify-content:space-between; align-items:center;">
+            <span>📥 Toptancı / Ürün Giriş Bildirimleri</span>
+            <span id="notif-badge" style="background:var(--rust); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; display:none;">0 Yeni</span>
+          </h3>
+          <p style="font-size:12px; color:var(--steel); margin-top:-4px; margin-bottom:12px;">Dükkana eklenen ürünler buraya bildirim olarak düşer. İstediğiniz bildirimi çalışana görev olarak atayabilirsiniz.</p>
+          <div id="notifications-list" style="space-y:8px;">
+            <p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>
+          </div>
+        </div>
+
+        <div class="form-card">
+          <h3 style="margin-top:0;font-family:'Oswald';">Yönetici Görev veya Not Ata</h3>
+          <form onsubmit="handleManagerAssignTask(event)">
+            <div class="form-row">
+              <div><label>Görev / Not Açıklaması</label><input type="text" id="m-task-desc" placeholder="Örn: Vitrin camlarını sil ve düzenle" required></div>
+              <div><label>Atanacak Personel</label>
+                <select id="m-task-person">
+                  <option value="Ahmet Y.">Ahmet Y. (Çalışan)</option>
+                  <option value="Mehmet K.">Mehmet K. (Çalışan)</option>
+                  <option value="Tüm Ekip">Tüm Ekip</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" class="btn btn-dark">Görev / Notu Personele Gönder</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- Ortak Görev Listesi / Takip Ekranı -->
+      <div class="form-card">
+        <h3 style="margin-top:0;font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:8px;">📋 Günlük İş / Görev Listesi &amp; Takibi</h3>
+        <p style="font-size:12px; color:var(--steel); margin-bottom:12px;">Çalışanlar düzenlemeler bittikten sonra <strong>Yeşil Tik</strong> ile görevi işaretleyebilir, yönetici anlık olarak durumunu görebilir.</p>
+        
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:450px;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
+                <th style="padding-bottom:6px;">Görev / İş Açıklaması</th>
+                <th>Atanan Personel</th>
+                <th>Durum</th>
+                <th style="text-align:center;">İşlem (Yeşil Tik)</th>
+              </tr>
+            </thead>
+            <tbody id="tasks-table-body"></tbody>
+          </table>
+        </div>
       </div>
     </div>
 
@@ -389,11 +444,16 @@
   const dbMovements = dbRoot.child('daily_movements');
   const dbWholesalers = dbRoot.child('wholesalers');
   const dbOrders = dbRoot.child('orders');
+  const dbNotifications = dbRoot.child('notifications');
+  const dbTasks = dbRoot.child('tasks');
 
   let productsData = {};
   let wholesalersData = {};
   let globalPastOrders = {};
   let movementsData = {};
+  let notificationsData = {};
+  let tasksData = {};
+  
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
   let cart = [];
@@ -408,7 +468,7 @@
   const urlParams = new URLSearchParams(window.location.search);
   const targetCode = urlParams.get('item');
 
-  // Dinleyiciler
+  // Firebase Dinleyicileri
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
@@ -426,6 +486,16 @@
 
   dbMovements.on('value', (snapshot) => {
     movementsData = snapshot.val() || {};
+  });
+
+  dbNotifications.on('value', (snapshot) => {
+    notificationsData = snapshot.val() || {};
+    if(currentRole === 'admin') renderNotifications();
+  });
+
+  dbTasks.on('value', (snapshot) => {
+    tasksData = snapshot.val() || {};
+    renderTasks();
   });
 
   dbOrders.on('value', snapshot => {
@@ -502,28 +572,36 @@
     const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
     document.getElementById('nav-siparis-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
     document.getElementById('nav-reports-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
+    document.getElementById('nav-gorevler-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
 
     if(currentRole === 'admin') {
       statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
       printAllBtn.style.display = 'inline-block';
+      document.getElementById('manager-task-section').style.display = 'block';
     } else if(currentRole === 'staff') {
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'inline-block';
+      document.getElementById('manager-task-section').style.display = 'none';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'none';
+      document.getElementById('manager-task-section').style.display = 'none';
     }
     renderGrid();
-    if(currentRole === 'admin') renderWholesalers();
+    if(currentRole === 'admin') {
+        renderWholesalers();
+        renderNotifications();
+    }
+    renderTasks();
   }
 
   function switchTab(tabName) {
     if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
     if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
-    if((tabName === 'siparis' || tabName === 'raporlar') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+    if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
 
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -543,6 +621,144 @@
     const t = document.getElementById('toast');
     t.textContent = msg; t.style.display = 'block';
     setTimeout(() => t.style.display = 'none', 2500);
+  }
+
+  // GÖREV YÖNETİMİ & BİLDİRİMLER
+  function renderNotifications() {
+    const listDiv = document.getElementById('notifications-list');
+    const badge = document.getElementById('notif-badge');
+    if(!listDiv) return;
+    
+    listDiv.innerHTML = '';
+    const keys = Object.keys(notificationsData);
+    
+    if(keys.length === 0) {
+      listDiv.innerHTML = '<p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>';
+      badge.style.display = 'none';
+      return;
+    }
+    
+    badge.style.display = 'inline-block';
+    badge.textContent = keys.length + " Yeni";
+    
+    keys.reverse().forEach(key => {
+      const n = notificationsData[key];
+      listDiv.innerHTML += `
+        <div style="background:#F7F5F0; border:1px solid var(--steel-line); padding:10px; border-radius:3px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+           <div>
+              <div style="font-size:12px; font-weight:bold; color:var(--charcoal);">📥 ${n.text}</div>
+              <div style="font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';">🕒 ${n.time}</div>
+           </div>
+           <button class="btn btn-primary btn-sm" onclick="convertNotifToTask('${key}')" style="white-space:nowrap;">Çalışana Görev Ata</button>
+        </div>
+      `;
+    });
+  }
+
+  function convertNotifToTask(notifKey) {
+    if(currentRole !== 'admin') return;
+    const n = notificationsData[notifKey];
+    if(!n) return;
+    
+    const taskText = `Ürün Giriş Yerleşimi: ${n.text}`;
+    dbTasks.push({
+      text: taskText,
+      person: "Ahmet Y.",
+      category: "Ürün Kabul",
+      status: "Bekliyor",
+      time: "-"
+    }, (err) => {
+      if(!err) {
+        dbNotifications.child(notifKey).remove();
+        showToast("Bildirim başarıyla çalışana görev olarak atandı!");
+      }
+    });
+  }
+
+  function handleManagerAssignTask(e) {
+    e.preventDefault();
+    if(currentRole !== 'admin') return;
+    
+    const text = document.getElementById('m-task-desc').value.trim();
+    const person = document.getElementById('m-task-person').value;
+    
+    if(!text) return;
+    
+    dbTasks.push({
+      text: text,
+      person: person,
+      category: "Yönetici Talimatı",
+      status: "Bekliyor",
+      time: "-"
+    }, (err) => {
+      if(!err) {
+        document.getElementById('m-task-desc').value = '';
+        showToast("Görev başarıyla eklendi!");
+      }
+    });
+  }
+
+  function toggleTaskStatus(taskId) {
+    if(currentRole !== 'admin' && currentRole !== 'staff') return;
+    const task = tasksData[taskId];
+    if(!task) return;
+    
+    const newStatus = task.status === 'Tamamlandı' ? 'Bekliyor' : 'Tamamlandı';
+    const newTime = newStatus === 'Tamamlandı' ? new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}) : '-';
+    
+    dbTasks.child(taskId).update({
+      status: newStatus,
+      time: newTime
+    }, (err) => {
+      if(!err) {
+        showToast(newStatus === 'Tamamlandı' ? "Görev tamamlandı olarak işaretlendi! ✅" : "Görev durumu güncellendi.");
+      }
+    });
+  }
+
+  function deleteTask(taskId) {
+    if(currentRole !== 'admin') return;
+    if(confirm("Bu görevi silmek istediğinize emin misiniz?")) {
+      dbTasks.child(taskId).remove();
+      showToast("Görev silindi.");
+    }
+  }
+
+  function renderTasks() {
+    const tbody = document.getElementById('tasks-table-body');
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    
+    const keys = Object.keys(tasksData);
+    if(keys.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; padding:15px; color:var(--steel);">Kayıtlı görev bulunmuyor.</td></tr>`;
+      return;
+    }
+    
+    keys.reverse().forEach(key => {
+      const t = tasksData[key];
+      const isDone = t.status === 'Tamamlandı';
+      const isAdmin = currentRole === 'admin';
+      
+      tbody.innerHTML += `
+        <tr style="border-bottom:1px dashed var(--steel-line);">
+          <td style="padding:10px 4px;">
+            <strong>${t.text}</strong><br>
+            <span style="font-size:10px; color:var(--steel);">Kategori: ${t.category || 'Genel'}</span>
+          </td>
+          <td style="padding:10px 4px; font-weight:500;">${t.person}</td>
+          <td style="padding:10px 4px;">
+            ${isDone ? `<span style="color:var(--success); font-weight:bold; font-size:12px;">✅ Tamamlandı (${t.time})</span>` : `<span style="color:var(--rust); font-weight:bold; font-size:12px;">⏳ Bekliyor</span>`}
+          </td>
+          <td style="padding:10px 4px; text-align:center; white-space:nowrap;">
+            <button class="btn btn-sm ${isDone ? 'btn-success' : 'btn-dark'}" onclick="toggleTaskStatus('${key}')">
+              ${isDone ? '✅ Tamamlandı (Geri Al)' : '🔲 Yeşil Tik İle Bitir'}
+            </button>
+            ${isAdmin ? `<button class="sm-btn" onclick="deleteTask('${key}')" style="color:var(--rust); margin-left:8px;">Sil</button>` : ''}
+          </td>
+        </tr>
+      `;
+    });
   }
 
   // SİPARİŞ & SEPET İŞLEMLERİ
@@ -751,7 +967,14 @@
            db.child(code).set({ name, qty, price, unit, category, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
              if(!error) {
                if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
-               showToast("Ürün eklendi!");
+               
+               // Yöneticiye bildirim düşmesi için tetikleme
+               dbNotifications.push({
+                 text: `Yeni Ürün Eklendi: ${name} (${qty} ${unit}) - Kategori: ${category}`,
+                 time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+               });
+
+               showToast("Ürün eklendi ve bildirim gönderildi!");
                document.getElementById('f-name').value = ''; 
                document.getElementById('f-qty').value = ''; 
                document.getElementById('f-price').value = ''; 
@@ -841,6 +1064,14 @@
       db.child(code).update({ qty: newQty });
       const moveType = actualChange > 0 ? 'STOK EKLENDİ' : 'SATIŞ YAPILDI';
       logMovement(code, productsData[code].name, actualChange, moveType);
+      
+      // Eğer stok eklendiyse yöneticiye bildirim gönder
+      if(actualChange > 0) {
+        dbNotifications.push({
+          text: `Stok Eklendi: ${productsData[code].name} (+${actualChange} ${productsData[code].unit || 'Adet'})`,
+          time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+        });
+      }
     }
   }
 
@@ -1052,6 +1283,14 @@
       newHistory.push(newHistoryItem);
       
       dbWholesalers.child(id).update({ balance: newBalance, history: newHistory });
+
+      // Toptancıdan mal alımı/borç eklendiğinde yöneticiye bildirim gönder
+      if(type === 'borc') {
+        dbNotifications.push({
+          text: `Toptancı Mal Girişi (${w.name}): ${note} - ₺${formatMoney(amount)}`,
+          time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+        });
+      }
   }
 
   function deleteWholesaler(id) {
