@@ -1091,7 +1091,6 @@
     
     dbOrders.child(dateStr).child(orderId).set(orderData, async (err) => {
         if(!err) {
-            // Kullanıcıya satış için Excel dosyası çıkarılsın mı diye soruyoruz
             if(confirm("Satış başarıyla tamamlandı. Bu satış için Excel raporu oluşturulsun ve kaydedilsin mi?")) {
                 await generateOrderExcel(orderData, orderId, dateStr);
             }
