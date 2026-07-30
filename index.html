@@ -14,7 +14,7 @@
 <script src="https://unpkg.com/html5-qrcode"></script>
 
 <!-- SheetJS (Gerçek Excel Çıktısı İçin) -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <!-- Firebase CDNs (v8) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -647,7 +647,9 @@
     
     Object.keys(data).sort().reverse().forEach(dateStr => {
       if(dateStr < cutoffStr) {
-        dbOrders.child(dateStr).remove(); 
+        // Artık burada otomatik/sessiz silme YAPILMIYOR — bu her sayfa
+        // yüklemesinde çalışıp geri dönüşü olmayan veri kaybına yol açabiliyordu.
+        // İsterseniz "🗑️ Satış Geçmişini Temizle" butonuyla elle (onaylı) temizleyin.
         return;
       }
       
@@ -827,10 +829,18 @@
               <div style="font-size:12px; font-weight:bold; color:var(--charcoal);">📥 ${n.text}</div>
               <div style="font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';">🕒 ${n.time}</div>
            </div>
-           <button class="btn btn-primary btn-sm" onclick="convertNotifToTask('${key}')" style="white-space:nowrap;">Çalışana Görev Ata</button>
+           <div style="display:flex; flex-direction:column; gap:4px;">
+             <button class="btn btn-primary btn-sm" onclick="convertNotifToTask('${key}')" style="white-space:nowrap;">Çalışana Görev Ata</button>
+             <button class="sm-btn" onclick="dismissNotification('${key}')" style="color:var(--steel);">Yoksay / Kapat</button>
+           </div>
         </div>
       `;
     });
+  }
+
+  function dismissNotification(notifKey) {
+    if(currentRole !== 'admin') return;
+    dbNotifications.child(notifKey).remove();
   }
 
   function convertNotifToTask(notifKey) {
@@ -838,10 +848,12 @@
     const n = notificationsData[notifKey];
     if(!n) return;
     
+    const personSelect = document.getElementById('m-task-person');
+    const assignedPerson = personSelect ? personSelect.value : "Tüm Ekip";
     const taskText = `Ürün Giriş Yerleşimi: ${n.text}`;
     dbTasks.push({
       text: taskText,
-      person: "Ahmet Y.",
+      person: assignedPerson,
       category: "Ürün Kabul",
       status: "Bekliyor",
       time: "-"
@@ -1102,12 +1114,19 @@
     cart.forEach(i => grandTotal += i.total);
     
     cart.forEach(item => {
-      if(productsData[item.code]) {
-        const currentQty = productsData[item.code].qty || 0;
-        const newQty = Math.max(0, currentQty - item.qty);
-        db.child(item.code).update({ qty: newQty });
-        logMovement(item.code, item.name, -item.qty, 'SATIŞ YAPILDI (SEPET)');
-      }
+      if(!productsData[item.code]) return;
+      let appliedChange = 0;
+      db.child(item.code).child('qty').transaction((currentQty) => {
+        const cur = Number(currentQty || 0);
+        const next = Math.max(0, cur - item.qty);
+        appliedChange = next - cur;
+        return next;
+      }, (error, committed) => {
+        if (error) { console.error(error); return; }
+        if (committed && appliedChange !== 0) {
+          logMovement(item.code, item.name, appliedChange, 'SATIŞ YAPILDI (SEPET)');
+        }
+      });
     });
 
     const orderData = { time: timeStr, items: cart, total: grandTotal };
@@ -1306,7 +1325,7 @@
       if(currentRole !== 'admin' && currentRole !== 'staff') return;
       const code = document.getElementById('edit-code').value;
       const name = document.getElementById('edit-name').value.trim();
-      const qty = parseFloat(document.getElementById('edit-qty').value) || 0;
+      const qty = Math.max(0, parseFloat(document.getElementById('edit-qty').value) || 0);
       const unit = document.getElementById('edit-unit').value;
       const category = document.getElementById('edit-category').value;
       
@@ -1316,7 +1335,7 @@
       let updateData = { name, qty, unit, category };
       
       if(currentRole === 'admin') {
-          updateData.price = parseFloat(document.getElementById('edit-price').value) || 0;
+          updateData.price = Math.max(0, parseFloat(document.getElementById('edit-price').value) || 0);
       } else {
           updateData.price = p.price || 0;
       }
@@ -1337,21 +1356,32 @@
     if(actionCooldowns[code] && (now - actionCooldowns[code] < 800)) return;
     actionCooldowns[code] = now;
 
-    const currentQty = productsData[code].qty || 0;
-    const newQty = Math.max(0, currentQty + change);
-    const actualChange = newQty - currentQty;
-    if(actualChange !== 0) {
-      db.child(code).update({ qty: newQty });
-      const moveType = actualChange > 0 ? 'STOK EKLENDİ' : 'HIZLI STOK DÜŞÜŞÜ';
-      logMovement(code, productsData[code].name, actualChange, moveType);
-      
-      if(actualChange > 0) {
+    const productName = productsData[code].name;
+    const productUnit = productsData[code].unit || 'Adet';
+    let appliedChange = 0;
+
+    // Atomik transaction: iki cihaz aynı anda aynı ürüne dokunursa veri kaybı olmaz.
+    // appliedChange, 0'da kilitlenme (negatife düşme) ihtimaline karşı transaction
+    // fonksiyonunun içinde hesaplanır — bu yüzden loglanan miktar her zaman gerçek farktır.
+    db.child(code).child('qty').transaction((currentQty) => {
+      const cur = Number(currentQty || 0);
+      const next = Math.max(0, cur + change);
+      appliedChange = next - cur;
+      return next;
+    }, (error, committed) => {
+      if (error) { console.error(error); showToast("Stok güncellenemedi, tekrar deneyin."); return; }
+      if (!committed || appliedChange === 0) return;
+
+      const moveType = appliedChange > 0 ? 'STOK EKLENDİ' : 'HIZLI STOK DÜŞÜŞÜ';
+      logMovement(code, productName, appliedChange, moveType);
+
+      if (appliedChange > 0) {
         dbNotifications.push({
-          text: `Stok Eklendi: ${productsData[code].name} (+${actualChange} ${productsData[code].unit || 'Adet'})`,
+          text: `Stok Eklendi: ${productName} (+${appliedChange} ${productUnit})`,
           time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
         });
       }
-    }
+    });
   }
 
   function updatePrice(code) {
