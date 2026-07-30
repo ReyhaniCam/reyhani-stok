@@ -93,6 +93,21 @@
   
   .qr-box-mini{display:flex;justify-content:center;margin:10px 0;padding:6px;background:#fff;border:1px dashed var(--steel-line);width:80px;height:80px;margin-left:auto;margin-right:auto;}
   .qr-box-mini img{width:100%!important;height:100%!important;}
+  .qr-box-mini.hidden{display:none;}
+
+  .product-photo{
+    width:100%; height:120px; border-radius:3px; overflow:hidden; margin-bottom:8px;
+    background:var(--concrete); display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--steel-line);
+  }
+  .product-photo img{width:100%; height:100%; object-fit:cover; display:block;}
+  .product-photo .photo-placeholder{font-size:26px; color:var(--steel-line);}
+  .qr-toggle-link{display:block; text-align:center; font-size:11px; color:var(--info); text-decoration:underline; background:none; border:none; cursor:pointer; width:100%; padding:4px 0;}
+
+  .edit-photo-row{display:flex; gap:12px; align-items:center; margin-bottom:12px; background:#F7F5F0; padding:10px; border-radius:3px;}
+  .edit-photo-preview{width:64px; height:64px; border-radius:3px; overflow:hidden; background:var(--concrete); flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--steel-line);}
+  .edit-photo-preview img{width:100%; height:100%; object-fit:cover;}
+  .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
   
   .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
 
@@ -454,6 +469,19 @@
     <button class="modal-close" onclick="closeEditModal()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';">Ürün Düzenle</h3>
     <input type="hidden" id="edit-code">
+
+    <div class="edit-photo-row">
+      <div class="edit-photo-preview" id="edit-photo-preview"><span class="photo-placeholder">📷</span></div>
+      <div style="flex:1;">
+        <label style="margin-bottom:6px;">Ürün Fotoğrafı</label>
+        <input type="file" accept="image/*" id="edit-photo-file" style="padding:4px; font-size:11px;">
+        <div style="display:flex; gap:8px; margin-top:6px;">
+          <button class="sm-btn" id="edit-photo-remove-btn" onclick="removeProductImage()" style="display:none; color:var(--rust);">Fotoğrafı Kaldır</button>
+        </div>
+        <div id="edit-photo-status" style="font-size:10px; color:var(--steel); margin-top:4px;"></div>
+      </div>
+    </div>
+
     <div class="form-row">
       <div><label>Ürün Adı</label><input type="text" id="edit-name"></div>
       <div><label>Miktar</label><input type="number" id="edit-qty" step="any"></div>
@@ -504,6 +532,7 @@
   const dbNotifications = dbRoot.child('notifications');
   const dbTasks = dbRoot.child('tasks');
   const dbZReports = dbRoot.child('z_reports');
+  const dbProductImages = dbRoot.child('product_images'); // ürün listesinden AYRI tutulur — ana liste hafif kalır
 
   let productsData = {};
   let wholesalersData = {};
@@ -513,14 +542,25 @@
   let notificationsData = {};
   let tasksData = {};
   let selectedTaskIds = new Set();
+  let imageCache = {}; // { code: dataUrl | null } — bir kez indirilen fotoğraf tekrar indirilmez
+  let pendingImageDataUrl = null; // düzenleme modalında henüz kaydedilmemiş yeni fotoğraf
   
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
   let cart = [];
   const actionCooldowns = {};
 
-  const ADMIN_PASS = "5358";
-  const STAFF_PASS = "5323";
+  // Şifreler artık düz metin olarak DEĞİL, SHA-256 özeti (hash) olarak tutuluyor.
+  // Bu, kaynak koduna bakan birinin şifreyi doğrudan okumasını engeller — ancak
+  // gerçek/tam güvenlik değildir; asıl koruma Firebase Rules + Authentication'dır.
+  const ADMIN_HASH = "50e65b1455800c98b480cec56db88524fabd630ddd992df1a58faf5a6edd2430";
+  const STAFF_HASH = "2b084c9efd9150fb848e4efb0b5f03f455470f68b153814944e14a6204ec5b9a";
+
+  async function sha256Hex(text) {
+    const enc = new TextEncoder().encode(text);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
 
   // Klasör seçimi için File System Access API yönetimi (Reyhani Yapi Satis Raporlari için)
   let reyhaniDirHandle = null;
@@ -565,6 +605,125 @@
 
   function formatMoney(amount) {
     return Number(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  // ============================================================
+  // ÜRÜN FOTOĞRAFLARI
+  // ------------------------------------------------------------
+  // Firebase Cloud Storage artık ücretsiz planda çalışmadığı için
+  // (3 Şubat 2026'dan itibaren kredi kartı bağlama zorunlu), fotoğraflar
+  // sıkıştırılıp Realtime Database'e ayrı bir yolda (/product_images)
+  // kaydediliyor. Ana ürün listesi ile birlikte SENKRONİZE EDİLMEZ —
+  // her ürünün fotoğrafı sadece o kart ekrana geldiğinde, tek seferlik
+  // indirilir ve tarayıcı belleğinde önbelleğe alınır.
+  // ============================================================
+
+  function compressImageFile(file, maxDim, quality) {
+    maxDim = maxDim || 360;
+    quality = quality || 0.55;
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("Dosya okunamadı"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("Görsel yüklenemedi"));
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+          else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+          const canvas = document.createElement('canvas');
+          canvas.width = width; canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setEditPhotoPreview(dataUrl) {
+    const box = document.getElementById('edit-photo-preview');
+    const removeBtn = document.getElementById('edit-photo-remove-btn');
+    if (dataUrl) {
+      box.innerHTML = `<img src="${dataUrl}">`;
+      removeBtn.style.display = 'inline-block';
+    } else {
+      box.innerHTML = `<span class="photo-placeholder">📷</span>`;
+      removeBtn.style.display = 'none';
+    }
+  }
+
+  document.getElementById('edit-photo-file').addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const code = document.getElementById('edit-code').value;
+    const statusEl = document.getElementById('edit-photo-status');
+    statusEl.textContent = "Sıkıştırılıyor ve yükleniyor...";
+    try {
+      const dataUrl = await compressImageFile(file);
+      pendingImageDataUrl = dataUrl;
+      setEditPhotoPreview(dataUrl);
+      dbProductImages.child(code).set(dataUrl, (err) => {
+        if (err) { statusEl.textContent = "Yükleme başarısız."; return; }
+        imageCache[code] = dataUrl;
+        statusEl.textContent = "Fotoğraf kaydedildi (~" + Math.round(dataUrl.length / 1024) + " KB).";
+        refreshCardPhoto(code);
+      });
+    } catch (err) {
+      statusEl.textContent = "Fotoğraf işlenemedi, tekrar deneyin.";
+      console.error(err);
+    }
+  });
+
+  function removeProductImage() {
+    const code = document.getElementById('edit-code').value;
+    if (!code) return;
+    if (!confirm("Bu ürünün fotoğrafını kaldırmak istiyor musunuz?")) return;
+    dbProductImages.child(code).remove(() => {
+      imageCache[code] = null;
+      pendingImageDataUrl = null;
+      setEditPhotoPreview(null);
+      document.getElementById('edit-photo-status').textContent = "Fotoğraf kaldırıldı.";
+      refreshCardPhoto(code);
+    });
+  }
+
+  function refreshCardPhoto(code) {
+    const el = document.getElementById(`photo-${code}`);
+    if (!el) return;
+    const dataUrl = imageCache[code];
+    el.innerHTML = dataUrl ? `<img src="${dataUrl}">` : `<span class="photo-placeholder">📷</span>`;
+  }
+
+  // Kart ekrana geldiğinde fotoğrafı tembel şekilde indirir (bir kez), önbelleğe alır.
+  function loadProductImageIntoCard(code) {
+    const el = document.getElementById(`photo-${code}`);
+    if (!el) return;
+
+    if (Object.prototype.hasOwnProperty.call(imageCache, code)) {
+      el.innerHTML = imageCache[code] ? `<img src="${imageCache[code]}">` : `<span class="photo-placeholder">📷</span>`;
+      return;
+    }
+
+    dbProductImages.child(code).once('value', snap => {
+      const val = snap.val();
+      imageCache[code] = val || null;
+      const el2 = document.getElementById(`photo-${code}`);
+      if (el2) el2.innerHTML = val ? `<img src="${val}">` : `<span class="photo-placeholder">📷</span>`;
+    });
+  }
+
+  // Karekod, kart ilk açıldığında ÜRETİLMEZ — sadece link tıklanınca oluşturulur.
+  function toggleQR(code) {
+    const box = document.getElementById(`grid-qr-${code}`);
+    if (!box) return;
+    const isHidden = box.classList.contains('hidden');
+    if (isHidden && box.childElementCount === 0) {
+      const currentBaseUrl = window.location.href.split('?')[0];
+      new QRCode(box, { text: `${currentBaseUrl}?item=${code}`, width: 68, height: 68 });
+    }
+    box.classList.toggle('hidden');
   }
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -703,12 +862,20 @@
     dbMovements.child(dateStr).push({ time: timeStr, code: code, name: name, change: change, type: type });
   }
 
-  function toggleAuth() {
+  async function toggleAuth() {
     if(currentRole === 'guest') {
       const p = prompt("Giriş Şifresini Giriniz:");
-      if(p === ADMIN_PASS) { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
-      else if(p === STAFF_PASS) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
-      else if(p !== null) { alert("Hatalı Şifre!"); }
+      if (p === null) return;
+      let hash;
+      try {
+        hash = await sha256Hex(p);
+      } catch (e) {
+        alert("Şifre doğrulaması bu bağlantıda çalışamadı. Sitenin https:// ile açıldığından emin olun.");
+        return;
+      }
+      if(hash === ADMIN_HASH) { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
+      else if(hash === STAFF_HASH) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
+      else { alert("Hatalı Şifre!"); return; }
     } else {
       currentRole = 'guest'; showToast("Çıkış yapıldı.");
     }
@@ -1184,6 +1351,7 @@
     const canEdit = (currentRole === 'admin' || currentRole === 'staff');
     const isAdmin = (currentRole === 'admin');
     const currentBaseUrl = window.location.href.split('?')[0];
+    const matchedCodes = [];
 
     Object.values(productsData).forEach(p => {
       const pName = p.name ? p.name.toLowerCase() : '';
@@ -1194,6 +1362,7 @@
         count++;
         units += parseFloat(p.qty || 0);
         value += parseFloat(p.qty || 0) * parseFloat(p.price || 0);
+        matchedCodes.push(p.code);
         const isLow = p.qty <= 5;
         
         let editActions = '';
@@ -1215,8 +1384,10 @@
               </div>
               <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
             </div>
-            
-            <div class="qr-box-mini" id="grid-qr-${p.code}"></div>
+
+            <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
+            <button class="qr-toggle-link" onclick="toggleQR('${p.code}')">🔳 Karekodu Görüntüle</button>
+            <div class="qr-box-mini hidden" id="grid-qr-${p.code}"></div>
 
             <div class="price-info-box">
                <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
@@ -1234,12 +1405,7 @@
       }
     });
 
-    Object.values(productsData).forEach(p => {
-      const el = document.getElementById(`grid-qr-${p.code}`);
-      if (el && el.childElementCount === 0) {
-        new QRCode(el, { text: `${currentBaseUrl}?item=${p.code}`, width: 68, height: 68 });
-      }
-    });
+    matchedCodes.forEach(code => loadProductImageIntoCard(code));
 
     document.getElementById('sum-count').textContent = count;
     document.getElementById('sum-units').textContent = units.toFixed(1);
@@ -1300,6 +1466,20 @@
       document.getElementById('edit-price').value = p.price || 0;
       document.getElementById('edit-unit').value = p.unit || 'Adet';
       document.getElementById('edit-category').value = p.category || 'Diğer';
+
+      pendingImageDataUrl = null;
+      document.getElementById('edit-photo-file').value = '';
+      document.getElementById('edit-photo-status').textContent = 'Yükleniyor...';
+      setEditPhotoPreview(imageCache[code] || null);
+      dbProductImages.child(code).once('value', snap => {
+        const val = snap.val();
+        imageCache[code] = val || null;
+        // Kullanıcı bu sırada modalı kapatmadıysa güncelle
+        if (document.getElementById('edit-code').value === code) {
+          setEditPhotoPreview(val || null);
+          document.getElementById('edit-photo-status').textContent = '';
+        }
+      });
       
       const priceInput = document.getElementById('edit-price');
       const priceLockNote = document.getElementById('price-lock-note');
