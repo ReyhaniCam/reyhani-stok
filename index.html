@@ -135,6 +135,11 @@
   #print-area { display: none; }
   #thermal-print-area { display: none; }
 
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+
   @media print {
     body * { visibility: hidden; }
     
@@ -147,9 +152,18 @@
     .sticker-qr img { width: 100% !important; height: 100% !important; }
     .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
 
-    /* Termal Fiş Modu */
+    /* Termal Fiş Modu (Boyut ve Sayfa Taşma Koruması) */
     body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area * { visibility: visible; }
-    body.printing-receipt #thermal-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 58mm; }
+    body.printing-receipt #thermal-print-area { 
+      display: block !important; 
+      position: absolute; 
+      left: 0; 
+      top: 0; 
+      width: 56mm; 
+      margin: 0; 
+      padding: 0;
+      page-break-after: avoid;
+    }
   }
 </style>
 </head>
@@ -247,7 +261,6 @@
 
     <!-- GÜNLÜK GÖREVLER TABI -->
     <div id="tab-gorevler" class="tab-content">
-      <!-- Yöneticiye Özel Bildirimler & Görev Oluşturma -->
       <div id="manager-task-section" style="display:none;">
         <div class="form-card" style="border-left: 4px solid var(--safety);">
           <h3 style="margin-top:0;font-family:'Oswald'; display:flex; justify-content:space-between; align-items:center;">
@@ -278,12 +291,10 @@
         </div>
       </div>
 
-      <!-- Ortak Görev Listesi / Takip Ekranı -->
       <div class="form-card">
         <h3 style="margin-top:0;font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:8px;">📋 Günlük İş / Görev Listesi &amp; Takibi</h3>
         <p style="font-size:12px; color:var(--steel); margin-bottom:12px;">Çalışanlar düzenlemeler bittikten sonra <strong>Yeşil Tik</strong> ile görevi işaretleyebilir, yönetici anlık olarak durumunu görebilir.</p>
         
-        <!-- Toplu İşlem Paneli -->
         <div id="bulk-task-actions" style="display:none; justify-content:space-between; align-items:center; background:#F7F5F0; padding:8px 12px; border:1px solid var(--steel-line); border-radius:3px; margin-bottom:10px;">
           <span style="font-size:12px; font-weight:600; color:var(--charcoal);" id="selected-task-count">0 görev seçildi</span>
           <button class="btn btn-danger btn-sm" id="bulk-del-btn" onclick="deleteSelectedTasks()" style="display:none;">🗑️ Seçilen Görevleri Sil</button>
@@ -402,27 +413,25 @@
 
 <!-- TERMAL FİŞ ŞABLONU -->
 <div id="thermal-print-area">
-  <div style="width: 58mm; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; padding: 2mm; background: #fff;">
+  <div style="width: 54mm; font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #000; padding: 2mm; background: #fff; margin: 0 auto;">
     <div style="text-align: center;">
-      <h3 style="font-size: 14px; margin: 0 0 4px 0; font-weight: bold;">REYHANİ CAM HIRDAVAT</h3>
-      <p style="margin: 2px 0; font-size: 10px;">Satış Fişi</p>
-      <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+      <h3 style="font-size: 13px; margin: 0 0 3px 0; font-weight: bold;">REYHANİ CAM HIRDAVAT</h3>
+      <p style="margin: 2px 0; font-size: 9px;">Satış Fişi</p>
+      <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
     </div>
-    <div style="margin-bottom: 6px;">
+    <div style="margin-bottom: 4px; font-size: 9px;">
       <p style="margin: 2px 0;"><strong>Tarih:</strong> <span id="t-date"></span></p>
       <p style="margin: 2px 0;"><strong>Saat:</strong> <span id="t-time"></span></p>
     </div>
-    <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-    <div id="t-items-list" style="margin-bottom: 6px;">
-      <!-- Dinamik ürün satırları -->
-    </div>
-    <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-    <div style="text-align: right; margin-top: 4px; font-weight: bold; font-size: 12px;">
+    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+    <div id="t-items-list" style="margin-bottom: 4px;"></div>
+    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+    <div style="text-align: right; margin-top: 3px; font-weight: bold; font-size: 11px;">
       TOPLAM: <span id="t-total"></span>
     </div>
-    <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-    <div style="text-align: center; margin-top: 8px;">
-      <p style="margin: 2px 0; font-size: 10px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
+    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+    <div style="text-align: center; margin-top: 5px;">
+      <p style="margin: 2px 0; font-size: 9px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
     </div>
   </div>
 </div>
@@ -505,12 +514,51 @@
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
   let cart = [];
-
-  // İşlem zaman sınırlaması (0.8 saniye / 800ms throttle takibi)
   const actionCooldowns = {};
 
   const ADMIN_PASS = "5358";
   const STAFF_PASS = "5323";
+
+  // Klasör seçimi için File System Access API yönetimi (Reyhani Yapi Satis Raporlari için)
+  let reyhaniDirHandle = null;
+
+  async function getReyhaniFolder() {
+    if (!reyhaniDirHandle && window.showDirectoryPicker) {
+      try {
+        alert("Lütfen raporların ve fişlerin otomatik kaydedilmesi için tarayıcınızda 'Reyhani Yapi Satis Raporlari' adında bir klasör seçin veya oluşturun.");
+        reyhaniDirHandle = await window.showDirectoryPicker();
+      } catch (err) {
+        console.log("Klasör seçimi iptal edildi:", err);
+      }
+    }
+    return reyhaniDirHandle;
+  }
+
+  async function saveExcelFile(wb, defaultFilename) {
+    let savedViaFolder = false;
+    const dirHandle = await getReyhaniFolder();
+    
+    if (dirHandle) {
+      try {
+        const fileHandle = await dirHandle.getFileHandle(defaultFilename, { create: true });
+        const writable = await fileHandle.createWritable();
+        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([wbout], { type: 'application/octet-stream' });
+        
+        await writable.write(blob);
+        await writable.close();
+        savedViaFolder = true;
+        showToast(`Dosya seçilen klasöre kaydedildi: ${defaultFilename}`);
+      } catch (err) {
+        console.error("Klasöre yazma hatası:", err);
+      }
+    }
+    
+    if (!savedViaFolder) {
+      XLSX.writeFile(wb, defaultFilename);
+      showToast(`Dosya indirildi: ${defaultFilename}`);
+    }
+  }
 
   function formatMoney(amount) {
     return Number(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -519,7 +567,6 @@
   const urlParams = new URLSearchParams(window.location.search);
   const targetCode = urlParams.get('item');
 
-  // Firebase Dinleyicileri
   db.on('value', (snapshot) => {
     productsData = snapshot.val() || {};
     renderGrid();
@@ -707,7 +754,6 @@
     setTimeout(() => t.style.display = 'none', 2500);
   }
 
-  // TERMAL FİŞ YAZDIRMA FONKSİYONU (Sepet Satışları İçin)
   function printThermalReceipt(items, total) {
     const now = new Date();
     document.getElementById('t-date').textContent = now.toLocaleDateString('tr-TR');
@@ -716,7 +762,7 @@
     let itemsHtml = '';
     items.forEach(item => {
       itemsHtml += `
-        <div style="margin-bottom: 4px; display:flex; justify-content:space-between;">
+        <div style="margin-bottom: 3px; display:flex; justify-content:space-between; font-size:10px;">
           <span>${item.name} (${item.qty} ${item.unit || 'Adet'})</span>
           <span>₺${formatMoney(item.total)}</span>
         </div>
@@ -730,10 +776,9 @@
     setTimeout(() => {
       window.print();
       document.body.className = '';
-    }, 200);
+    }, 250);
   }
 
-  // GÖREV YÖNETİMİ & BİLDİRİMLER
   function renderNotifications() {
     const listDiv = document.getElementById('notifications-list');
     const badge = document.getElementById('notif-badge');
@@ -903,11 +948,7 @@
     tbody.innerHTML = '';
     
     const keys = Object.keys(tasksData);
-    
-    selectedTaskIds.forEach(id => {
-      if(!tasksData[id]) selectedTaskIds.delete(id);
-    });
-
+    selectedTaskIds.forEach(id => { if(!tasksData[id]) selectedTaskIds.delete(id); });
     updateBulkDeleteUI();
 
     if(keys.length === 0) {
@@ -952,7 +993,6 @@
     }
   }
 
-  // SİPARİŞ & SEPET İŞLEMLERİ
   function updateOrderProductList() {
     const dl = document.getElementById('order-product-list');
     if(!dl) return;
@@ -1028,7 +1068,7 @@
     renderCart();
   }
 
-  function completeOrder() {
+  async function completeOrder() {
     if(cart.length === 0) return;
     
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -1049,11 +1089,14 @@
 
     const orderData = { time: timeStr, items: cart, total: grandTotal };
     
-    dbOrders.child(dateStr).child(orderId).set(orderData, (err) => {
+    dbOrders.child(dateStr).child(orderId).set(orderData, async (err) => {
         if(!err) {
-            generateOrderExcel(orderData, orderId, dateStr);
+            // Kullanıcıya satış için Excel dosyası çıkarılsın mı diye soruyoruz
+            if(confirm("Satış başarıyla tamamlandı. Bu satış için Excel raporu oluşturulsun ve kaydedilsin mi?")) {
+                await generateOrderExcel(orderData, orderId, dateStr);
+            }
             
-            if(confirm("Satış başarıyla tamamlandı ve Excel kaydedildi.\nMüşteri için fiş basılsın mı?")) {
+            if(confirm("Müşteri için termal fiş basılsın mı?")) {
               printThermalReceipt(cart, grandTotal);
             }
             
@@ -1065,17 +1108,31 @@
     });
   }
 
-  function downloadOrderById(orderId) {
+  async function generateOrderExcel(order, orderId, dateStr) {
+    const dataRow = [["Sıra", "Ürün Kodu", "Ürün Adı", "Birim Fiyat", "Miktar", "Toplam"]];
+    order.items.forEach((item, idx) => {
+        dataRow.push([idx+1, item.code, item.name, item.price, item.qty, item.total]);
+    });
+    dataRow.push(["", "", "", "", "GENEL TOPLAM:", order.total]);
+
+    const ws = XLSX.utils.aoa_to_sheet(dataRow);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Satis");
+    
+    await saveExcelFile(wb, `Reyhani_Satis_${dateStr}_${orderId}.xlsx`);
+  }
+
+  async function downloadOrderById(orderId) {
     const target = globalPastOrders[orderId];
     if(target) {
-      generateOrderExcel(target.orderData, orderId, target.date);
-      showToast("Kayıtlı satış excel olarak indiriliyor!");
+      if(confirm("Bu geçmiş satış için Excel raporu tekrar indirilsin mi?")) {
+        await generateOrderExcel(target.orderData, orderId, target.date);
+      }
     } else {
       alert("Bu satışın detayları bulunamadı.");
     }
   }
 
-  // STOK GÖRÜNTÜLEME VE YÖNETİM
   function renderGrid() {
     const grid = document.getElementById('grid');
     const search = document.getElementById('search').value.toLowerCase();
@@ -1084,7 +1141,6 @@
     let count = 0, units = 0, value = 0;
     const canEdit = (currentRole === 'admin' || currentRole === 'staff');
     const isAdmin = (currentRole === 'admin');
-
     const currentBaseUrl = window.location.href.split('?')[0];
 
     Object.values(productsData).forEach(p => {
@@ -1096,7 +1152,6 @@
         count++;
         units += parseFloat(p.qty || 0);
         value += parseFloat(p.qty || 0) * parseFloat(p.price || 0);
-        
         const isLow = p.qty <= 5;
         
         let editActions = '';
@@ -1146,12 +1201,7 @@
 
     document.getElementById('sum-count').textContent = count;
     document.getElementById('sum-units').textContent = units.toFixed(1);
-    
-    if (isAdmin) {
-        document.getElementById('sum-value').textContent = "₺" + formatMoney(value);
-    } else {
-        document.getElementById('sum-value').textContent = "***";
-    }
+    document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
   }
 
   function addProduct() {
@@ -1168,17 +1218,15 @@
 
     db.child(code).once('value', snapshot => {
        if(snapshot.exists()) {
-           alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor! Lütfen farklı bir kod girin veya otomatik bırakın.`);
+           alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor!`);
        } else {
            db.child(code).set({ name, qty, price, unit, category, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
              if(!error) {
                if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
-               
                dbNotifications.push({
                  text: `Yeni Ürün Eklendi: ${name} (${qty} ${unit}) - Kategori: ${category}`,
                  time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
                });
-
                showToast("Ürün eklendi ve bildirim gönderildi!");
                document.getElementById('f-name').value = ''; 
                document.getElementById('f-qty').value = ''; 
@@ -1245,8 +1293,7 @@
       let updateData = { name, qty, unit, category };
       
       if(currentRole === 'admin') {
-          const price = parseFloat(document.getElementById('edit-price').value) || 0;
-          updateData.price = price;
+          updateData.price = parseFloat(document.getElementById('edit-price').value) || 0;
       } else {
           updateData.price = p.price || 0;
       }
@@ -1259,16 +1306,12 @@
       });
   }
 
-  // 0.8 Saniyelik Zaman Sınırlandırması (Throttle / Debounce) Entegre Edilmiş Fonksiyon
   function updateQty(code, change) {
     if(currentRole === 'guest') return;
     if(!productsData[code]) return;
 
-    // 0.8 saniye (800 milisaniye) zaman sınırlaması kontrolü
     const now = Date.now();
-    if(actionCooldowns[code] && (now - actionCooldowns[code] < 800)) {
-      return; // Çok hızlı peş peşe basımları engellemek için yoksay
-    }
+    if(actionCooldowns[code] && (now - actionCooldowns[code] < 800)) return;
     actionCooldowns[code] = now;
 
     const currentQty = productsData[code].qty || 0;
@@ -1309,7 +1352,6 @@
     if(!p) return;
     const printArea = document.getElementById('print-area');
     printArea.innerHTML = '';
-    
     const currentBaseUrl = window.location.href.split('?')[0];
 
     const sticker = document.createElement('div');
@@ -1360,45 +1402,23 @@
       }, 800);
   }
 
-  function exportBackup() {
+  async function exportBackup() {
     if(currentRole !== 'admin') return;
+    if(!confirm("Tüm stok listesi Excel yedeği olarak indirilsin mi?")) return;
+
     const dataRow = [["Ürün Kodu", "Kategori", "Ürün Adı", "Miktar", "Birim", "Birim Fiyat", "Toplam Değer"]];
-    
     Object.values(productsData).forEach(p => {
-        dataRow.push([
-            p.code, 
-            p.category || 'Belirtilmedi', 
-            p.name, 
-            p.qty, 
-            p.unit || 'Adet', 
-            p.price, 
-            (p.qty * p.price)
-        ]);
+        dataRow.push([p.code, p.category || 'Belirtilmedi', p.name, p.qty, p.unit || 'Adet', p.price, (p.qty * p.price)]);
     });
 
     const ws = XLSX.utils.aoa_to_sheet(dataRow);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Stok Durumu");
     const dateStr = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `Reyhani_Stok_Yedegi_${dateStr}.xlsx`);
+    await saveExcelFile(wb, `Reyhani_Stok_Yedegi_${dateStr}.xlsx`);
   }
 
-  function generateOrderExcel(order, orderId, dateStr) {
-    const dataRow = [["Sıra", "Ürün Kodu", "Ürün Adı", "Birim Fiyat", "Miktar", "Toplam"]];
-    
-    order.items.forEach((item, idx) => {
-        dataRow.push([idx+1, item.code, item.name, item.price, item.qty, item.total]);
-    });
-    
-    dataRow.push(["", "", "", "", "GENEL TOPLAM:", order.total]);
-
-    const ws = XLSX.utils.aoa_to_sheet(dataRow);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Satis");
-    XLSX.writeFile(wb, `Reyhani_Satis_${dateStr}_${orderId}.xlsx`);
-  }
-
-  // GÜN SONU Z RAPORU OLUŞTURMA & ARŞİVLEME
+  // Z RAPORU OLUŞTURMA & KLASÖRE KAYDETME
   function generateDailyZReport() {
     if(currentRole !== 'admin' && currentRole !== 'staff') return;
     
@@ -1412,19 +1432,14 @@
     
     Object.values(dayMoves).forEach(m => {
       itemsList.push(m);
-      if(m.change > 0) {
-        malGirisi += Number(m.change);
-      } else if(m.change < 0) {
-        malCikisi += Math.abs(Number(m.change));
-      }
+      if(m.change > 0) malGirisi += Number(m.change);
+      else if(m.change < 0) malCikisi += Math.abs(Number(m.change));
     });
 
     dbOrders.child(dateStr).once('value', snapshot => {
       const ordersOnDate = snapshot.val() || {};
       let paraGirisi = 0;
-      Object.values(ordersOnDate).forEach(order => {
-        paraGirisi += Number(order.total || 0);
-      });
+      Object.values(ordersOnDate).forEach(order => { paraGirisi += Number(order.total || 0); });
 
       let paraCikisi = 0;
       const todayFormatted = new Date().toLocaleDateString('tr-TR');
@@ -1448,15 +1463,18 @@
         movements: itemsList
       };
 
-      dbZReports.child(dateStr).set(reportData, err => {
+      dbZReports.child(dateStr).set(reportData, async err => {
         if(!err) {
-          showToast(`${dateStr} tarihli Z Raporu oluşturuldu ve arşive kaydedildi!`);
+          if(confirm(`${dateStr} tarihli Z Raporu başarıyla oluşturuldu. Şimdi Excel dosyası olarak kaydedilsin mi?`)) {
+            await downloadZReportByDate(dateStr);
+          }
+          showToast("Z Raporu arşive kaydedildi!");
         }
       });
     });
   }
 
-  function downloadZReportByDate(dateStr) {
+  async function downloadZReportByDate(dateStr) {
     const rep = globalZReports[dateStr];
     if(!rep) { alert("Rapor verisi bulunamadı."); return; }
     
@@ -1485,8 +1503,8 @@
     const ws = XLSX.utils.aoa_to_sheet(dataRow);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Z_Raporu_" + dateStr);
-    XLSX.writeFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
-    showToast("Z Raporu Excel dosyası indiriliyor!");
+    
+    await saveExcelFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
   }
 
   function addWholesaler() {
@@ -1509,10 +1527,8 @@
 
   function renderWholesalers() {
     const grid = document.getElementById('wholesalers-grid');
-    if(!grid) return;
+    if(!grid || currentRole !== 'admin') return;
     grid.innerHTML = '';
-    
-    if(currentRole !== 'admin') return;
     
     Object.keys(wholesalersData).forEach(id => {
         const w = wholesalersData[id];
@@ -1528,11 +1544,9 @@
                </div>
                <button class="sm-btn" onclick="deleteWholesaler('${id}')" style="color:var(--rust);">Sil</button>
             </div>
-            
             <div class="balance-box ${isNegative ? 'balance-negative' : 'balance-positive'}">
                 Bakiye: ₺${formatMoney(w.balance || 0)}
             </div>
-            
             <div class="action-grid">
                <button class="btn btn-dark btn-sm" onclick="addBalance('${id}', 'borc')">Borç Ekle (-)</button>
                <button class="btn btn-success btn-sm" onclick="addBalance('${id}', 'odeme')">Ödeme Yap (+)</button>
@@ -1617,12 +1631,8 @@
 
   function startScanner() {
     document.getElementById('scan-result').innerHTML = '';
-    if (!html5QrcodeScanner) {
-      html5QrcodeScanner = new Html5Qrcode("reader");
-    }
-    if (html5QrcodeScanner.isScanning) {
-      return;
-    }
+    if (!html5QrcodeScanner) html5QrcodeScanner = new Html5Qrcode("reader");
+    if (html5QrcodeScanner.isScanning) return;
     const config = { fps: 10, qrbox: { width: 250, height: 250 } };
     html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
       .catch(err => {
@@ -1647,9 +1657,7 @@
             codeToSearch = urlObj.searchParams.get('item') || decodedText;
         } catch(e) {
             const parts = decodedText.split('item=');
-            if(parts.length > 1) {
-                codeToSearch = parts[1].split('&')[0];
-            }
+            if(parts.length > 1) codeToSearch = parts[1].split('&')[0];
         }
     }
     
