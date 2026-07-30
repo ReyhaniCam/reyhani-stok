@@ -665,6 +665,9 @@
     const canEdit = (currentRole === 'admin' || currentRole === 'staff');
     const isAdmin = (currentRole === 'admin');
 
+    // Aktif sayfanın canlı linkini baz al (Hata vermemesi için)
+    const currentBaseUrl = window.location.href.split('?')[0];
+
     Object.values(productsData).forEach(p => {
       const pName = p.name ? p.name.toLowerCase() : '';
       const pCat = p.category ? p.category.toLowerCase() : '';
@@ -716,11 +719,11 @@
       }
     });
 
-    // Grid basıldıktan sonra ekrandaki QR kodlarını anında çizdir
+    // Grid basıldıktan sonra ekrandaki QR kodlarını canlı URL ile çizdir
     Object.values(productsData).forEach(p => {
       const el = document.getElementById(`grid-qr-${p.code}`);
       if (el && el.childElementCount === 0) {
-        new QRCode(el, { text: `https://reyhani-stok.web.app/?item=${p.code}`, width: 68, height: 68 });
+        new QRCode(el, { text: `${currentBaseUrl}?item=${p.code}`, width: 68, height: 68 });
       }
     });
 
@@ -846,6 +849,8 @@
     const printArea = document.getElementById('print-area');
     printArea.innerHTML = '';
     
+    const currentBaseUrl = window.location.href.split('?')[0];
+
     const sticker = document.createElement('div');
     sticker.className = 'sticker-label';
     sticker.innerHTML = `
@@ -854,7 +859,7 @@
       <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price)}</span></div>
     `;
     printArea.appendChild(sticker);
-    new QRCode(document.getElementById(`qr-${code}`), { text: `https://reyhani-stok.web.app/?item=${code}`, width: 68, height: 68 });
+    new QRCode(document.getElementById(`qr-${code}`), { text: `${currentBaseUrl}?item=${code}`, width: 68, height: 68 });
     
     setTimeout(() => window.print(), 300);
   }
@@ -864,6 +869,7 @@
       const printArea = document.getElementById('print-area');
       printArea.innerHTML = '';
       const search = document.getElementById('search').value.toLowerCase();
+      const currentBaseUrl = window.location.href.split('?')[0];
       
       Object.values(productsData).forEach(p => {
           const pName = p.name ? p.name.toLowerCase() : '';
@@ -879,7 +885,7 @@
                 <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price)}</span></div>
               `;
               printArea.appendChild(sticker);
-              new QRCode(document.getElementById(`qrp-${p.code}`), { text: `https://reyhani-stok.web.app/?item=${p.code}`, width: 68, height: 68 });
+              new QRCode(document.getElementById(`qrp-${p.code}`), { text: `${currentBaseUrl}?item=${p.code}`, width: 68, height: 68 });
           }
       });
       setTimeout(() => window.print(), 800);
