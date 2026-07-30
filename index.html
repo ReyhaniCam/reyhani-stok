@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Reyhani Cam Hırdavat — Canlı QR Stok ve Görev Paneli</title>
+<title>Reyhani Cam Hırdavat — Canlı QR Stok, Görev ve Fiş Paneli</title>
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -133,15 +133,23 @@
   .history-flex { display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
 
   #print-area { display: none; }
+  #thermal-print-area { display: none; }
+
   @media print {
     body * { visibility: hidden; }
-    #print-area, #print-area * { visibility: visible; }
-    #print-area { display: flex !important; flex-wrap: wrap; gap: 4mm; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
+    
+    /* Etiket Modu */
+    body.printing-label #print-area, body.printing-label #print-area * { visibility: visible; }
+    body.printing-label #print-area { display: flex !important; flex-wrap: wrap; gap: 4mm; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
     .sticker-label { width: 50mm; height: 30mm; border: 1px dashed #000; padding: 2mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
     .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
     .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; }
     .sticker-qr img { width: 100% !important; height: 100% !important; }
     .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
+
+    /* Termal Fiş Modu */
+    body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area * { visibility: visible; }
+    body.printing-receipt #thermal-print-area { display: block !important; position: absolute; left: 0; top: 0; width: 58mm; }
   }
 </style>
 </head>
@@ -151,7 +159,7 @@
   <header>
     <div class="brand">
       <h1>Reyhani Cam Hırdavat</h1>
-      <span>Canlı Bulut &amp; QR Stok ve Görev Paneli</span>
+      <span>Canlı Bulut &amp; QR Stok, Görev ve Fiş Paneli</span>
     </div>
     <div class="auth-status">
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
@@ -379,8 +387,28 @@
   </main>
 </div>
 
-<!-- GİZLİ YAZDIRMA ŞABLON ALANI -->
+<!-- GİZLİ YAZDIRMA ŞABLON ALANLARI -->
 <div id="print-area"></div>
+
+<div id="thermal-print-area">
+  <div style="width: 58mm; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; padding: 2mm; background: #fff;">
+    <div style="text-align: center;">
+      <h3 style="font-size: 14px; margin: 0 0 4px 0; font-weight: bold;">REYHANİ CAM HIRDAVAT</h3>
+      <p style="margin: 2px 0; font-size: 10px;">Satış Fişi</p>
+      <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+    </div>
+    <div style="margin-bottom: 6px;">
+      <p style="margin: 2px 0;"><strong>Tarih:</strong> <span id="t-date"></span></p>
+      <p style="margin: 2px 0;"><strong>Saat:</strong> <span id="t-time"></span></p>
+    </div>
+    <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+    <div id="t-items-list" style="margin-bottom: 6px;"></div>
+    <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+    <div style="text-align: center; margin-top: 8px;">
+      <p style="margin: 2px 0; font-size: 10px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
+    </div>
+  </div>
+</div>
 
 <!-- GEÇMİŞ MODALI (HESAP EKSTRESİ) -->
 <div class="modal-overlay" id="history-modal" style="display:none;">
@@ -621,6 +649,26 @@
     const t = document.getElementById('toast');
     t.textContent = msg; t.style.display = 'block';
     setTimeout(() => t.style.display = 'none', 2500);
+  }
+
+  // TERMAL FİŞ YAZDIRMA FONKSİYONU
+  function printThermalReceipt(productName, quantity, unit) {
+    const now = new Date();
+    document.getElementById('t-date').textContent = now.toLocaleDateString('tr-TR');
+    document.getElementById('t-time').textContent = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    
+    document.getElementById('t-items-list').innerHTML = `
+      <div style="margin-bottom: 4px;">
+        <p style="margin: 2px 0;"><strong>Ürün:</strong> ${productName}</p>
+        <p style="margin: 2px 0;"><strong>Adet:</strong> ${quantity} ${unit || 'Adet'}</p>
+      </div>
+    `;
+
+    document.body.className = 'printing-receipt';
+    setTimeout(() => {
+      window.print();
+      document.body.className = '';
+    }, 200);
   }
 
   // GÖREV YÖNETİMİ & BİLDİRİMLER
@@ -968,7 +1016,6 @@
              if(!error) {
                if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
                
-               // Yöneticiye bildirim düşmesi için tetikleme
                dbNotifications.push({
                  text: `Yeni Ürün Eklendi: ${name} (${qty} ${unit}) - Kategori: ${category}`,
                  time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
@@ -1065,7 +1112,11 @@
       const moveType = actualChange > 0 ? 'STOK EKLENDİ' : 'SATIŞ YAPILDI';
       logMovement(code, productsData[code].name, actualChange, moveType);
       
-      // Eğer stok eklendiyse yöneticiye bildirim gönder
+      // Satış yapıldığında termal fiş yazdır
+      if(actualChange < 0) {
+        printThermalReceipt(productsData[code].name, Math.abs(actualChange), productsData[code].unit);
+      }
+      
       if(actualChange > 0) {
         dbNotifications.push({
           text: `Stok Eklendi: ${productsData[code].name} (+${actualChange} ${productsData[code].unit || 'Adet'})`,
@@ -1109,7 +1160,11 @@
     printArea.appendChild(sticker);
     new QRCode(document.getElementById(`qr-${code}`), { text: `${currentBaseUrl}?item=${code}`, width: 68, height: 68 });
     
-    setTimeout(() => window.print(), 300);
+    document.body.className = 'printing-label';
+    setTimeout(() => {
+      window.print();
+      document.body.className = '';
+    }, 300);
   }
 
   function printAllLabels() {
@@ -1136,7 +1191,11 @@
               new QRCode(document.getElementById(`qrp-${p.code}`), { text: `${currentBaseUrl}?item=${p.code}`, width: 68, height: 68 });
           }
       });
-      setTimeout(() => window.print(), 800);
+      document.body.className = 'printing-label';
+      setTimeout(() => {
+        window.print();
+        document.body.className = '';
+      }, 800);
   }
 
   function exportBackup() {
@@ -1284,7 +1343,6 @@
       
       dbWholesalers.child(id).update({ balance: newBalance, history: newHistory });
 
-      // Toptancıdan mal alımı/borç eklendiğinde yöneticiye bildirim gönder
       if(type === 'borc') {
         dbNotifications.push({
           text: `Toptancı Mal Girişi (${w.name}): ${note} - ₺${formatMoney(amount)}`,
