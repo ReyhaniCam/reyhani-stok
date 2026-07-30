@@ -90,16 +90,17 @@
   .tag-header{display:flex;justify-content:space-between;align-items:flex-start;}
   .tag-title{font-weight:600;font-size:15px;}
   .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);}
-  .qr-box{display:flex;justify-content:center;margin:12px 0;padding:8px;background:#fff;border:1px dashed var(--steel-line);}
+  
+  /* Ürün kartı içi mini QR alanı */
+  .qr-box-mini{display:flex;justify-content:center;margin:10px 0;padding:6px;background:#fff;border:1px dashed var(--steel-line);width:80px;height:80px;margin-left:auto;margin-right:auto;}
+  .qr-box-mini img{width:100%!important;height:100%!important;}
   
   .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
-  .price-warning{color:var(--rust);font-weight:600;margin-top:4px;font-size:11px;background:#FDF2F0;padding:6px 8px;border-radius:3px;border:1px dashed var(--rust);}
 
   .qty-control{display:flex;align-items:center;justify-content:space-between;margin-top:10px;background:var(--concrete);padding:6px 10px;border-radius:var(--radius);}
   .qty-btn{width:32px;height:32px;border:1px solid var(--steel-line);background:#fff;font-weight:bold;cursor:pointer;}
   .qty-val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
   
-  .tag-actions{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:10px;padding-top:8px;border-top:1px solid var(--steel-line);}
   .sm-btn{background:none;border:none;color:var(--steel);font-size:11px;text-decoration:underline;cursor:pointer;}
 
   #reader{width:100%;max-width:500px;margin:0 auto;border:2px dashed var(--steel-line);border-radius:var(--radius);}
@@ -141,6 +142,7 @@
     .sticker-label { width: 50mm; height: 30mm; border: 1px dashed #000; padding: 2mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
     .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
     .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; }
+    .sticker-qr img { width: 100% !important; height: 100% !important; }
     .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
   }
 </style>
@@ -380,7 +382,7 @@
 <div class="toast" id="toast"></div>
 
 <script>
-  // FIREBASE BAĞLANTISI (Aynı kalıyor)
+  // FIREBASE BAĞLANTISI
   const firebaseConfig = { databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/" };
   firebase.initializeApp(firebaseConfig);
   
@@ -443,7 +445,7 @@
     
     Object.keys(data).sort().reverse().forEach(dateStr => {
       if(dateStr < cutoffStr) {
-        dbOrders.child(dateStr).remove(); // Otomatik temizlik
+        dbOrders.child(dateStr).remove(); 
         return;
       }
       
@@ -675,7 +677,6 @@
         
         const isLow = p.qty <= 5;
         
-        // Düzenleme / Silme butonları (sadece Admin)
         let adminActions = '';
         if (isAdmin) {
           adminActions = `
@@ -696,6 +697,9 @@
               <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
             </div>
             
+            <!-- Kart İçerisinde Canlı QR Kodu Alanı -->
+            <div class="qr-box-mini" id="grid-qr-${p.code}"></div>
+
             <div class="price-info-box">
                <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
                <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
@@ -712,6 +716,14 @@
       }
     });
 
+    // Grid basıldıktan sonra ekrandaki QR kodlarını anında çizdir
+    Object.values(productsData).forEach(p => {
+      const el = document.getElementById(`grid-qr-${p.code}`);
+      if (el && el.childElementCount === 0) {
+        new QRCode(el, { text: `https://reyhani-stok.web.app/?item=${p.code}`, width: 68, height: 68 });
+      }
+    });
+
     document.getElementById('sum-count').textContent = count;
     document.getElementById('sum-units').textContent = units.toFixed(1);
     
@@ -722,7 +734,6 @@
     }
   }
 
-  // --- ÜRÜN EKLEME (KOD ÇAKIŞMA KONTROLÜ İLE) ---
   function addProduct() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('f-name').value.trim();
@@ -735,7 +746,6 @@
     if(!name) { alert("Lütfen ürün adını giriniz."); return; }
     if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
 
-    // KOD ÇAKIŞMASINI ÖNLE
     db.child(code).once('value', snapshot => {
        if(snapshot.exists()) {
            alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor! Lütfen farklı bir kod girin veya otomatik bırakın.`);
@@ -763,7 +773,6 @@
     }
   }
 
-  // --- ÜRÜN DÜZENLEME MODALI ---
   function openEditModal(code) {
       if(currentRole !== 'admin') return;
       const p = productsData[code];
@@ -830,7 +839,6 @@
     }
   }
 
-  // YAZDIRMA İŞLEMLERİ
   function printQR(code) {
     if(currentRole === 'guest') return;
     const p = productsData[code];
@@ -877,7 +885,6 @@
       setTimeout(() => window.print(), 800);
   }
 
-  // EXCEL ÇIKTILARI (SheetJS Kullanılarak)
   function exportBackup() {
     if(currentRole !== 'admin') return;
     const dataRow = [["Ürün Kodu", "Kategori", "Ürün Adı", "Miktar", "Birim", "Birim Fiyat", "Toplam Değer"]];
@@ -919,7 +926,6 @@
   function exportZReport() {
     if(currentRole !== 'admin' && currentRole !== 'staff') return;
     
-    // SİLME ONAYI EKLENDİ
     if(!confirm("Z Raporu almak, dükkandaki şu ana kadar kaydedilmiş gün içi hareket kayıtlarını excel olarak indirip veritabanından SİLECEKTİR. Onaylıyor musunuz?")) {
         return; 
     }
@@ -944,12 +950,10 @@
     const dateStr = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `Reyhani_ZRaporu_${dateStr}.xlsx`);
     
-    // Eski hareketleri temizle
     dbMovements.remove();
     showToast("Z Raporu alındı ve kayıtlar temizlendi.");
   }
 
-  // TOPTANCI FONKSİYONLARI
   function addWholesaler() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('w-name').value.trim();
@@ -1069,7 +1073,6 @@
       document.getElementById('history-modal').style.display = 'none';
   }
 
-  // QR OKUYUCU
   function startScanner() {
     if (!html5QrcodeScanner) {
       html5QrcodeScanner = new Html5Qrcode("reader");
@@ -1101,7 +1104,6 @@
     setTimeout(() => { renderGrid(); showToast("Ürün Bulundu!"); }, 500);
   }
 
-  // Başlangıç Kurulumu
   updateAuthUI();
 </script>
 </body>
