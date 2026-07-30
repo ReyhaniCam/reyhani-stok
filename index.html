@@ -501,6 +501,9 @@
   let currentRole = 'guest';
   let cart = [];
 
+  // İşlem zaman sınırlaması (0.8 saniye / 800ms throttle takibi)
+  const actionCooldowns = {};
+
   const ADMIN_PASS = "5358";
   const STAFF_PASS = "5323";
 
@@ -863,7 +866,6 @@
     
     const keys = Object.keys(tasksData);
     
-    // Clear selections that no longer exist
     selectedTaskIds.forEach(id => {
       if(!tasksData[id]) selectedTaskIds.delete(id);
     });
@@ -1219,9 +1221,18 @@
       });
   }
 
+  // 0.8 Saniyelik Zaman Sınırlandırması (Throttle / Debounce) Entegre Edilmiş Fonksiyon
   function updateQty(code, change) {
     if(currentRole === 'guest') return;
     if(!productsData[code]) return;
+
+    // 0.8 saniye (800 milisaniye) zaman sınırlaması kontrolü
+    const now = Date.now();
+    if(actionCooldowns[code] && (now - actionCooldowns[code] < 800)) {
+      return; // Çok hızlı peş peşe basımları engellemek için yoksay
+    }
+    actionCooldowns[code] = now;
+
     const currentQty = productsData[code].qty || 0;
     const newQty = Math.max(0, currentQty + change);
     const actualChange = newQty - currentQty;
