@@ -385,10 +385,13 @@
     <!-- RAPORLAR TABI -->
     <div id="tab-raporlar" class="tab-content">
       <div class="report-box">
-        <h3>GÜN SONU Z RAPORU</h3>
-        <p>Bugün dükkanda yapılan tüm işlemler ve stoka eklenen ürünler listelenir. Raporu aldığınızda eski kayıtlar sistemden temizlenir.</p>
-        <button class="btn btn-success" onclick="exportZReport()">Z Raporunu İndir ve Temizle (Excel)</button>
+        <h3>GÜN SONU Z RAPORU OLUŞTURMA</h3>
+        <p>Bugün dükkanda yapılan tüm hareketleri derleyerek sistemde kalıcı bir Z Raporu oluşturun. Oluşturduğunuz raporlar aşağıda gün gün listelenir.</p>
+        <button class="btn btn-success" onclick="generateDailyZReport()">Bugünün Z Raporunu Oluştur &amp; Arşivle</button>
       </div>
+
+      <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Geçmiş Z Raporları (Gün Gün Arşiv)</h3>
+      <div id="past-z-reports-list"></div>
     </div>
 
   </main>
@@ -488,10 +491,12 @@
   const dbOrders = dbRoot.child('orders');
   const dbNotifications = dbRoot.child('notifications');
   const dbTasks = dbRoot.child('tasks');
+  const dbZReports = dbRoot.child('z_reports');
 
   let productsData = {};
   let wholesalersData = {};
   let globalPastOrders = {};
+  let globalZReports = {};
   let movementsData = {};
   let notificationsData = {};
   let tasksData = {};
@@ -542,6 +547,39 @@
   dbTasks.on('value', (snapshot) => {
     tasksData = snapshot.val() || {};
     renderTasks();
+  });
+
+  dbZReports.on('value', (snapshot) => {
+    const data = snapshot.val() || {};
+    const listDiv = document.getElementById('past-z-reports-list');
+    if(!listDiv) return;
+    listDiv.innerHTML = '';
+    globalZReports = {};
+    
+    let hasReports = false;
+    Object.keys(data).sort().reverse().forEach(dateStr => {
+      hasReports = true;
+      const rep = data[dateStr];
+      globalZReports[dateStr] = rep;
+      
+      listDiv.innerHTML += `
+        <div class="tag" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+           <div>
+              <div class="tag-title">📅 Z Raporu: ${rep.date}</div>
+              <div class="tag-code">🕒 Oluşturma: ${rep.time || 'N/A'} | 📦 Mal Giriş: ${rep.malGirisi} | 📤 Mal Çıkış: ${rep.malCikisi}</div>
+              <div style="font-size:12px; margin-top:4px; color:var(--charcoal);">
+                 Para Girişi: <strong style="color:var(--success);">₺${formatMoney(rep.paraGirisi)}</strong> | 
+                 Para Çıkışı: <strong style="color:var(--rust);">₺${formatMoney(rep.paraCikisi)}</strong>
+              </div>
+           </div>
+           <div style="text-align:right;">
+              <button class="btn btn-success btn-sm" onclick="downloadZReportByDate('${dateStr}')">📊 Z Raporu Excel İndir</button>
+           </div>
+        </div>
+      `;
+    });
+    
+    if(!hasReports) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
   });
 
   dbOrders.on('value', snapshot => {
@@ -1360,35 +1398,95 @@
     XLSX.writeFile(wb, `Reyhani_Satis_${dateStr}_${orderId}.xlsx`);
   }
 
-  function exportZReport() {
+  // GÜN SONU Z RAPORU OLUŞTURMA & ARŞİVLEME
+  function generateDailyZReport() {
     if(currentRole !== 'admin' && currentRole !== 'staff') return;
     
-    if(!confirm("Z Raporu almak, dükkandaki şu ana kadar kaydedilmiş gün içi hareket kayıtlarını excel olarak indirip veritabanından SİLECEKTİR. Onaylıyor musunuz?")) {
-        return; 
-    }
-
-    const dataRow = [["Tarih", "Saat", "İşlem Tipi", "Ürün Kodu", "Ürün Adı", "Değişim Miktarı"]];
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
     
-    Object.keys(movementsData).forEach(date => {
-        const moves = movementsData[date];
-        Object.values(moves).forEach(m => {
-            dataRow.push([date, m.time, m.type, m.code, m.name, m.change]);
-        });
+    let malGirisi = 0;
+    let malCikisi = 0;
+    const dayMoves = movementsData[dateStr] || {};
+    const itemsList = [];
+    
+    Object.values(dayMoves).forEach(m => {
+      itemsList.push(m);
+      if(m.change > 0) {
+        malGirisi += Number(m.change);
+      } else if(m.change < 0) {
+        malCikisi += Math.abs(Number(m.change));
+      }
     });
 
-    if(dataRow.length === 1) {
-        alert("Raporlanacak hareket bulunamadı.");
-        return;
-    }
+    dbOrders.child(dateStr).once('value', snapshot => {
+      const ordersOnDate = snapshot.val() || {};
+      let paraGirisi = 0;
+      Object.values(ordersOnDate).forEach(order => {
+        paraGirisi += Number(order.total || 0);
+      });
 
+      let paraCikisi = 0;
+      const todayFormatted = new Date().toLocaleDateString('tr-TR');
+      Object.values(wholesalersData).forEach(w => {
+        if(w.history) {
+          w.history.forEach(h => {
+            if(h.date && h.date.startsWith(todayFormatted) && h.type === 'odeme') {
+              paraCikisi += Number(h.amount || 0);
+            }
+          });
+        }
+      });
+
+      const reportData = {
+        date: dateStr,
+        time: timeStr,
+        malGirisi: malGirisi,
+        malCikisi: malCikisi,
+        paraGirisi: paraGirisi,
+        paraCikisi: paraCikisi,
+        movements: itemsList
+      };
+
+      dbZReports.child(dateStr).set(reportData, err => {
+        if(!err) {
+          showToast(`${dateStr} tarihli Z Raporu oluşturuldu ve arşive kaydedildi!`);
+        }
+      });
+    });
+  }
+
+  function downloadZReportByDate(dateStr) {
+    const rep = globalZReports[dateStr];
+    if(!rep) { alert("Rapor verisi bulunamadı."); return; }
+    
+    const dataRow = [
+      ["REYHANİ CAM HIRDAVAT - GÜN SONU Z RAPORU"],
+      ["Rapor Tarihi:", rep.date, "Oluşturulma Saati:", rep.time || "-"],
+      [],
+      ["ÖZET METRİKLER"],
+      ["Toplam Mal Girişi (Adet/Miktar):", rep.malGirisi],
+      ["Toplam Mal Çıkışı (Adet/Miktar):", rep.malCikisi],
+      ["Toplam Para Girişi (₺):", rep.paraGirisi],
+      ["Toplam Para Çıkışı (₺):", rep.paraCikisi],
+      [],
+      ["DETAYLI GÜN İÇİ HAREKETLER LİSTESİ"],
+      ["Saat", "İşlem Tipi", "Ürün Kodu", "Ürün Adı", "Değişim Miktarı"]
+    ];
+    
+    if(rep.movements && rep.movements.length > 0) {
+      rep.movements.forEach(m => {
+        dataRow.push([m.time, m.type, m.code, m.name, m.change]);
+      });
+    } else {
+      dataRow.push(["-", "Bu tarihe ait kayıtlı hareket bulunmuyor", "-", "-", "-"]);
+    }
+    
     const ws = XLSX.utils.aoa_to_sheet(dataRow);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Z_Raporu");
-    const dateStr = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `Reyhani_ZRaporu_${dateStr}.xlsx`);
-    
-    dbMovements.remove();
-    showToast("Z Raporu alındı ve kayıtlar temizlendi.");
+    XLSX.utils.book_append_sheet(wb, ws, "Z_Raporu_" + dateStr);
+    XLSX.writeFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
+    showToast("Z Raporu Excel dosyası indiriliyor!");
   }
 
   function addWholesaler() {
