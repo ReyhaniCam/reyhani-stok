@@ -173,7 +173,7 @@
     <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
     <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Günlük Görevler</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
-    <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Siparişler</button>
+    <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış / Sepet</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
   </div>
 
@@ -255,7 +255,7 @@
             <span id="notif-badge" style="background:var(--rust); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; display:none;">0 Yeni</span>
           </h3>
           <p style="font-size:12px; color:var(--steel); margin-top:-4px; margin-bottom:12px;">Dükkana eklenen ürünler buraya bildirim olarak düşer. İstediğiniz bildirimi çalışana görev olarak atayabilirsiniz.</p>
-          <div id="notifications-list" style="space-y:8px;">
+          <div id="notifications-list">
             <p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>
           </div>
         </div>
@@ -329,11 +329,11 @@
       <div id="wholesalers-grid" class="grid"></div>
     </div>
 
-    <!-- SİPARİŞLER TABI -->
+    <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
     <div id="tab-siparis" class="tab-content">
       <div class="form-card">
-        <h3 style="margin-top:0; font-family:'Oswald';">Yeni Sipariş Listesi (Sepet)</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Dükkanın eksiklerini sepete ekleyerek toplam maliyet çıkarabilirsin.</p>
+        <h3 style="margin-top:0; font-family:'Oswald';">Satış / Sepet Ekranı</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Satış yapılacak ürünleri sepete ekleyerek hem stoktan düşebilir hem de müşteri için fiş kesebilirsiniz.</p>
         
         <div class="form-row" style="grid-template-columns: 2fr 1fr;">
           <div>
@@ -368,10 +368,10 @@
         <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
             Genel Toplam: <span id="cart-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
         </div>
-        <button class="btn btn-success" style="margin-top:15px;" onclick="completeOrder()">Siparişi Tamamla & Excel Olarak İndir</button>
+        <button class="btn btn-success" style="margin-top:15px;" onclick="completeOrder()">Satışı Tamamla &amp; Fiş / Excel İşlemi</button>
       </div>
 
-      <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Geçmiş Sipariş Listeleri (Son 40 Gün)</h3>
+      <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Geçmiş Satış / Sipariş Listeleri (Son 40 Gün)</h3>
       <div id="past-orders-list"></div>
     </div>
 
@@ -390,6 +390,7 @@
 <!-- GİZLİ YAZDIRMA ŞABLON ALANLARI -->
 <div id="print-area"></div>
 
+<!-- TERMAL FİŞ ŞABLONU -->
 <div id="thermal-print-area">
   <div style="width: 58mm; font-family: 'Courier New', Courier, monospace; font-size: 11px; color: #000; padding: 2mm; background: #fff;">
     <div style="text-align: center;">
@@ -402,7 +403,13 @@
       <p style="margin: 2px 0;"><strong>Saat:</strong> <span id="t-time"></span></p>
     </div>
     <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
-    <div id="t-items-list" style="margin-bottom: 6px;"></div>
+    <div id="t-items-list" style="margin-bottom: 6px;">
+      <!-- Dinamik ürün satırları -->
+    </div>
+    <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
+    <div style="text-align: right; margin-top: 4px; font-weight: bold; font-size: 12px;">
+      TOPLAM: <span id="t-total"></span>
+    </div>
     <div style="border-bottom: 1px dashed #000; margin: 6px 0;"></div>
     <div style="text-align: center; margin-top: 8px;">
       <p style="margin: 2px 0; font-size: 10px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
@@ -554,7 +561,7 @@
         listDiv.innerHTML += `
           <div class="tag" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
              <div>
-                <div class="tag-title">Sipariş: ${dateStr}</div>
+                <div class="tag-title">Satış / Sipariş: ${dateStr}</div>
                 <div class="tag-code">🕒 ${order.time} | 📦 ${order.items.length} Çeşit Ürün</div>
              </div>
              <div style="text-align:right;">
@@ -566,7 +573,7 @@
       });
     });
     
-    if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş sipariş bulunamadı.</p>';
+    if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
   });
 
   function logMovement(code, name, change, type) {
@@ -651,18 +658,24 @@
     setTimeout(() => t.style.display = 'none', 2500);
   }
 
-  // TERMAL FİŞ YAZDIRMA FONKSİYONU
-  function printThermalReceipt(productName, quantity, unit) {
+  // TERMAL FİŞ YAZDIRMA FONKSİYONU (Sepet Satışları İçin)
+  function printThermalReceipt(items, total) {
     const now = new Date();
     document.getElementById('t-date').textContent = now.toLocaleDateString('tr-TR');
     document.getElementById('t-time').textContent = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
     
-    document.getElementById('t-items-list').innerHTML = `
-      <div style="margin-bottom: 4px;">
-        <p style="margin: 2px 0;"><strong>Ürün:</strong> ${productName}</p>
-        <p style="margin: 2px 0;"><strong>Adet:</strong> ${quantity} ${unit || 'Adet'}</p>
-      </div>
-    `;
+    let itemsHtml = '';
+    items.forEach(item => {
+      itemsHtml += `
+        <div style="margin-bottom: 4px; display:flex; justify-content:space-between;">
+          <span>${item.name} (${item.qty} ${item.unit || 'Adet'})</span>
+          <span>₺${formatMoney(item.total)}</span>
+        </div>
+      `;
+    });
+
+    document.getElementById('t-items-list').innerHTML = itemsHtml;
+    document.getElementById('t-total').textContent = '₺' + formatMoney(total);
 
     document.body.className = 'printing-receipt';
     setTimeout(() => {
@@ -842,7 +855,7 @@
         cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
     } else {
         const price = Number(p.price || 0);
-        cart.push({ code: p.code, name: p.name, price: price, qty: qty, total: price * qty });
+        cart.push({ code: p.code, name: p.name, price: price, qty: qty, unit: p.unit || 'Adet', total: price * qty });
     }
     
     document.getElementById('cart-product').value = '';
@@ -870,7 +883,7 @@
               <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code}</small>
             </td>
             <td>₺${formatMoney(item.price)}</td>
-            <td style="font-weight:bold;">${item.qty}</td>
+            <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
             <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
             <td><button class="btn btn-dark btn-sm" onclick="removeFromCart(${index})">Çıkar</button></td>
           </tr>
@@ -890,19 +903,36 @@
     
     const dateStr = new Date().toISOString().slice(0, 10);
     const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    const orderId = "SİPARİŞ-" + new Date().getTime();
+    const orderId = "SATIŞ-" + new Date().getTime();
     
     let grandTotal = 0;
     cart.forEach(i => grandTotal += i.total);
     
+    // Sepetteki ürünlerin stoklarını düş ve hareket kaydet
+    cart.forEach(item => {
+      if(productsData[item.code]) {
+        const currentQty = productsData[item.code].qty || 0;
+        const newQty = Math.max(0, currentQty - item.qty);
+        db.child(item.code).update({ qty: newQty });
+        logMovement(item.code, item.name, -item.qty, 'SATIŞ YAPILDI (SEPET)');
+      }
+    });
+
     const orderData = { time: timeStr, items: cart, total: grandTotal };
     
     dbOrders.child(dateStr).child(orderId).set(orderData, (err) => {
         if(!err) {
             generateOrderExcel(orderData, orderId, dateStr);
+            
+            // Fİş İsteği Sorgusu (Yalnızca sepet satışı tamamlandıktan sonra)
+            if(confirm("Satış başarıyla tamamlandı ve Excel kaydedildi.\nMüşteri için fiş basılsın mı?")) {
+              printThermalReceipt(cart, grandTotal);
+            }
+            
             cart = [];
             renderCart();
-            showToast("Sipariş kaydedildi ve Excel indiriliyor!");
+            renderGrid();
+            showToast("Satış ve sepet işlemleri başarıyla tamamlandı!");
         }
     });
   }
@@ -911,9 +941,9 @@
     const target = globalPastOrders[orderId];
     if(target) {
       generateOrderExcel(target.orderData, orderId, target.date);
-      showToast("Eski sipariş excel olarak indiriliyor!");
+      showToast("Kayıtlı satış excel olarak indiriliyor!");
     } else {
-      alert("Bu siparişin detayları bulunamadı.");
+      alert("Bu satışın detayları bulunamadı.");
     }
   }
 
@@ -1109,13 +1139,8 @@
     const actualChange = newQty - currentQty;
     if(actualChange !== 0) {
       db.child(code).update({ qty: newQty });
-      const moveType = actualChange > 0 ? 'STOK EKLENDİ' : 'SATIŞ YAPILDI';
+      const moveType = actualChange > 0 ? 'STOK EKLENDİ' : 'HIZLI STOK DÜŞÜŞÜ';
       logMovement(code, productsData[code].name, actualChange, moveType);
-      
-      // Satış yapıldığında termal fiş yazdır
-      if(actualChange < 0) {
-        printThermalReceipt(productsData[code].name, Math.abs(actualChange), productsData[code].unit);
-      }
       
       if(actualChange > 0) {
         dbNotifications.push({
@@ -1232,8 +1257,8 @@
 
     const ws = XLSX.utils.aoa_to_sheet(dataRow);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sipariş");
-    XLSX.writeFile(wb, `Reyhani_Siparis_${dateStr}_${orderId}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Satis");
+    XLSX.writeFile(wb, `Reyhani_Satis_${dateStr}_${orderId}.xlsx`);
   }
 
   function exportZReport() {
