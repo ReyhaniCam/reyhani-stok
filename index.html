@@ -272,7 +272,7 @@
             </select>
           </div>
         </div>
-        <div class="form-row" style="grid-template-columns: 1fr; margin-bottom:10px;">
+        <div class="form-row" style="grid-template-columns: 1fr 1fr; margin-bottom:10px;">
           <div><label>Ürün Sınıfı</label>
             <select id="f-category">
               <option value="Banyo">Banyo</option>
@@ -288,12 +288,21 @@
               <option value="Diğer">Diğer</option>
             </select>
           </div>
+          <div><label>Marka / Katalog Grubu</label>
+            <select id="f-brand"></select>
+          </div>
         </div>
         <div style="margin-bottom:12px;">
           <label>Özel QR Kodu No (Boş bırakırsanız otomatik üretilir)</label>
           <input type="text" id="f-code" placeholder="Otomatik kod verilsin">
         </div>
         <button class="btn btn-primary" id="add-btn" onclick="addProduct()">Ürünü Canlı Sisteme Kaydet</button>
+      </div>
+
+      <div class="form-card disabled-action" id="brand-settings-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">Marka İskonto / KDV Ayarları</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Her marka için kendi iskonto ve KDV yüzdenizi girip kaydedin. Bu oranlar markanın yanında saklanır, hesaplamaları buradan yönetebilirsiniz.</p>
+        <div id="brand-settings-list"></div>
       </div>
     </div>
 
@@ -584,6 +593,11 @@
         </select>
       </div>
     </div>
+    <div class="form-row" style="grid-template-columns: 1fr;">
+      <div><label>Marka / Katalog Grubu</label>
+        <select id="edit-brand"></select>
+      </div>
+    </div>
     <div class="form-row" style="grid-template-columns: 1fr 1fr;">
       <div><label>Konum — Stand</label>
         <select id="edit-stand" onchange="updateSlotMax()">
@@ -613,6 +627,8 @@
   const dbZReports = dbRoot.child('z_reports');
   const dbProductImages = dbRoot.child('product_images'); // ürün listesinden AYRI tutulur — ana liste hafif kalır
   const dbLayout = dbRoot.child('store_layout');
+  const dbBrandSettings = dbRoot.child('brand_settings');
+  const BRAND_LIST = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon"];
 
   let productsData = {};
   let wholesalersData = {};
@@ -625,6 +641,7 @@
   let imageCache = {}; // { code: dataUrl | null } — bir kez indirilen fotoğraf tekrar indirilmez
   let pendingImageDataUrl = null; // düzenleme modalında henüz kaydedilmemiş yeni fotoğraf
   let layoutData = { stands: {} };
+  let brandSettingsData = {};
   let highlightTimer = null;
   
   let html5QrcodeScanner = null;
@@ -847,6 +864,11 @@
     renderLayoutGrid();
   });
 
+  dbBrandSettings.on('value', (snapshot) => {
+    brandSettingsData = snapshot.val() || {};
+    renderBrandSettings();
+  });
+
   dbZReports.on('value', (snapshot) => {
     const data = snapshot.val() || {};
     const listDiv = document.getElementById('past-z-reports-list');
@@ -993,6 +1015,7 @@
       printAllBtn.style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'block';
       document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
+      document.getElementById('brand-settings-card').classList.remove('disabled-action');
     } else if(currentRole === 'staff') {
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
@@ -1000,6 +1023,7 @@
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
+      document.getElementById('brand-settings-card').classList.add('disabled-action');
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
@@ -1007,9 +1031,11 @@
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
+      document.getElementById('brand-settings-card').classList.add('disabled-action');
     }
     renderGrid();
     renderLayoutGrid();
+    renderBrandSettings();
     if(currentRole === 'admin') {
         renderWholesalers();
         renderNotifications();
@@ -1176,6 +1202,53 @@
     switchTab('yerlesim');
     setTimeout(() => highlightStand(location.split('-')[0]), 150);
   }
+
+  // ============================================================
+  // MARKA / KATALOG GRUBU
+  // ------------------------------------------------------------
+  // /brand_settings/{MARKA} = { discount: yüzde, vat: yüzde }
+  // Yüzdeleri admin kendisi "Ürün Ekle" sekmesindeki panelden girer.
+  // ============================================================
+
+  function populateBrandSelect(selectId, selectedValue) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = '<option value="">Marka Seçilmedi</option>' +
+      BRAND_LIST.map(b => `<option value="${b}">${b}</option>`).join('');
+    sel.value = selectedValue || '';
+  }
+
+  function renderBrandSettings() {
+    const box = document.getElementById('brand-settings-list');
+    if (!box) return;
+    box.innerHTML = BRAND_LIST.map(brand => {
+      const s = brandSettingsData[brand] || {};
+      return `
+        <div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-top:1px solid var(--steel-line);">
+          <div style="flex:1.2;"><label style="margin-bottom:2px;">${brand}</label></div>
+          <div style="flex:1;">
+            <label style="margin-bottom:2px;">İskonto %</label>
+            <input type="number" step="0.01" id="bs-discount-${brand}" value="${s.discount != null ? s.discount : ''}" placeholder="0">
+          </div>
+          <div style="flex:1;">
+            <label style="margin-bottom:2px;">KDV %</label>
+            <input type="number" step="0.01" id="bs-vat-${brand}" value="${s.vat != null ? s.vat : ''}" placeholder="0">
+          </div>
+          <button class="btn btn-dark btn-sm" style="width:auto;" onclick="saveBrandSetting('${brand}')">Kaydet</button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function saveBrandSetting(brand) {
+    if (currentRole !== 'admin') return;
+    const discount = parseFloat(document.getElementById(`bs-discount-${brand}`).value) || 0;
+    const vat = parseFloat(document.getElementById(`bs-vat-${brand}`).value) || 0;
+    dbBrandSettings.child(brand).set({ discount, vat }, (err) => {
+      if (err) { alert("Kaydedilemedi: " + err.message); return; }
+      showToast(`${brand} için oranlar kaydedildi.`);
+    });
+  }
+
 
   function switchTab(tabName) {
     if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
@@ -1614,8 +1687,9 @@
       const pCat = p.category ? p.category.toLowerCase() : '';
       const pCode = p.code ? p.code.toLowerCase() : '';
       const pLoc = p.location ? p.location.toLowerCase() : '';
+      const pBrand = p.brand ? p.brand.toLowerCase() : '';
       
-      if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search)) {
+      if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
         count++;
         units += parseFloat(p.qty || 0);
         value += parseFloat(p.qty || 0) * parseFloat(p.price || 0);
@@ -1637,7 +1711,7 @@
             <div class="tag-header">
               <div>
                 <div class="tag-title">${p.name}</div>
-                <div class="tag-code">${p.code} • ${p.category || 'Belirtilmedi'}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
+                <div class="tag-code">${p.code} • ${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
               </div>
               <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
             </div>
@@ -1677,6 +1751,7 @@
     const unit = document.getElementById('f-unit').value;
     let code = document.getElementById('f-code').value.trim().toUpperCase();
     const category = document.getElementById('f-category').value;
+    const brand = document.getElementById('f-brand').value;
     
     if(!name) { alert("Lütfen ürün adını giriniz."); return; }
     if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
@@ -1685,7 +1760,7 @@
        if(snapshot.exists()) {
            alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor!`);
        } else {
-           db.child(code).set({ name, qty, price, unit, category, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
+           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
              if(!error) {
                if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
                dbNotifications.push({
@@ -1723,6 +1798,7 @@
       document.getElementById('edit-price').value = p.price || 0;
       document.getElementById('edit-unit').value = p.unit || 'Adet';
       document.getElementById('edit-category').value = p.category || 'Diğer';
+      populateBrandSelect('edit-brand', p.brand || '');
 
       const standSelect = document.getElementById('edit-stand');
       const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
@@ -1787,6 +1863,7 @@
       const qty = Math.max(0, parseFloat(document.getElementById('edit-qty').value) || 0);
       const unit = document.getElementById('edit-unit').value;
       const category = document.getElementById('edit-category').value;
+      const brand = document.getElementById('edit-brand').value;
 
       const standLetter = document.getElementById('edit-stand').value;
       const slotNum = parseInt(document.getElementById('edit-slot').value, 10);
@@ -1801,7 +1878,7 @@
       if(!name) { alert("Ürün adı boş olamaz."); return; }
       
       const p = productsData[code];
-      let updateData = { name, qty, unit, category, location: location };
+      let updateData = { name, qty, unit, category, brand: brand || null, location: location };
       
       if(currentRole === 'admin') {
           updateData.price = Math.max(0, parseFloat(document.getElementById('edit-price').value) || 0);
@@ -2192,6 +2269,7 @@
     }, 300);
   }
 
+  populateBrandSelect('f-brand', '');
   updateAuthUI();
 </script>
 </body>
