@@ -108,6 +108,37 @@
   .edit-photo-preview{width:64px; height:64px; border-radius:3px; overflow:hidden; background:var(--concrete); flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--steel-line);}
   .edit-photo-preview img{width:100%; height:100%; object-fit:cover;}
   .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
+
+  /* YERLEŞİM (KROKİ) */
+  .layout-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr));
+    gap:8px; background:#E4DFD3; border:1px solid var(--steel-line); border-radius:var(--radius);
+    padding:10px; min-height:120px;
+  }
+  .stand-box{
+    background:var(--paper); border:2px solid var(--charcoal); border-radius:3px;
+    padding:8px 6px; text-align:center; cursor:pointer; position:relative; min-height:70px;
+    display:flex; flex-direction:column; justify-content:center; transition:box-shadow .2s, transform .2s;
+  }
+  .stand-box:hover{box-shadow:0 2px 8px rgba(0,0,0,0.15);}
+  .stand-letter{font-family:'Oswald',sans-serif; font-size:22px; font-weight:700; line-height:1;}
+  .stand-label{font-size:9px; color:var(--steel); margin-top:3px; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .stand-count{font-size:10px; font-family:'IBM Plex Mono'; margin-top:4px; color:var(--info); font-weight:600;}
+  .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px;}
+  .stand-box.highlight{
+    border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45);
+    animation:standPulse 1s ease-in-out 3;
+  }
+  @keyframes standPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
+  .location-badge{
+    display:inline-block; font-size:10px; font-family:'IBM Plex Mono'; font-weight:600;
+    background:var(--charcoal); color:#fff; padding:2px 7px; border-radius:10px; margin-left:6px; cursor:pointer;
+  }
+  .slot-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(60px,1fr)); gap:6px; margin-top:10px;}
+  .slot-cell{border:1px solid var(--steel-line); border-radius:3px; padding:6px 4px; text-align:center; font-size:11px; min-height:44px;}
+  .slot-cell.filled{background:#FFF7E0; border-color:var(--safety);}
+  .slot-num{font-family:'IBM Plex Mono'; font-weight:700; font-size:12px;}
+  .slot-item{font-size:9px; color:var(--charcoal-soft, var(--charcoal)); line-height:1.2; margin-top:2px; word-break:break-word;}
   
   .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
 
@@ -203,6 +234,7 @@
     <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Günlük Görevler</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
     <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış / Sepet</button>
+    <button class="tab-btn" id="nav-yerlesim-btn" onclick="switchTab('yerlesim')" style="display:none;">🗺️ Yerleşim</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
   </div>
 
@@ -411,6 +443,45 @@
       <div id="past-orders-list" style="margin-top: 10px;"></div>
     </div>
 
+    <!-- YERLEŞİM (KROKİ) TABI -->
+    <div id="tab-yerlesim" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">📍 Ürün Nerede? Ara</h3>
+        <input type="text" id="layout-search" placeholder="Ürün adı veya kodu yazın..." oninput="findProductLocation()">
+        <div id="layout-search-result"></div>
+      </div>
+
+      <div class="form-card" id="stand-form-card" style="display:none;">
+        <h3 style="margin-top:0; font-family:'Oswald';">Yeni Stand Ekle</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Standın krokideki yerini satır/sütun numarasıyla belirleyin (0,0 sol üst köşedir).</p>
+        <div class="form-row">
+          <div><label>Stand Harfi</label><input type="text" id="ns-letter" maxlength="2" placeholder="Örn: A" style="text-transform:uppercase;"></div>
+          <div><label>Bölme (Numara) Adedi</label><input type="number" id="ns-slots" min="1" value="10" placeholder="10"></div>
+        </div>
+        <div class="form-row">
+          <div><label>Satır (Krokide yukarıdan aşağı)</label><input type="number" id="ns-row" min="0" value="0"></div>
+          <div><label>Sütun (Krokide soldan sağa)</label><input type="number" id="ns-col" min="0" value="0"></div>
+        </div>
+        <div style="margin-bottom:10px;"><label>Açıklama (isteğe bağlı)</label><input type="text" id="ns-label" placeholder="Örn: Vida & Civata Reyonu"></div>
+        <button class="btn btn-dark" onclick="addStand()">Standı Krokiye Ekle</button>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px;">
+        <h3 style="font-family:'Oswald'; margin:0; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex:1;">Mağaza Krokisi</h3>
+        <button class="btn btn-primary btn-sm" id="toggle-stand-form-btn" onclick="toggleStandForm()" style="width:auto; margin-left:10px; display:none;">+ Stand Ekle</button>
+      </div>
+      <p style="font-size:12px; color:var(--steel); margin-top:-4px;">Bir standa tıklayınca içindeki ürünleri bölme numarasına göre görebilirsiniz.</p>
+      <div id="layout-grid" class="layout-grid"></div>
+
+      <div class="modal-overlay" id="stand-detail-modal">
+        <div class="modal-content">
+          <button class="modal-close" onclick="closeStandDetail()">X</button>
+          <h3 style="margin-top:0; font-family:'Oswald';" id="stand-detail-title"></h3>
+          <div id="stand-detail-body"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- RAPORLAR TABI -->
     <div id="tab-raporlar" class="tab-content">
       <div class="report-box">
@@ -513,6 +584,14 @@
         </select>
       </div>
     </div>
+    <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+      <div><label>Konum — Stand</label>
+        <select id="edit-stand" onchange="updateSlotMax()">
+          <option value="">Atanmamış</option>
+        </select>
+      </div>
+      <div><label>Bölme No</label><input type="number" id="edit-slot" min="1" placeholder="örn: 3"></div>
+    </div>
     <button class="btn btn-primary" onclick="saveEditProduct()">Değişiklikleri Kaydet</button>
   </div>
 </div>
@@ -533,6 +612,7 @@
   const dbTasks = dbRoot.child('tasks');
   const dbZReports = dbRoot.child('z_reports');
   const dbProductImages = dbRoot.child('product_images'); // ürün listesinden AYRI tutulur — ana liste hafif kalır
+  const dbLayout = dbRoot.child('store_layout');
 
   let productsData = {};
   let wholesalersData = {};
@@ -544,6 +624,8 @@
   let selectedTaskIds = new Set();
   let imageCache = {}; // { code: dataUrl | null } — bir kez indirilen fotoğraf tekrar indirilmez
   let pendingImageDataUrl = null; // düzenleme modalında henüz kaydedilmemiş yeni fotoğraf
+  let layoutData = { stands: {} };
+  let highlightTimer = null;
   
   let html5QrcodeScanner = null;
   let currentRole = 'guest';
@@ -733,6 +815,7 @@
     productsData = snapshot.val() || {};
     renderGrid();
     updateOrderProductList();
+    renderLayoutGrid();
     if (targetCode && productsData[targetCode]) {
       document.getElementById('search').value = targetCode;
       renderGrid();
@@ -756,6 +839,12 @@
   dbTasks.on('value', (snapshot) => {
     tasksData = snapshot.val() || {};
     renderTasks();
+  });
+
+  dbLayout.on('value', (snapshot) => {
+    layoutData = snapshot.val() || { stands: {} };
+    if (!layoutData.stands) layoutData.stands = {};
+    renderLayoutGrid();
   });
 
   dbZReports.on('value', (snapshot) => {
@@ -894,6 +983,7 @@
     
     const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
     document.getElementById('nav-siparis-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
+    document.getElementById('nav-yerlesim-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
     document.getElementById('nav-reports-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
     document.getElementById('nav-gorevler-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
 
@@ -902,18 +992,24 @@
       addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
       printAllBtn.style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'block';
+      document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
     } else if(currentRole === 'staff') {
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'none';
+      document.getElementById('toggle-stand-form-btn').style.display = 'none';
+      document.getElementById('stand-form-card').style.display = 'none';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'none';
       document.getElementById('manager-task-section').style.display = 'none';
+      document.getElementById('toggle-stand-form-btn').style.display = 'none';
+      document.getElementById('stand-form-card').style.display = 'none';
     }
     renderGrid();
+    renderLayoutGrid();
     if(currentRole === 'admin') {
         renderWholesalers();
         renderNotifications();
@@ -921,10 +1017,170 @@
     renderTasks();
   }
 
+  // ============================================================
+  // MAĞAZA KROKİSİ / YERLEŞİM
+  // ------------------------------------------------------------
+  // /store_layout/stands/{HARF} = { row, col, slotCount, label }
+  // Ürünlerde: product.location = "A-3" (Stand A, 3. bölme)
+  // ============================================================
+
+  function toggleStandForm() {
+    if (currentRole !== 'admin') return;
+    const card = document.getElementById('stand-form-card');
+    card.style.display = (card.style.display === 'none' || !card.style.display) ? 'block' : 'none';
+  }
+
+  function addStand() {
+    if (currentRole !== 'admin') return;
+    const letter = document.getElementById('ns-letter').value.trim().toUpperCase();
+    const slots = parseInt(document.getElementById('ns-slots').value, 10) || 1;
+    const row = parseInt(document.getElementById('ns-row').value, 10) || 0;
+    const col = parseInt(document.getElementById('ns-col').value, 10) || 0;
+    const label = document.getElementById('ns-label').value.trim();
+
+    if (!letter || !/^[A-ZÇĞİÖŞÜ0-9]{1,2}$/.test(letter)) {
+      alert("Stand harfi 1-2 karakter olmalı (örn: A, B, K2).");
+      return;
+    }
+    if (layoutData.stands && layoutData.stands[letter]) {
+      alert("Bu harfte bir stand zaten var: " + letter);
+      return;
+    }
+
+    dbLayout.child('stands').child(letter).set({ row, col, slotCount: slots, label }, (err) => {
+      if (err) { alert("Kaydedilemedi: " + err.message); return; }
+      showToast("Stand eklendi: " + letter);
+      document.getElementById('ns-letter').value = '';
+      document.getElementById('ns-label').value = '';
+      document.getElementById('stand-form-card').style.display = 'none';
+    });
+  }
+
+  function deleteStand(evt, letter) {
+    if (currentRole !== 'admin') return;
+    evt.stopPropagation();
+    if (!confirm(`"${letter}" standını krokiden silmek istiyor musunuz? (Bu standa atanmış ürünlerin konum bilgisi otomatik temizlenmez, gerekirse elle güncelleyin.)`)) return;
+    dbLayout.child('stands').child(letter).remove(() => showToast("Stand silindi."));
+  }
+
+  function productsInStand(letter) {
+    return Object.values(productsData).filter(p => p.location && p.location.split('-')[0] === letter);
+  }
+
+  function renderLayoutGrid() {
+    const grid = document.getElementById('layout-grid');
+    if (!grid) return;
+    const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
+    const letters = Object.keys(stands).sort();
+
+    if (letters.length === 0) {
+      grid.innerHTML = `<p style="grid-column:1/-1; text-align:center; color:var(--steel); font-size:13px; padding:20px;">Henüz kroki oluşturulmadı. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
+      return;
+    }
+
+    let maxRow = 0;
+    letters.forEach(l => { if ((stands[l].row || 0) > maxRow) maxRow = stands[l].row || 0; });
+
+    grid.innerHTML = '';
+    letters.forEach(letter => {
+      const s = stands[letter];
+      const count = productsInStand(letter).length;
+      const box = document.createElement('div');
+      box.className = 'stand-box';
+      box.id = 'stand-' + letter;
+      box.style.gridRow = (s.row || 0) + 1;
+      box.style.gridColumn = (s.col || 0) + 1;
+      box.onclick = () => openStandDetail(letter);
+      box.innerHTML = `
+        ${currentRole === 'admin' ? `<button class="stand-del" onclick="deleteStand(event, '${letter}')">✕</button>` : ''}
+        <div class="stand-letter">${letter}</div>
+        <div class="stand-label">${s.label || ''}</div>
+        <div class="stand-count">${count} ürün · ${s.slotCount || 0} bölme</div>
+      `;
+      grid.appendChild(box);
+    });
+  }
+
+  function openStandDetail(letter) {
+    const s = layoutData.stands[letter];
+    if (!s) return;
+    document.getElementById('stand-detail-title').textContent = `Stand ${letter}${s.label ? ' — ' + s.label : ''}`;
+    const itemsInStand = productsInStand(letter);
+    const bySlot = {};
+    itemsInStand.forEach(p => {
+      const slotNum = p.location.split('-')[1] || '?';
+      if (!bySlot[slotNum]) bySlot[slotNum] = [];
+      bySlot[slotNum].push(p);
+    });
+
+    let html = '<div class="slot-grid">';
+    const slotCount = s.slotCount || 0;
+    for (let i = 1; i <= slotCount; i++) {
+      const items = bySlot[String(i)] || [];
+      html += `
+        <div class="slot-cell ${items.length ? 'filled' : ''}">
+          <div class="slot-num">${letter}-${i}</div>
+          ${items.map(p => `<div class="slot-item">${p.name}</div>`).join('') || '<div class="slot-item" style="color:var(--steel-line);">boş</div>'}
+        </div>
+      `;
+    }
+    html += '</div>';
+    document.getElementById('stand-detail-body').innerHTML = html;
+    document.getElementById('stand-detail-modal').style.display = 'block';
+  }
+
+  function closeStandDetail() {
+    document.getElementById('stand-detail-modal').style.display = 'none';
+  }
+
+  function findProductLocation() {
+    const q = document.getElementById('layout-search').value.trim().toLowerCase();
+    const resultBox = document.getElementById('layout-search-result');
+    if (highlightTimer) { clearTimeout(highlightTimer); highlightTimer = null; }
+    document.querySelectorAll('.stand-box.highlight').forEach(el => el.classList.remove('highlight'));
+
+    if (!q) { resultBox.innerHTML = ''; return; }
+
+    const matches = Object.values(productsData).filter(p =>
+      (p.name && p.name.toLowerCase().includes(q)) || (p.code && p.code.toLowerCase().includes(q))
+    ).slice(0, 8);
+
+    if (matches.length === 0) {
+      resultBox.innerHTML = `<p style="font-size:12px; color:var(--steel); margin-top:8px;">Eşleşen ürün yok.</p>`;
+      return;
+    }
+
+    resultBox.innerHTML = matches.map(p => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--steel-line);">
+        <span style="font-size:13px;">${p.name}</span>
+        ${p.location
+          ? `<span class="location-badge" onclick="highlightStand('${p.location.split('-')[0]}')">📍 ${p.location}</span>`
+          : `<span style="font-size:11px; color:var(--steel);">Konum atanmamış</span>`}
+      </div>
+    `).join('');
+  }
+
+  function highlightStand(letter) {
+    const box = document.getElementById('stand-' + letter);
+    if (!box) { showToast("Bu stand krokide bulunamadı: " + letter); return; }
+    document.querySelectorAll('.stand-box.highlight').forEach(el => el.classList.remove('highlight'));
+    box.classList.add('highlight');
+    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (highlightTimer) clearTimeout(highlightTimer);
+    highlightTimer = setTimeout(() => box.classList.remove('highlight'), 4000);
+  }
+
+  // Stok listesindeki 📍 rozetine tıklayınca doğrudan krokiye gidip standı vurgular
+  function goToLocation(location) {
+    if (!location) return;
+    switchTab('yerlesim');
+    setTimeout(() => highlightStand(location.split('-')[0]), 150);
+  }
+
   function switchTab(tabName) {
     if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
     if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
-    if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+    if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
 
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -1357,8 +1613,9 @@
       const pName = p.name ? p.name.toLowerCase() : '';
       const pCat = p.category ? p.category.toLowerCase() : '';
       const pCode = p.code ? p.code.toLowerCase() : '';
+      const pLoc = p.location ? p.location.toLowerCase() : '';
       
-      if (pName.includes(search) || pCat.includes(search) || pCode.includes(search)) {
+      if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search)) {
         count++;
         units += parseFloat(p.qty || 0);
         value += parseFloat(p.qty || 0) * parseFloat(p.price || 0);
@@ -1380,7 +1637,7 @@
             <div class="tag-header">
               <div>
                 <div class="tag-title">${p.name}</div>
-                <div class="tag-code">${p.code} • ${p.category || 'Belirtilmedi'}</div>
+                <div class="tag-code">${p.code} • ${p.category || 'Belirtilmedi'}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
               </div>
               <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
             </div>
@@ -1467,6 +1724,21 @@
       document.getElementById('edit-unit').value = p.unit || 'Adet';
       document.getElementById('edit-category').value = p.category || 'Diğer';
 
+      const standSelect = document.getElementById('edit-stand');
+      const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
+      standSelect.innerHTML = '<option value="">Atanmamış</option>' +
+        Object.keys(stands).sort().map(l => `<option value="${l}">${l}${stands[l].label ? ' — ' + stands[l].label : ''}</option>`).join('');
+
+      if (p.location && p.location.includes('-')) {
+        const [stLetter, stSlot] = p.location.split('-');
+        standSelect.value = stLetter;
+        document.getElementById('edit-slot').value = stSlot;
+      } else {
+        standSelect.value = '';
+        document.getElementById('edit-slot').value = '';
+      }
+      updateSlotMax();
+
       pendingImageDataUrl = null;
       document.getElementById('edit-photo-file').value = '';
       document.getElementById('edit-photo-status').textContent = 'Yükleniyor...';
@@ -1501,6 +1773,13 @@
       document.getElementById('edit-modal').style.display = 'none';
   }
 
+  function updateSlotMax() {
+    const letter = document.getElementById('edit-stand').value;
+    const slotInput = document.getElementById('edit-slot');
+    if (!letter || !layoutData.stands[letter]) { slotInput.removeAttribute('max'); return; }
+    slotInput.max = layoutData.stands[letter].slotCount || 999;
+  }
+
   function saveEditProduct() {
       if(currentRole !== 'admin' && currentRole !== 'staff') return;
       const code = document.getElementById('edit-code').value;
@@ -1508,11 +1787,21 @@
       const qty = Math.max(0, parseFloat(document.getElementById('edit-qty').value) || 0);
       const unit = document.getElementById('edit-unit').value;
       const category = document.getElementById('edit-category').value;
-      
+
+      const standLetter = document.getElementById('edit-stand').value;
+      const slotNum = parseInt(document.getElementById('edit-slot').value, 10);
+      let location = null;
+      if (standLetter && slotNum && slotNum > 0) {
+        location = standLetter + '-' + slotNum;
+      } else if (standLetter && !slotNum) {
+        alert("Stand seçtiniz ama bölme numarası girmediniz.");
+        return;
+      }
+
       if(!name) { alert("Ürün adı boş olamaz."); return; }
       
       const p = productsData[code];
-      let updateData = { name, qty, unit, category };
+      let updateData = { name, qty, unit, category, location: location };
       
       if(currentRole === 'admin') {
           updateData.price = Math.max(0, parseFloat(document.getElementById('edit-price').value) || 0);
