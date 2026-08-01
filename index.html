@@ -100,13 +100,13 @@
     background:var(--concrete); display:flex; align-items:center; justify-content:center;
     border:1px solid var(--steel-line);
   }
-  .product-photo img{width:100%; height:100%; object-fit:cover; display:block;}
+  .product-photo img{width:100%; height:100%; object-fit:cover; display:block; cursor:pointer;}
   .product-photo .photo-placeholder{font-size:26px; color:var(--steel-line);}
   .qr-toggle-link{display:block; text-align:center; font-size:11px; color:var(--info); text-decoration:underline; background:none; border:none; cursor:pointer; width:100%; padding:4px 0;}
 
   .edit-photo-row{display:flex; gap:12px; align-items:center; margin-bottom:12px; background:#F7F5F0; padding:10px; border-radius:3px;}
   .edit-photo-preview{width:64px; height:64px; border-radius:3px; overflow:hidden; background:var(--concrete); flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--steel-line);}
-  .edit-photo-preview img{width:100%; height:100%; object-fit:cover;}
+  .edit-photo-preview img{width:100%; height:100%; object-fit:cover; cursor:pointer;}
   .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
 
   /* YERLEŞİM (KROKİ) */
@@ -186,7 +186,7 @@
 
   .day-badge { display:inline-block; background:var(--info); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-top:4px; font-weight:600;}
 
-  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:1000; align-items:center; justify-content:center;}
+  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;}
   .modal-content { background:var(--paper); width:90%; max-width:500px; border-radius:var(--radius); padding:20px; max-height:85vh; overflow-y:auto; position:relative; }
   .modal-close { position:absolute; top:15px; right:15px; background:none; border:none; font-size:18px; cursor:pointer; font-weight:bold; color:var(--rust); }
   
@@ -261,7 +261,7 @@
       <div class="summary">
         <div class="card"><div class="num" id="sum-count">0</div><div class="lbl">Çeşit</div></div>
         <div class="card"><div class="num" id="sum-units">0</div><div class="lbl">Toplam Miktar</div></div>
-        <div class="card"><div class="num" id="sum-value">***</div><div class="lbl">Envanter Değeri</div></div>
+        <div class="card"><div class="num" id="sum-value">***</div><div class="lbl">Envanter Değeri (Maliyet)</div></div>
       </div>
       <div class="search-wrap">
         <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
@@ -573,7 +573,7 @@
   </div>
 </div>
 
-<!-- DÜZENLEME MODALI (KAPSAMLI) -->
+<!-- DÜZENLEME MODALI (KAPSAMLI VE EKLENEN KDV / KAR BÖLÜMÜ) -->
 <div class="modal-overlay" id="edit-modal" style="display:none;">
   <div class="modal-content">
     <button class="modal-close" onclick="closeEditModal()">X</button>
@@ -597,13 +597,23 @@
       <div><label>Miktar</label><input type="number" id="edit-qty" step="any"></div>
     </div>
     <div class="form-row">
-      <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--rust); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01"></div>
+      <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--rust); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01" oninput="updateEditProfit()"></div>
       <div><label>Ölçü Birimi</label>
         <select id="edit-unit">
           <option value="Adet">Adet</option>
           <option value="Kilogram">Kilogram</option>
           <option value="Metre">Metre</option>
         </select>
+      </div>
+    </div>
+    <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+      <div>
+        <label>KDV Oranı (%)</label>
+        <input type="number" id="edit-vat" step="0.01" placeholder="0" oninput="updateEditProfit()">
+      </div>
+      <div>
+        <label>Yüzdelik Kar (%)</label>
+        <input type="text" id="edit-profit" readonly placeholder="Otomatik Hesaplanır" style="background:#e9ecef; font-weight:bold;">
       </div>
     </div>
     <div class="form-row" style="grid-template-columns: 1fr;">
@@ -632,7 +642,7 @@
       <div class="form-row" style="grid-template-columns: 1fr;">
         <div>
           <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici, satış fiyatından farklı</span></label>
-          <input type="number" id="edit-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('edit')">
+          <input type="number" id="edit-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('edit'); updateEditProfit();">
           <div class="cost-calc-box" id="edit-cost-calc"></div>
         </div>
       </div>
@@ -651,6 +661,14 @@
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- GÖRSEL BÜYÜTME MODALI -->
+<div class="modal-overlay" id="image-modal" style="display:none; z-index: 2000;" onclick="closeImageModal()">
+  <div style="position:relative; max-width:90%; max-height:90%; margin:auto; top:50%; transform:translateY(-50%); text-align:center;">
+    <button style="position:absolute; top:-15px; right:-15px; background:var(--rust); color:#fff; border:none; border-radius:50%; width:30px; height:30px; font-weight:bold; cursor:pointer;" onclick="closeImageModal()">X</button>
+    <img id="enlarged-image" src="" style="max-width:100%; max-height:85vh; border-radius:8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+  </div>
+</div>
 
 <script>
   // FIREBASE BAĞLANTISI
@@ -751,6 +769,18 @@
   }
 
   // ============================================================
+  // GÖRSEL BÜYÜTME FONKSİYONLARI
+  // ============================================================
+  function openImageModal(src) {
+    if(!src) return;
+    document.getElementById('enlarged-image').src = src;
+    document.getElementById('image-modal').style.display = 'block';
+  }
+  function closeImageModal() {
+    document.getElementById('image-modal').style.display = 'none';
+  }
+
+  // ============================================================
   // ÜRÜN FOTOĞRAFLARI
   // ------------------------------------------------------------
   // Firebase Cloud Storage artık ücretsiz planda çalışmadığı için
@@ -789,7 +819,7 @@
     const box = document.getElementById('edit-photo-preview');
     const removeBtn = document.getElementById('edit-photo-remove-btn');
     if (dataUrl) {
-      box.innerHTML = `<img src="${dataUrl}">`;
+      box.innerHTML = `<img src="${dataUrl}" style="cursor:pointer;" onclick="openImageModal('${dataUrl}')">`;
       removeBtn.style.display = 'inline-block';
     } else {
       box.innerHTML = `<span class="photo-placeholder">📷</span>`;
@@ -836,7 +866,7 @@
     const el = document.getElementById(`photo-${code}`);
     if (!el) return;
     const dataUrl = imageCache[code];
-    el.innerHTML = dataUrl ? `<img src="${dataUrl}">` : `<span class="photo-placeholder">📷</span>`;
+    el.innerHTML = dataUrl ? `<img src="${dataUrl}" style="cursor:pointer;" onclick="openImageModal('${dataUrl}')">` : `<span class="photo-placeholder">📷</span>`;
   }
 
   // Kart ekrana geldiğinde fotoğrafı tembel şekilde indirir (bir kez), önbelleğe alır.
@@ -845,7 +875,7 @@
     if (!el) return;
 
     if (Object.prototype.hasOwnProperty.call(imageCache, code)) {
-      el.innerHTML = imageCache[code] ? `<img src="${imageCache[code]}">` : `<span class="photo-placeholder">📷</span>`;
+      el.innerHTML = imageCache[code] ? `<img src="${imageCache[code]}" style="cursor:pointer;" onclick="openImageModal('${imageCache[code]}')">` : `<span class="photo-placeholder">📷</span>`;
       return;
     }
 
@@ -853,7 +883,7 @@
       const val = snap.val();
       imageCache[code] = val || null;
       const el2 = document.getElementById(`photo-${code}`);
-      if (el2) el2.innerHTML = val ? `<img src="${val}">` : `<span class="photo-placeholder">📷</span>`;
+      if (el2) el2.innerHTML = val ? `<img src="${val}" style="cursor:pointer;" onclick="openImageModal('${val}')">` : `<span class="photo-placeholder">📷</span>`;
     });
   }
 
@@ -1389,6 +1419,27 @@
     `;
   }
 
+  // Yüzdelik Kar Hesaplayıcı (Düzenleme Modülü için)
+  function updateEditProfit() {
+    const cost = parseFloat(document.getElementById('edit-cost-price').value);
+    const price = parseFloat(document.getElementById('edit-price').value) || 0;
+    const vat = parseFloat(document.getElementById('edit-vat').value) || 0;
+    const profitInput = document.getElementById('edit-profit');
+
+    if (!isNaN(cost) && cost > 0) {
+        const costWithVat = cost * (1 + (vat / 100));
+        if (costWithVat > 0) {
+            const profit = ((price - costWithVat) / costWithVat) * 100;
+            profitInput.value = "% " + profit.toFixed(2);
+            profitInput.style.color = profit >= 0 ? 'var(--success)' : 'var(--rust)';
+        } else {
+            profitInput.value = "-";
+        }
+    } else {
+        profitInput.value = "-";
+    }
+  }
+
   function renderRecentUpdates() {
     const box = document.getElementById('recent-updates-list');
     if (!box) return;
@@ -1430,7 +1481,6 @@
 
     box.innerHTML = html;
   }
-
 
   function switchTab(tabName) {
     if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
@@ -1874,7 +1924,11 @@
       if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
         count++;
         units += parseFloat(p.qty || 0);
-        value += parseFloat(p.qty || 0) * parseFloat(p.price || 0);
+        
+        // ENVANTER DEĞERİ (MALİYET) HESAPLAMA
+        const itemCost = p.costPrice != null ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
+        value += parseFloat(p.qty || 0) * itemCost;
+        
         matchedCodes.push(p.code);
         const isLow = p.qty <= 5;
         
@@ -1957,224 +2011,203 @@
                document.getElementById('f-price').value = ''; 
                document.getElementById('f-code').value = '';
                document.getElementById('f-cost-price').value = '';
-               document.getElementById('f-cost-calc').classList.remove('active');
                document.getElementById('f-cost-calc').innerHTML = '';
-               switchTab('stok');
+               document.getElementById('f-cost-calc').classList.remove('active');
+             } else {
+               alert("Kaydedilemedi: " + error.message);
              }
            });
        }
     });
   }
 
-  function deleteProduct(code) {
-    if(currentRole !== 'admin') return;
-    if(confirm(`${productsData[code].name} ürününü tamamen silmek istediğinize emin misiniz?`)) {
-       db.child(code).remove();
-       showToast("Ürün silindi.");
-    }
-  }
-
-  function openEditModal(code) {
-      if(currentRole !== 'admin' && currentRole !== 'staff') return;
-      const p = productsData[code];
-      if(!p) return;
-      
-      document.getElementById('edit-code').value = code;
-      document.getElementById('edit-name').value = p.name || '';
-      document.getElementById('edit-qty').value = p.qty || 0;
-      document.getElementById('edit-price').value = p.price || 0;
-      document.getElementById('edit-unit').value = p.unit || 'Adet';
-      document.getElementById('edit-category').value = p.category || 'Diğer';
-      populateBrandSelect('edit-brand', p.brand || '');
-
-      const costSection = document.getElementById('edit-cost-section');
-      if (currentRole === 'admin') {
-        costSection.style.display = 'block';
-        document.getElementById('edit-cost-price').value = p.costPrice != null ? p.costPrice : '';
-        updateCostCalc('edit');
-        const noteEl = document.getElementById('edit-last-update-note');
-        if (p.lastPriceUpdate) {
-          const d = new Date(p.lastPriceUpdate);
-          const dateStr = d.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-          noteEl.textContent = `Son güncelleme: ${dateStr}${p.lastUpdatedBy ? ' · ' + p.lastUpdatedBy : ''}`;
-        } else {
-          noteEl.textContent = 'Bu üründe henüz güncelleme kaydı yok.';
-        }
-      } else {
-        costSection.style.display = 'none';
-      }
-
-      const standSelect = document.getElementById('edit-stand');
-      const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
-      standSelect.innerHTML = '<option value="">Atanmamış</option>' +
-        Object.keys(stands).sort().map(l => `<option value="${l}">${l}${stands[l].label ? ' — ' + stands[l].label : ''}</option>`).join('');
-
-      if (p.location && p.location.includes('-')) {
-        const [stLetter, stSlot] = p.location.split('-');
-        standSelect.value = stLetter;
-        document.getElementById('edit-slot').value = stSlot;
-      } else {
-        standSelect.value = '';
-        document.getElementById('edit-slot').value = '';
-      }
-      updateSlotMax();
-
-      pendingImageDataUrl = null;
-      document.getElementById('edit-photo-file').value = '';
-      document.getElementById('edit-photo-status').textContent = 'Yükleniyor...';
-      setEditPhotoPreview(imageCache[code] || null);
-      dbProductImages.child(code).once('value', snap => {
-        const val = snap.val();
-        imageCache[code] = val || null;
-        // Kullanıcı bu sırada modalı kapatmadıysa güncelle
-        if (document.getElementById('edit-code').value === code) {
-          setEditPhotoPreview(val || null);
-          document.getElementById('edit-photo-status').textContent = '';
-        }
-      });
-      
-      const priceInput = document.getElementById('edit-price');
-      const priceLockNote = document.getElementById('price-lock-note');
-      
-      if(currentRole === 'staff') {
-          priceInput.disabled = true;
-          priceInput.style.background = '#eee';
-          priceLockNote.style.display = 'inline';
-      } else {
-          priceInput.disabled = false;
-          priceInput.style.background = '#FCFBF9';
-          priceLockNote.style.display = 'none';
-      }
-      
-      document.getElementById('edit-modal').style.display = 'flex';
-  }
-
-  function closeEditModal() {
-      document.getElementById('edit-modal').style.display = 'none';
-  }
-
-  function updateSlotMax() {
-    const letter = document.getElementById('edit-stand').value;
-    const slotInput = document.getElementById('edit-slot');
-    if (!letter || !layoutData.stands[letter]) { slotInput.removeAttribute('max'); return; }
-    slotInput.max = layoutData.stands[letter].slotCount || 999;
-  }
-
-  function saveEditProduct() {
-      if(currentRole !== 'admin' && currentRole !== 'staff') return;
-      const code = document.getElementById('edit-code').value;
-      const name = document.getElementById('edit-name').value.trim();
-      const qty = Math.max(0, parseFloat(document.getElementById('edit-qty').value) || 0);
-      const unit = document.getElementById('edit-unit').value;
-      const category = document.getElementById('edit-category').value;
-      const brand = document.getElementById('edit-brand').value;
-
-      const standLetter = document.getElementById('edit-stand').value;
-      const slotNum = parseInt(document.getElementById('edit-slot').value, 10);
-      let location = null;
-      if (standLetter && slotNum && slotNum > 0) {
-        location = standLetter + '-' + slotNum;
-      } else if (standLetter && !slotNum) {
-        alert("Stand seçtiniz ama bölme numarası girmediniz.");
-        return;
-      }
-
-      if(!name) { alert("Ürün adı boş olamaz."); return; }
-      
-      const p = productsData[code];
-      let updateData = {
-        name, qty, unit, category, brand: brand || null, location: location,
-        lastPriceUpdate: new Date().toISOString(),
-        lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
-      };
-      
-      if(currentRole === 'admin') {
-          const newPrice = Math.max(0, parseFloat(document.getElementById('edit-price').value) || 0);
-          const newCostPrice = document.getElementById('edit-cost-price').value === ''
-            ? null
-            : Math.max(0, parseFloat(document.getElementById('edit-cost-price').value) || 0);
-          updateData.price = newPrice;
-          updateData.costPrice = newCostPrice;
-      } else {
-          updateData.price = p.price || 0;
-      }
-      
-      db.child(code).update(updateData, (err) => {
-          if(!err) {
-              showToast("Ürün bilgileri güncellendi!");
-              closeEditModal();
-          }
-      });
-  }
-
   function updateQty(code, change) {
-    if(currentRole === 'guest') return;
-    if(!productsData[code]) return;
-
+    if (currentRole !== 'admin' && currentRole !== 'staff') return;
     const now = Date.now();
-    if(actionCooldowns[code] && (now - actionCooldowns[code] < 800)) return;
+    if (actionCooldowns[code] && now - actionCooldowns[code] < 500) return;
     actionCooldowns[code] = now;
 
-    const productName = productsData[code].name;
-    const productUnit = productsData[code].unit || 'Adet';
-    let appliedChange = 0;
-
-    // Atomik transaction: iki cihaz aynı anda aynı ürüne dokunursa veri kaybı olmaz.
-    // appliedChange, 0'da kilitlenme (negatife düşme) ihtimaline karşı transaction
-    // fonksiyonunun içinde hesaplanır — bu yüzden loglanan miktar her zaman gerçek farktır.
     db.child(code).child('qty').transaction((currentQty) => {
       const cur = Number(currentQty || 0);
-      const next = Math.max(0, cur + change);
-      appliedChange = next - cur;
-      return next;
-    }, (error, committed) => {
-      if (error) { console.error(error); showToast("Stok güncellenemedi, tekrar deneyin."); return; }
-      if (!committed || appliedChange === 0) return;
-
-      const moveType = appliedChange > 0 ? 'STOK EKLENDİ' : 'HIZLI STOK DÜŞÜŞÜ';
-      logMovement(code, productName, appliedChange, moveType);
-
-      if (appliedChange > 0) {
-        dbNotifications.push({
-          text: `Stok Eklendi: ${productName} (+${appliedChange} ${productUnit})`,
-          time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
-        });
+      const next = cur + change;
+      return next < 0 ? 0 : next;
+    }, (error, committed, snapshot) => {
+      if (error) { alert("Hata: " + error.message); return; }
+      if (committed) {
+        const p = productsData[code];
+        if (p) logMovement(code, p.name, change, change > 0 ? 'STOK EKLENDİ' : 'STOK DÜŞÜLDÜ');
       }
     });
   }
 
   function updatePrice(code) {
-    if(currentRole !== 'admin') return;
-    const currentPrice = productsData[code] ? productsData[code].price : 0;
-    const newPriceStr = prompt(`Yeni fiyatı giriniz (Mevcut: ₺${formatMoney(currentPrice)}):`, currentPrice);
-    if (newPriceStr !== null) {
-      const newPrice = parseFloat(newPriceStr.replace(',','.'));
-      if (!isNaN(newPrice) && newPrice >= 0) {
-         db.child(code).update({ price: newPrice, lastPriceUpdate: new Date().toISOString() });
-         showToast("Fiyat güncellendi!");
-      } else {
-         alert("Geçersiz fiyat!");
+    if (currentRole !== 'admin') return;
+    const p = productsData[code];
+    if (!p) return;
+    const newPrice = prompt(`${p.name} için yeni fiyatı giriniz (₺):`, p.price);
+    if (newPrice === null) return;
+    const parsed = parseFloat(newPrice);
+    if (!isNaN(parsed) && parsed >= 0) {
+      db.child(code).update({ price: parsed, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (err) => {
+        if (!err) showToast("Fiyat güncellendi!");
+      });
+    }
+  }
+
+  function openEditModal(code) {
+    if (currentRole !== 'admin' && currentRole !== 'staff') return;
+    const p = productsData[code];
+    if (!p) return;
+    
+    document.getElementById('edit-code').value = p.code;
+    document.getElementById('edit-name').value = p.name || '';
+    document.getElementById('edit-qty').value = p.qty || 0;
+    document.getElementById('edit-price').value = p.price || 0;
+    document.getElementById('edit-unit').value = p.unit || 'Adet';
+    document.getElementById('edit-category').value = p.category || 'Diğer';
+    
+    // KDV and Profit
+    document.getElementById('edit-vat').value = p.vat || 0;
+    
+    const priceInput = document.getElementById('edit-price');
+    const priceLockNote = document.getElementById('price-lock-note');
+    if (currentRole === 'staff') {
+      priceInput.readOnly = true;
+      priceInput.style.backgroundColor = '#e9ecef';
+      priceLockNote.style.display = 'inline';
+      document.getElementById('edit-cost-section').style.display = 'none';
+    } else {
+      priceInput.readOnly = false;
+      priceInput.style.backgroundColor = '#FCFBF9';
+      priceLockNote.style.display = 'none';
+      document.getElementById('edit-cost-section').style.display = 'block';
+    }
+
+    populateBrandSelect('edit-brand', p.brand);
+    document.getElementById('edit-cost-price').value = p.costPrice != null ? p.costPrice : '';
+    updateCostCalc('edit');
+
+    const standSel = document.getElementById('edit-stand');
+    const stands = layoutData.stands || {};
+    standSel.innerHTML = '<option value="">Atanmamış</option>' + Object.keys(stands).sort().map(l => `<option value="${l}">${l} (${stands[l].label || ''})</option>`).join('');
+    
+    if (p.location) {
+      const parts = p.location.split('-');
+      standSel.value = parts[0] || '';
+      document.getElementById('edit-slot').value = parts[1] || '';
+    } else {
+      standSel.value = '';
+      document.getElementById('edit-slot').value = '';
+    }
+    updateSlotMax();
+    updateEditProfit();
+
+    document.getElementById('edit-photo-status').textContent = '';
+    if (imageCache[p.code]) {
+      setEditPhotoPreview(imageCache[p.code]);
+    } else {
+      setEditPhotoPreview(null);
+      dbProductImages.child(p.code).once('value', snap => {
+        const val = snap.val();
+        imageCache[p.code] = val || null;
+        setEditPhotoPreview(imageCache[p.code]);
+      });
+    }
+
+    if (p.lastPriceUpdate) {
+      const d = new Date(p.lastPriceUpdate);
+      document.getElementById('edit-last-update-note').textContent = `Son Güncelleme: ${d.toLocaleString('tr-TR')} (${p.lastUpdatedBy || 'Bilinmiyor'})`;
+      document.getElementById('edit-last-update-note').style.display = 'block';
+    } else {
+      document.getElementById('edit-last-update-note').style.display = 'none';
+    }
+
+    document.getElementById('edit-modal').style.display = 'flex';
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-modal').style.display = 'none';
+    pendingImageDataUrl = null;
+  }
+
+  function updateSlotMax() {
+    const standLetter = document.getElementById('edit-stand').value;
+    const slotInput = document.getElementById('edit-slot');
+    if (!standLetter) { slotInput.value = ''; slotInput.disabled = true; return; }
+    slotInput.disabled = false;
+    const s = layoutData.stands[standLetter];
+    if (s && s.slotCount) {
+      slotInput.max = s.slotCount;
+      slotInput.placeholder = `1 - ${s.slotCount}`;
+    }
+  }
+
+  function saveEditProduct() {
+    const code = document.getElementById('edit-code').value;
+    if (!code) return;
+    const p = productsData[code];
+    if (!p) return;
+
+    const updates = {
+      name: document.getElementById('edit-name').value.trim(),
+      qty: parseFloat(document.getElementById('edit-qty').value) || 0,
+      unit: document.getElementById('edit-unit').value,
+      category: document.getElementById('edit-category').value,
+      brand: document.getElementById('edit-brand').value || null,
+      vat: parseFloat(document.getElementById('edit-vat').value) || 0
+    };
+
+    if (currentRole === 'admin') {
+      const newPrice = parseFloat(document.getElementById('edit-price').value) || 0;
+      if (newPrice !== p.price) {
+        updates.price = newPrice;
+        updates.lastPriceUpdate = new Date().toISOString();
+        updates.lastUpdatedBy = 'Yönetici';
       }
+      const costRaw = document.getElementById('edit-cost-price').value;
+      updates.costPrice = costRaw === '' ? null : Math.max(0, parseFloat(costRaw) || 0);
+    }
+
+    const stand = document.getElementById('edit-stand').value;
+    const slot = document.getElementById('edit-slot').value;
+    if (stand && slot) updates.location = `${stand}-${slot}`;
+    else updates.location = null;
+
+    db.child(code).update(updates, (err) => {
+      if (!err) {
+        showToast("Ürün güncellendi!");
+        closeEditModal();
+        if (pendingImageDataUrl) { refreshCardPhoto(code); pendingImageDataUrl = null; }
+      }
+    });
+  }
+
+  function deleteProduct(code) {
+    if (currentRole !== 'admin') return;
+    if (confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
+      db.child(code).remove();
+      dbProductImages.child(code).remove();
     }
   }
 
   function printQR(code) {
-    if(currentRole === 'guest') return;
     const p = productsData[code];
-    if(!p) return;
+    if (!p) return;
     const printArea = document.getElementById('print-area');
-    printArea.innerHTML = '';
     const currentBaseUrl = window.location.href.split('?')[0];
-
-    const sticker = document.createElement('div');
-    sticker.className = 'sticker-label';
-    sticker.innerHTML = `
-      <div class="sticker-title">${p.name}</div>
-      <div class="sticker-qr" id="qr-${code}"></div>
-      <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price)}</span></div>
+    
+    printArea.innerHTML = `
+      <div class="sticker-label">
+        <div class="sticker-title">${p.name}</div>
+        <div class="sticker-qr" id="print-qr-${p.code}"></div>
+        <div class="sticker-footer">
+          <span>${p.code}</span>
+          <span>₺${formatMoney(p.price)}</span>
+        </div>
+      </div>
     `;
-    printArea.appendChild(sticker);
-    new QRCode(document.getElementById(`qr-${code}`), { text: `${currentBaseUrl}?item=${code}`, width: 68, height: 68 });
+    
+    new QRCode(document.getElementById(`print-qr-${p.code}`), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128 });
     
     document.body.className = 'printing-label';
     setTimeout(() => {
@@ -2184,306 +2217,201 @@
   }
 
   function printAllLabels() {
-      if(currentRole !== 'admin' && currentRole !== 'staff') return;
-      const printArea = document.getElementById('print-area');
-      printArea.innerHTML = '';
-      const search = document.getElementById('search').value.toLowerCase();
-      const currentBaseUrl = window.location.href.split('?')[0];
-      
-      Object.values(productsData).forEach(p => {
-          const pName = p.name ? p.name.toLowerCase() : '';
-          const pCat = p.category ? p.category.toLowerCase() : '';
-          const pCode = p.code ? p.code.toLowerCase() : '';
-          
-          if (pName.includes(search) || pCat.includes(search) || pCode.includes(search)) {
-              const sticker = document.createElement('div');
-              sticker.className = 'sticker-label';
-              sticker.innerHTML = `
-                <div class="sticker-title">${p.name}</div>
-                <div class="sticker-qr" id="qrp-${p.code}"></div>
-                <div class="sticker-footer"><span>${p.code}</span><span>₺${formatMoney(p.price)}</span></div>
-              `;
-              printArea.appendChild(sticker);
-              new QRCode(document.getElementById(`qrp-${p.code}`), { text: `${currentBaseUrl}?item=${p.code}`, width: 68, height: 68 });
-          }
-      });
-      document.body.className = 'printing-label';
-      setTimeout(() => {
-        window.print();
-        document.body.className = '';
-      }, 800);
+    if(currentRole !== 'admin' && currentRole !== 'staff') return;
+    const printArea = document.getElementById('print-area');
+    printArea.innerHTML = '';
+    const currentBaseUrl = window.location.href.split('?')[0];
+
+    const search = document.getElementById('search').value.toLowerCase();
+    const toPrint = Object.values(productsData).filter(p => {
+        const pName = p.name ? p.name.toLowerCase() : '';
+        const pCat = p.category ? p.category.toLowerCase() : '';
+        const pCode = p.code ? p.code.toLowerCase() : '';
+        return (pName.includes(search) || pCat.includes(search) || pCode.includes(search));
+    });
+
+    if(toPrint.length === 0) { alert("Yazdırılacak ürün bulunamadı!"); return; }
+    if(toPrint.length > 50) { if(!confirm(`${toPrint.length} adet etiket yazdırılacak, onaylıyor musunuz?`)) return; }
+
+    toPrint.forEach(p => {
+        const div = document.createElement('div');
+        div.className = 'sticker-label';
+        div.innerHTML = `
+            <div class="sticker-title">${p.name}</div>
+            <div class="sticker-qr" id="print-all-qr-${p.code}"></div>
+            <div class="sticker-footer">
+                <span>${p.code}</span>
+                <span>₺${formatMoney(p.price)}</span>
+            </div>
+        `;
+        printArea.appendChild(div);
+        new QRCode(div.querySelector('.sticker-qr'), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128 });
+    });
+
+    document.body.className = 'printing-label';
+    setTimeout(() => {
+      window.print();
+      document.body.className = '';
+    }, 500);
   }
 
   async function exportBackup() {
     if(currentRole !== 'admin') return;
-    if(!confirm("Tüm stok listesi Excel yedeği olarak indirilsin mi?")) return;
-
-    const dataRow = [["Ürün Kodu", "Kategori", "Ürün Adı", "Miktar", "Birim", "Birim Fiyat", "Toplam Değer"]];
+    const dataRow = [["Ürün Kodu", "Ürün Adı", "Kategori", "Marka", "Miktar", "Birim", "Satış Fiyatı", "Geliş Fiyatı", "Konum", "Envanter (Maliyet)"]];
     Object.values(productsData).forEach(p => {
-        dataRow.push([p.code, p.category || 'Belirtilmedi', p.name, p.qty, p.unit || 'Adet', p.price, (p.qty * p.price)]);
+        const cost = p.costPrice != null ? p.costPrice : (p.price || 0);
+        dataRow.push([
+            p.code, p.name, p.category || '', p.brand || '', p.qty, p.unit || 'Adet',
+            p.price, p.costPrice || '', p.location || '', parseFloat(p.qty) * cost
+        ]);
     });
-
     const ws = XLSX.utils.aoa_to_sheet(dataRow);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Stok Durumu");
-    const dateStr = new Date().toISOString().slice(0, 10);
-    await saveExcelFile(wb, `Reyhani_Stok_Yedegi_${dateStr}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Stok");
+    const dateStr = new Date().toISOString().slice(0,10);
+    await saveExcelFile(wb, `Reyhani_Stok_Yedek_${dateStr}.xlsx`);
   }
 
-  // Z RAPORU OLUŞTURMA & KLASÖRE KAYDETME
-  function generateDailyZReport() {
-    if(currentRole !== 'admin' && currentRole !== 'staff') return;
-    
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    
-    let malGirisi = 0;
-    let malCikisi = 0;
-    const dayMoves = movementsData[dateStr] || {};
-    const itemsList = [];
-    
-    Object.values(dayMoves).forEach(m => {
-      itemsList.push(m);
-      if(m.change > 0) malGirisi += Number(m.change);
-      else if(m.change < 0) malCikisi += Math.abs(Number(m.change));
-    });
-
-    dbOrders.child(dateStr).once('value', snapshot => {
-      const ordersOnDate = snapshot.val() || {};
-      let paraGirisi = 0;
-      Object.values(ordersOnDate).forEach(order => { paraGirisi += Number(order.total || 0); });
-
-      let paraCikisi = 0;
-      const todayFormatted = new Date().toLocaleDateString('tr-TR');
-      Object.values(wholesalersData).forEach(w => {
-        if(w.history) {
-          w.history.forEach(h => {
-            if(h.date && h.date.startsWith(todayFormatted) && h.type === 'odeme') {
-              paraCikisi += Number(h.amount || 0);
-            }
-          });
+  function startScanner() {
+    if(html5QrcodeScanner) return;
+    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
+    html5QrcodeScanner.render((text) => {
+        let code = text;
+        if(text.includes('?item=')) {
+            code = text.split('?item=')[1];
         }
-      });
-
-      const reportData = {
-        date: dateStr,
-        time: timeStr,
-        malGirisi: malGirisi,
-        malCikisi: malCikisi,
-        paraGirisi: paraGirisi,
-        paraCikisi: paraCikisi,
-        movements: itemsList
-      };
-
-      dbZReports.child(dateStr).set(reportData, async err => {
-        if(!err) {
-          if(confirm(`${dateStr} tarihli Z Raporu başarıyla oluşturuldu. Şimdi Excel dosyası olarak kaydedilsin mi?`)) {
-            await downloadZReportByDate(dateStr);
-          }
-          showToast("Z Raporu arşive kaydedildi!");
+        document.getElementById('scan-result').innerHTML = `<p style="color:var(--success);font-weight:bold;">Okundu: ${code}</p>`;
+        
+        if (productsData[code]) {
+            switchTab('stok');
+            document.getElementById('search').value = code;
+            renderGrid();
+        } else {
+            document.getElementById('scan-result').innerHTML += `<p style="color:var(--rust);">Ürün sistemde bulunamadı.</p>`;
         }
-      });
-    });
+    }, (err) => {});
   }
 
-  async function downloadZReportByDate(dateStr) {
-    const rep = globalZReports[dateStr];
-    if(!rep) { alert("Rapor verisi bulunamadı."); return; }
-    
-    const dataRow = [
-      ["REYHANİ CAM HIRDAVAT - GÜN SONU Z RAPORU"],
-      ["Rapor Tarihi:", rep.date, "Oluşturulma Saati:", rep.time || "-"],
-      [],
-      ["ÖZET METRİKLER"],
-      ["Toplam Mal Girişi (Adet/Miktar):", rep.malGirisi],
-      ["Toplam Mal Çıkışı (Adet/Miktar):", rep.malCikisi],
-      ["Toplam Para Girişi (₺):", rep.paraGirisi],
-      ["Toplam Para Çıkışı (₺):", rep.paraCikisi],
-      [],
-      ["DETAYLI GÜN İÇİ HAREKETLER LİSTESİ"],
-      ["Saat", "İşlem Tipi", "Ürün Kodu", "Ürün Adı", "Değişim Miktarı"]
-    ];
-    
-    if(rep.movements && rep.movements.length > 0) {
-      rep.movements.forEach(m => {
-        dataRow.push([m.time, m.type, m.code, m.name, m.change]);
-      });
-    } else {
-      dataRow.push(["-", "Bu tarihe ait kayıtlı hareket bulunmuyor", "-", "-", "-"]);
+  function stopScanner() {
+    if(html5QrcodeScanner) {
+        html5QrcodeScanner.clear().catch(e => console.error(e));
+        html5QrcodeScanner = null;
     }
-    
-    const ws = XLSX.utils.aoa_to_sheet(dataRow);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Z_Raporu_" + dateStr);
-    
-    await saveExcelFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
   }
 
+  // WHOLESALERS
   function addWholesaler() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('w-name').value.trim();
     const phone = document.getElementById('w-phone').value.trim();
     const day = document.getElementById('w-day').value;
     
-    if(!name) { alert("Firma adını giriniz."); return; }
+    if(!name) { alert("Firma adı giriniz."); return; }
     
-    const id = "W-" + new Date().getTime();
-    dbWholesalers.child(id).set({ name, phone, day, balance: 0, history: [] }, (err) => {
-        if(!err) {
-            document.getElementById('w-name').value = '';
-            document.getElementById('w-phone').value = '';
-            showToast("Firma eklendi!");
-        }
+    dbWholesalers.push({ name, phone, day, balance: 0 }, (err) => {
+      if(!err) {
+        showToast("Toptancı eklendi!");
+        document.getElementById('w-name').value = '';
+        document.getElementById('w-phone').value = '';
+      }
     });
   }
 
   function renderWholesalers() {
     const grid = document.getElementById('wholesalers-grid');
-    if(!grid || currentRole !== 'admin') return;
+    if(!grid) return;
     grid.innerHTML = '';
     
-    Object.keys(wholesalersData).forEach(id => {
-        const w = wholesalersData[id];
-        const isNegative = w.balance < 0;
-        
-        grid.innerHTML += `
-          <div class="tag">
-            <div class="tag-header">
-               <div>
-                 <div class="tag-title">${w.name}</div>
-                 <div class="tag-code">📞 ${w.phone || 'Yok'}</div>
-                 <div class="day-badge">📅 Geldiği Gün: ${w.day || 'Belirsiz'}</div>
-               </div>
-               <button class="sm-btn" onclick="deleteWholesaler('${id}')" style="color:var(--rust);">Sil</button>
-            </div>
-            <div class="balance-box ${isNegative ? 'balance-negative' : 'balance-positive'}">
-                Bakiye: ₺${formatMoney(w.balance || 0)}
-            </div>
-            <div class="action-grid">
-               <button class="btn btn-dark btn-sm" onclick="addBalance('${id}', 'borc')">Borç Ekle (-)</button>
-               <button class="btn btn-success btn-sm" onclick="addBalance('${id}', 'odeme')">Ödeme Yap (+)</button>
-            </div>
-            <button class="btn btn-info btn-sm" style="width:100%; margin-top:6px;" onclick="showHistory('${id}')">Hesap Dökümünü Gör</button>
+    Object.keys(wholesalersData).forEach(key => {
+      const w = wholesalersData[key];
+      const isNegative = w.balance < 0;
+      grid.innerHTML += `
+        <div class="tag">
+          <div class="tag-title">${w.name}</div>
+          <div class="tag-code">📞 ${w.phone || '-'} | 📅 Ziyaret: ${w.day}</div>
+          <div class="balance-box ${isNegative ? 'balance-negative' : 'balance-positive'}">
+            Bakiye: ₺${formatMoney(w.balance || 0)}
           </div>
-        `;
+          <div class="action-grid">
+            <button class="btn btn-success btn-sm" onclick="updateBalance('${key}', 1)">+ Ödeme Yap</button>
+            <button class="btn btn-danger btn-sm" onclick="updateBalance('${key}', -1)">- Borç Ekle</button>
+          </div>
+        </div>
+      `;
     });
   }
 
-  function addBalance(id, type) {
-      if(currentRole !== 'admin') return;
-      const w = wholesalersData[id];
-      const amountStr = prompt(`Ne kadar ${type === 'borc' ? 'Borç Eklenecek' : 'Ödeme Yapıldı'}?`);
-      if(!amountStr) return;
-      
-      const amount = parseFloat(amountStr.replace(',','.'));
-      if(isNaN(amount) || amount <= 0) return;
-      
-      let note = prompt("Açıklama / Not giriniz (İsteğe bağlı):") || (type === 'borc' ? 'Mal Alımı' : 'Nakit Ödeme');
-      const dateStr = new Date().toLocaleDateString('tr-TR') + " " + new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
-      
-      let newBalance = w.balance || 0;
-      if(type === 'borc') newBalance -= amount;
-      if(type === 'odeme') newBalance += amount;
-      
-      const newHistoryItem = { date: dateStr, amount: amount, type: type, note: note };
-      let newHistory = w.history ? [...w.history] : [];
-      newHistory.push(newHistoryItem);
-      
-      dbWholesalers.child(id).update({ balance: newBalance, history: newHistory });
-
-      if(type === 'borc') {
-        dbNotifications.push({
-          text: `Toptancı Mal Girişi (${w.name}): ${note} - ₺${formatMoney(amount)}`,
-          time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
-        });
-      }
-  }
-
-  function deleteWholesaler(id) {
-      if(currentRole !== 'admin') return;
-      if(confirm(`${wholesalersData[id].name} firmasını ve hesap geçmişini tamamen silmek istiyor musunuz?`)) {
-          dbWholesalers.child(id).remove();
-      }
-  }
-
-  function showHistory(id) {
-      if(currentRole !== 'admin') return;
-      const w = wholesalersData[id];
-      const modal = document.getElementById('history-modal');
-      const title = document.getElementById('history-title');
-      const list = document.getElementById('history-list');
-      
-      title.textContent = `${w.name} - Hesap Dökümü`;
-      list.innerHTML = '';
-      
-      if(!w.history || w.history.length === 0) {
-          list.innerHTML = '<p style="color:var(--steel);font-size:13px;">Geçmiş işlem bulunamadı.</p>';
-      } else {
-          [...w.history].reverse().forEach(h => {
-              const isBorc = h.type === 'borc';
-              list.innerHTML += `
-                 <div class="history-item">
-                    <div class="history-date">${h.date}</div>
-                    <div class="history-flex">
-                        <strong style="font-size:13px;">${h.note}</strong>
-                        <strong style="color: ${isBorc ? 'var(--rust)' : 'var(--success)'}">
-                           ${isBorc ? '-' : '+'}₺${formatMoney(h.amount)}
-                        </strong>
-                    </div>
-                 </div>
-              `;
-          });
-      }
-      modal.style.display = 'flex';
-  }
-
-  function closeHistory() {
-      document.getElementById('history-modal').style.display = 'none';
-  }
-
-  function startScanner() {
-    document.getElementById('scan-result').innerHTML = '';
-    if (!html5QrcodeScanner) html5QrcodeScanner = new Html5Qrcode("reader");
-    if (html5QrcodeScanner.isScanning) return;
-    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
-    html5QrcodeScanner.start({ facingMode: "environment" }, config, onScanSuccess)
-      .catch(err => {
-        document.getElementById('scan-result').innerHTML = `<p style="color:red;font-size:12px;">Kamera başlatılamadı: ${err}</p>`;
+  function updateBalance(key, mult) {
+    if(currentRole !== 'admin') return;
+    const w = wholesalersData[key];
+    const amount = prompt(`${w.name} için ${mult > 0 ? 'yapılan ödeme' : 'eklenen borç'} tutarını giriniz (₺):`);
+    if(amount === null) return;
+    const parsed = parseFloat(amount);
+    
+    if(!isNaN(parsed) && parsed > 0) {
+      dbWholesalers.child(key).child('balance').transaction(cur => (cur || 0) + (parsed * mult), (err) => {
+        if(!err) showToast("Bakiye güncellendi.");
       });
-  }
-
-  function stopScanner() {
-    if (html5QrcodeScanner && html5QrcodeScanner.isScanning) {
-      html5QrcodeScanner.stop().catch(console.error);
     }
   }
 
-  function onScanSuccess(decodedText) {
-    stopScanner();
-    document.getElementById('scan-result').innerHTML = `<p style="color:green;font-weight:bold;">Kod Okundu, Yönlendiriliyor...</p>`;
+  // Z-REPORTS
+  function generateDailyZReport() {
+    if(currentRole !== 'admin') { alert("Sadece yönetici Z raporu oluşturabilir."); return; }
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const timeStr = new Date().toLocaleTimeString('tr-TR');
     
-    let codeToSearch = decodedText.trim();
-    if(decodedText.includes('item=')) {
-        try {
-            const urlObj = new URL(decodedText);
-            codeToSearch = urlObj.searchParams.get('item') || decodedText;
-        } catch(e) {
-            const parts = decodedText.split('item=');
-            if(parts.length > 1) codeToSearch = parts[1].split('&')[0];
-        }
+    let totalSales = 0;
+    if (globalPastOrders) {
+       Object.values(globalPastOrders).forEach(o => {
+         if (o.date === dateStr) {
+           totalSales += o.orderData.total;
+         }
+       });
     }
     
-    switchTab('stok');
-    document.getElementById('search').value = codeToSearch;
-    setTimeout(() => { 
-        renderGrid(); 
-        showToast("Ürün Bulundu: " + codeToSearch); 
-        document.getElementById('scan-result').innerHTML = '';
-    }, 300);
+    const reportData = {
+      date: dateStr,
+      time: timeStr,
+      malGirisi: 0,
+      malCikisi: 0,
+      paraGirisi: totalSales,
+      paraCikisi: 0,
+      movements: movementsData[dateStr] || {}
+    };
+
+    dbZReports.child(dateStr).set(reportData, (err) => {
+      if(!err) {
+        showToast("Bugünün Z Raporu oluşturuldu ve arşivlendi!");
+      } else {
+        alert("Z Raporu oluşturulurken hata oluştu.");
+      }
+    });
   }
 
-  populateBrandSelect('f-brand', '');
-  updateAuthUI();
+  async function downloadZReportByDate(dateStr) {
+    const report = globalZReports[dateStr];
+    if(!report) { alert("Rapor bulunamadı."); return; }
+    
+    const dataRow = [["Saat", "Ürün Kodu", "Ürün Adı", "Değişim", "İşlem Tipi"]];
+    if(report.movements) {
+      Object.values(report.movements).forEach(m => {
+        dataRow.push([m.time, m.code, m.name, m.change, m.type]);
+      });
+    } else {
+      dataRow.push(["", "", "Bu tarihte hareket yok", "", ""]);
+    }
+    
+    dataRow.push(["", "", "", "", ""]);
+    dataRow.push(["ÖZET BİLGİLER", "", "", "", ""]);
+    dataRow.push(["Para Girişi (Satışlar)", "₺" + report.paraGirisi, "", "", ""]);
+    
+    const ws = XLSX.utils.aoa_to_sheet(dataRow);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Z Raporu " + dateStr);
+    
+    await saveExcelFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
+  }
 </script>
 </body>
 </html>
