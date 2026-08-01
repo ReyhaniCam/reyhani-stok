@@ -1271,15 +1271,14 @@
   }
 
   function maybeSeedDefaultBrands() {
-    dbBrandMeta.child('seeded').once('value', snap => {
-      if (snap.val()) return; // daha önce tohumlanmış, ve/veya markalar elle silinmiş olabilir — tekrar ekleme
-      const updates = {};
-      DEFAULT_BRANDS.forEach(b => {
-        if (!brandSettingsData[b]) updates['brand_settings/' + b] = { discount: null, vat: null };
-      });
-      updates['brand_settings_meta/seeded'] = true;
-      dbRoot.update(updates);
+    // Liste tamamen boşsa (önceki hatalı sürümde marka kayıtları hiç oluşmamış olabilir),
+    // bayrağa bakmaksızın varsayılan markaları tekrar oluştur — kendi kendini onarır.
+    if (Object.keys(brandSettingsData).length > 0) return;
+    const updates = {};
+    DEFAULT_BRANDS.forEach(b => {
+      updates['brand_settings/' + b] = { discount: 0, vat: 0 };
     });
+    dbRoot.update(updates);
   }
 
   function populateBrandSelect(selectId, selectedValue) {
@@ -1296,7 +1295,7 @@
     const name = input.value.trim();
     if (!name) { alert("Marka adı girin."); return; }
     if (brandSettingsData[name]) { alert("Bu marka zaten listede: " + name); return; }
-    dbBrandSettings.child(name).set({ discount: null, vat: null }, (err) => {
+    dbBrandSettings.child(name).set({ discount: 0, vat: 0 }, (err) => {
       if (err) { alert("Eklenemedi: " + err.message); return; }
       input.value = '';
       showToast("Marka eklendi: " + name);
