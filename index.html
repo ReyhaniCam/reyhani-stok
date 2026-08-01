@@ -139,6 +139,18 @@
   .slot-cell.filled{background:#FFF7E0; border-color:var(--safety);}
   .slot-num{font-family:'IBM Plex Mono'; font-weight:700; font-size:12px;}
   .slot-item{font-size:9px; color:var(--charcoal-soft, var(--charcoal)); line-height:1.2; margin-top:2px; word-break:break-word;}
+
+  .cost-calc-box{
+    margin-top:6px; padding:8px 10px; background:#F7F5F0; border:1px dashed var(--steel-line);
+    border-radius:3px; font-size:11px; color:var(--steel); line-height:1.6; display:none;
+  }
+  .cost-calc-box.active{display:block;}
+  .cost-calc-box b{color:var(--charcoal); font-family:'IBM Plex Mono';}
+  .recent-update-row{
+    display:flex; justify-content:space-between; align-items:center; padding:8px 0;
+    border-top:1px solid var(--steel-line); font-size:12px;
+  }
+  .recent-update-row .ru-time{font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';}
   
   .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
 
@@ -289,7 +301,14 @@
             </select>
           </div>
           <div><label>Marka / Katalog Grubu</label>
-            <select id="f-brand"></select>
+            <select id="f-brand" onchange="updateCostCalc('f')"></select>
+          </div>
+        </div>
+        <div class="form-row" style="grid-template-columns: 1fr;">
+          <div>
+            <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— maliyet, satış fiyatından farklı</span></label>
+            <input type="number" id="f-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('f')">
+            <div class="cost-calc-box" id="f-cost-calc"></div>
           </div>
         </div>
         <div style="margin-bottom:12px;">
@@ -303,6 +322,12 @@
         <h3 style="margin-top:0;font-family:'Oswald';">Marka İskonto / KDV Ayarları</h3>
         <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Her marka için kendi iskonto ve KDV yüzdenizi girip kaydedin. Bu oranlar markanın yanında saklanır, hesaplamaları buradan yönetebilirsiniz.</p>
         <div id="brand-settings-list"></div>
+      </div>
+
+      <div class="form-card disabled-action" id="recent-updates-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">🕒 Son Fiyat / Maliyet Güncellemeleri</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">En son eklenen veya fiyatı/geliş fiyatı değiştirilen ürünler, en yeniden eskiye.</p>
+        <div id="recent-updates-list"></div>
       </div>
     </div>
 
@@ -595,7 +620,16 @@
     </div>
     <div class="form-row" style="grid-template-columns: 1fr;">
       <div><label>Marka / Katalog Grubu</label>
-        <select id="edit-brand"></select>
+        <select id="edit-brand" onchange="updateCostCalc('edit')"></select>
+      </div>
+    </div>
+    <div id="edit-cost-section" style="display:none;">
+      <div class="form-row" style="grid-template-columns: 1fr;">
+        <div>
+          <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici, satış fiyatından farklı</span></label>
+          <input type="number" id="edit-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('edit')">
+          <div class="cost-calc-box" id="edit-cost-calc"></div>
+        </div>
       </div>
     </div>
     <div class="form-row" style="grid-template-columns: 1fr 1fr;">
@@ -833,6 +867,7 @@
     renderGrid();
     updateOrderProductList();
     renderLayoutGrid();
+    if(currentRole === 'admin') renderRecentUpdates();
     if (targetCode && productsData[targetCode]) {
       document.getElementById('search').value = targetCode;
       renderGrid();
@@ -1016,6 +1051,8 @@
       document.getElementById('manager-task-section').style.display = 'block';
       document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
       document.getElementById('brand-settings-card').classList.remove('disabled-action');
+      document.getElementById('recent-updates-card').classList.remove('disabled-action');
+      document.getElementById('recent-updates-card').style.display = 'block';
     } else if(currentRole === 'staff') {
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
@@ -1024,6 +1061,7 @@
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
+      document.getElementById('recent-updates-card').style.display = 'none';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
@@ -1032,12 +1070,14 @@
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
+      document.getElementById('recent-updates-card').style.display = 'none';
     }
     renderGrid();
     renderLayoutGrid();
     renderBrandSettings();
     if(currentRole === 'admin') {
         renderWholesalers();
+        renderRecentUpdates();
         renderNotifications();
     }
     renderTasks();
@@ -1247,6 +1287,69 @@
       if (err) { alert("Kaydedilemedi: " + err.message); return; }
       showToast(`${brand} için oranlar kaydedildi.`);
     });
+  }
+
+
+  function updateCostCalc(prefix) {
+    const brand = document.getElementById(`${prefix}-brand`).value;
+    const costPrice = parseFloat(document.getElementById(`${prefix}-cost-price`).value);
+    const box = document.getElementById(`${prefix}-cost-calc`);
+
+    if (!brand || isNaN(costPrice) || costPrice <= 0) {
+      box.classList.remove('active');
+      box.innerHTML = '';
+      return;
+    }
+
+    const s = brandSettingsData[brand];
+    if (!s || (s.discount == null && s.vat == null)) {
+      box.classList.add('active');
+      box.innerHTML = `<b>${brand}</b> için henüz iskonto/KDV oranı girilmemiş — "Marka İskonto/KDV Ayarları" panelinden ekleyin.`;
+      return;
+    }
+
+    const discount = s.discount || 0;
+    const vat = s.vat || 0;
+    const afterDiscount = costPrice * (1 - discount / 100);
+    const netCost = afterDiscount * (1 + vat / 100);
+
+    box.classList.add('active');
+    box.innerHTML = `
+      Geliş Fiyatı: <b>₺${costPrice.toFixed(2)}</b> →
+      İskonto (%${discount}) sonrası: <b>₺${afterDiscount.toFixed(2)}</b> →
+      + KDV (%${vat}) = Net Maliyet: <b>₺${netCost.toFixed(2)}</b>
+    `;
+  }
+
+  function renderRecentUpdates() {
+    const box = document.getElementById('recent-updates-list');
+    if (!box) return;
+    const list = Object.values(productsData)
+      .filter(p => p.lastPriceUpdate)
+      .sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate))
+      .slice(0, 25);
+
+    if (list.length === 0) {
+      box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz güncelleme kaydı yok.</p>`;
+      return;
+    }
+
+    box.innerHTML = list.map(p => {
+      const d = new Date(p.lastPriceUpdate);
+      const dateStr = d.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+      return `
+        <div class="recent-update-row">
+          <div>
+            <div>${p.name} <span style="color:var(--steel); font-size:10px;">(${p.code})</span></div>
+            <div class="ru-time">${dateStr}</div>
+          </div>
+          <div style="text-align:right;">
+            <div>Satış: <b>₺${formatMoney(p.price || 0)}</b></div>
+            ${p.costPrice != null ? `<div style="color:var(--steel);">Geliş: ₺${formatMoney(p.costPrice)}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
 
@@ -1752,6 +1855,8 @@
     let code = document.getElementById('f-code').value.trim().toUpperCase();
     const category = document.getElementById('f-category').value;
     const brand = document.getElementById('f-brand').value;
+    const costPriceRaw = document.getElementById('f-cost-price').value;
+    const costPrice = costPriceRaw === '' ? null : Math.max(0, parseFloat(costPriceRaw) || 0);
     
     if(!name) { alert("Lütfen ürün adını giriniz."); return; }
     if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
@@ -1760,7 +1865,7 @@
        if(snapshot.exists()) {
            alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor!`);
        } else {
-           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
+           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
              if(!error) {
                if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
                dbNotifications.push({
@@ -1772,6 +1877,9 @@
                document.getElementById('f-qty').value = ''; 
                document.getElementById('f-price').value = ''; 
                document.getElementById('f-code').value = '';
+               document.getElementById('f-cost-price').value = '';
+               document.getElementById('f-cost-calc').classList.remove('active');
+               document.getElementById('f-cost-calc').innerHTML = '';
                switchTab('stok');
              }
            });
@@ -1799,6 +1907,15 @@
       document.getElementById('edit-unit').value = p.unit || 'Adet';
       document.getElementById('edit-category').value = p.category || 'Diğer';
       populateBrandSelect('edit-brand', p.brand || '');
+
+      const costSection = document.getElementById('edit-cost-section');
+      if (currentRole === 'admin') {
+        costSection.style.display = 'block';
+        document.getElementById('edit-cost-price').value = p.costPrice != null ? p.costPrice : '';
+        updateCostCalc('edit');
+      } else {
+        costSection.style.display = 'none';
+      }
 
       const standSelect = document.getElementById('edit-stand');
       const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
@@ -1881,7 +1998,14 @@
       let updateData = { name, qty, unit, category, brand: brand || null, location: location };
       
       if(currentRole === 'admin') {
-          updateData.price = Math.max(0, parseFloat(document.getElementById('edit-price').value) || 0);
+          const newPrice = Math.max(0, parseFloat(document.getElementById('edit-price').value) || 0);
+          const newCostPrice = document.getElementById('edit-cost-price').value === ''
+            ? null
+            : Math.max(0, parseFloat(document.getElementById('edit-cost-price').value) || 0);
+          const priceChanged = newPrice !== (p.price || 0) || newCostPrice !== (p.costPrice != null ? p.costPrice : null);
+          updateData.price = newPrice;
+          updateData.costPrice = newCostPrice;
+          if (priceChanged) updateData.lastPriceUpdate = new Date().toISOString();
       } else {
           updateData.price = p.price || 0;
       }
