@@ -325,8 +325,8 @@
       </div>
 
       <div class="form-card disabled-action" id="recent-updates-card">
-        <h3 style="margin-top:0;font-family:'Oswald';">🕒 Son Fiyat / Maliyet Güncellemeleri</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">En son eklenen veya fiyatı/geliş fiyatı değiştirilen ürünler, en yeniden eskiye.</p>
+        <h3 style="margin-top:0;font-family:'Oswald';">🕒 Son Güncellenen Ürünler</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">En son eklenen veya düzenlenen (fiyat, miktar, kategori, konum vb.) ürünler — en yeniden eskiye, kimin güncellediğiyle birlikte.</p>
         <div id="recent-updates-list"></div>
       </div>
     </div>
@@ -631,6 +631,7 @@
           <div class="cost-calc-box" id="edit-cost-calc"></div>
         </div>
       </div>
+      <div id="edit-last-update-note" style="font-size:11px; color:var(--steel); margin:-4px 0 10px;"></div>
     </div>
     <div class="form-row" style="grid-template-columns: 1fr 1fr;">
       <div><label>Konum — Stand</label>
@@ -1324,24 +1325,25 @@
   function renderRecentUpdates() {
     const box = document.getElementById('recent-updates-list');
     if (!box) return;
-    const list = Object.values(productsData)
-      .filter(p => p.lastPriceUpdate)
-      .sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate))
-      .slice(0, 25);
+    const all = Object.values(productsData);
+    const withDate = all.filter(p => p.lastPriceUpdate).sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate));
+    const withoutDate = all.filter(p => !p.lastPriceUpdate).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
+    const list = withDate.slice(0, 25);
+    const extraCount = withoutDate.length;
 
-    if (list.length === 0) {
-      box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz güncelleme kaydı yok.</p>`;
+    if (list.length === 0 && extraCount === 0) {
+      box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hiç ürün yok.</p>`;
       return;
     }
 
-    box.innerHTML = list.map(p => {
+    let html = list.map(p => {
       const d = new Date(p.lastPriceUpdate);
       const dateStr = d.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
       return `
         <div class="recent-update-row">
           <div>
             <div>${p.name} <span style="color:var(--steel); font-size:10px;">(${p.code})</span></div>
-            <div class="ru-time">${dateStr}</div>
+            <div class="ru-time">${dateStr}${p.lastUpdatedBy ? ' · ' + p.lastUpdatedBy : ''}</div>
           </div>
           <div style="text-align:right;">
             <div>Satış: <b>₺${formatMoney(p.price || 0)}</b></div>
@@ -1350,6 +1352,16 @@
         </div>
       `;
     }).join('');
+
+    if (extraCount > 0) {
+      html += `
+        <div class="recent-update-row" style="color:var(--steel); font-style:italic;">
+          <div>${extraCount} üründe henüz güncelleme tarihi yok (bu özellik eklenmeden önce oluşturulmuş — bir kez düzenleyip kaydedince tarih başlayacak).</div>
+        </div>
+      `;
+    }
+
+    box.innerHTML = html;
   }
 
 
@@ -1865,7 +1877,7 @@
        if(snapshot.exists()) {
            alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor!`);
        } else {
-           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, code, lastPriceUpdate: new Date().toISOString() }, (error) => {
+           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, code, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (error) => {
              if(!error) {
                if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
                dbNotifications.push({
@@ -1913,6 +1925,14 @@
         costSection.style.display = 'block';
         document.getElementById('edit-cost-price').value = p.costPrice != null ? p.costPrice : '';
         updateCostCalc('edit');
+        const noteEl = document.getElementById('edit-last-update-note');
+        if (p.lastPriceUpdate) {
+          const d = new Date(p.lastPriceUpdate);
+          const dateStr = d.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+          noteEl.textContent = `Son güncelleme: ${dateStr}${p.lastUpdatedBy ? ' · ' + p.lastUpdatedBy : ''}`;
+        } else {
+          noteEl.textContent = 'Bu üründe henüz güncelleme kaydı yok.';
+        }
       } else {
         costSection.style.display = 'none';
       }
@@ -1995,17 +2015,19 @@
       if(!name) { alert("Ürün adı boş olamaz."); return; }
       
       const p = productsData[code];
-      let updateData = { name, qty, unit, category, brand: brand || null, location: location };
+      let updateData = {
+        name, qty, unit, category, brand: brand || null, location: location,
+        lastPriceUpdate: new Date().toISOString(),
+        lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+      };
       
       if(currentRole === 'admin') {
           const newPrice = Math.max(0, parseFloat(document.getElementById('edit-price').value) || 0);
           const newCostPrice = document.getElementById('edit-cost-price').value === ''
             ? null
             : Math.max(0, parseFloat(document.getElementById('edit-cost-price').value) || 0);
-          const priceChanged = newPrice !== (p.price || 0) || newCostPrice !== (p.costPrice != null ? p.costPrice : null);
           updateData.price = newPrice;
           updateData.costPrice = newCostPrice;
-          if (priceChanged) updateData.lastPriceUpdate = new Date().toISOString();
       } else {
           updateData.price = p.price || 0;
       }
