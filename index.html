@@ -1,1846 +1,1750 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Reyhani Cam Hırdavat — Canlı QR Stok, Görev ve Fiş Paneli</title>
-
-<!-- Fonts -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-
-<!-- QR Code Generator & Scanner Libraries -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="https://unpkg.com/html5-qrcode"></script>
-
-<!-- SheetJS (Gerçek Excel Çıktısı İçin) -->
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-<!-- Firebase CDNs (v8) -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-
-<style>
-  :root{
-    --concrete:#EDE8DF; --paper:#FFFFFF; --charcoal:#22262A; 
-    --steel:#6B7178; --steel-line:#D8D2C6; --safety:#F5B700; 
-    --rust:#C1440E; --success:#28a745; --info:#17a2b8; --radius:4px;
-  }
-  *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--concrete);color:var(--charcoal);font-family:'Inter',sans-serif;}
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reyhani Cam Hırdavat — Yönetim ve Stok Paneli</title>
   
-  .app{max-width:900px;margin:0 auto;padding-bottom:60px;}
-
-  header{
-    background:var(--charcoal);color:#F5F3EF;padding:16px 20px;
-    display:flex;justify-content:space-between;align-items:center;
-    position:sticky;top:0;z-index:40;box-shadow:0 4px 12px rgba(0,0,0,0.15);
-  }
-  .brand h1{font-family:'Oswald',sans-serif;font-size:18px;margin:0;letter-spacing:0.5px;text-transform:uppercase;}
-  .brand span{display:block;font-size:11px;color:#B9BEC4;}
+  <!-- Kütüphaneler: Google Fonts, QRCode, SheetJS (XLSX), Html5-Qrcode -->
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Oswald:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
   
-  .auth-status{display:flex;align-items:center;gap:10px;}
-  .admin-badge{font-size:11px;padding:4px 10px;border-radius:12px;font-weight:600;}
-  .admin-badge.role-admin{background:var(--success);color:#fff;}
-  .admin-badge.role-staff{background:var(--info);color:#fff;}
-  .admin-badge.role-guest{background:var(--steel);color:#fff;}
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
-  .nav-tabs{display:flex;background:var(--paper);border-bottom:1px solid var(--steel-line);overflow-x:auto;}
-  .tab-btn{
-    flex:1; padding:12px; text-align:center; font-family:'Oswald',sans-serif;
-    font-size:14px; text-transform:uppercase; border:none; background:none;
-    cursor:pointer; color:var(--steel); border-bottom:3px solid transparent; white-space:nowrap;
-  }
-  .tab-btn.active{color:var(--charcoal);border-bottom-color:var(--safety);font-weight:600;}
-
-  main{padding:16px;}
-  .tab-content{display:none;}
-  .tab-content.active{display:block;}
-
-  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
-  .summary .card{background:var(--paper);border:1px solid var(--steel-line);padding:10px;border-radius:var(--radius);text-align:center;}
-  .summary .num{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
-  .summary .lbl{font-size:10px;color:var(--steel);text-transform:uppercase;margin-top:2px;}
-
-  .form-card{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:16px;margin-bottom:16px;}
-  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
-  label{display:block;font-size:11px;color:var(--steel);margin-bottom:4px;text-transform:uppercase;}
-  input,select{
-    width:100%;padding:10px;border:1px solid var(--steel-line);border-radius:var(--radius);
-    font-family:'Inter';font-size:14px;background:#FCFBF9;
-  }
-  .btn{
-    font-family:'Oswald',sans-serif;text-transform:uppercase;
-    font-size:13px;border:none;padding:12px;border-radius:var(--radius);cursor:pointer;width:100%;
-  }
-  .btn-primary{background:var(--safety);color:var(--charcoal);font-weight:600;}
-  .btn-dark{background:var(--charcoal);color:#fff;}
-  .btn-success{background:var(--success);color:#fff;}
-  .btn-info{background:var(--info);color:#fff;}
-  .btn-danger{background:var(--rust);color:#fff;}
-  .btn-sm{padding:6px 10px;font-size:11px;width:auto;}
-
-  .search-wrap{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;}
-  .grid{display:grid;grid-template-columns:1fr;gap:12px;}
-  @media(min-width:600px){.grid{grid-template-columns:1fr 1fr;}}
-
-  .tag{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:14px;position:relative;}
-  .tag.low{border-color:var(--rust);}
-  .tag.highlight{border:2px solid var(--safety);box-shadow:0 0 10px rgba(245,183,0,0.5);}
-  .tag-header{display:flex;justify-content:space-between;align-items:flex-start;}
-  .tag-title{font-weight:600;font-size:15px;}
-  .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);}
-  
-  .qr-box-mini{display:flex;justify-content:center;margin:10px 0;padding:6px;background:#fff;border:1px dashed var(--steel-line);width:80px;height:80px;margin-left:auto;margin-right:auto;}
-  .qr-box-mini img{width:100%!important;height:100%!important;}
-  .qr-box-mini.hidden{display:none;}
-
-  .product-photo{
-    width:100%; height:120px; border-radius:3px; overflow:hidden; margin-bottom:8px;
-    background:var(--concrete); display:flex; align-items:center; justify-content:center;
-    border:1px solid var(--steel-line);
-  }
-  .product-photo img{width:100%; height:100%; object-fit:cover; display:block; cursor:pointer;}
-  .product-photo .photo-placeholder{font-size:26px; color:var(--steel-line);}
-  .qr-toggle-link{display:block; text-align:center; font-size:11px; color:var(--info); text-decoration:underline; background:none; border:none; cursor:pointer; width:100%; padding:4px 0;}
-
-  .edit-photo-row{display:flex; gap:12px; align-items:center; margin-bottom:12px; background:#F7F5F0; padding:10px; border-radius:3px;}
-  .edit-photo-preview{width:64px; height:64px; border-radius:3px; overflow:hidden; background:var(--concrete); flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--steel-line);}
-  .edit-photo-preview img{width:100%; height:100%; object-fit:cover; cursor:pointer;}
-  .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
-
-  /* YERLEŞİM (KROKİ) */
-  .layout-grid{
-    display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr));
-    gap:8px; background:#E4DFD3; border:1px solid var(--steel-line); border-radius:var(--radius);
-    padding:10px; min-height:120px;
-  }
-  .stand-box{
-    background:var(--paper); border:2px solid var(--charcoal); border-radius:3px;
-    padding:8px 6px; text-align:center; cursor:pointer; position:relative; min-height:70px;
-    display:flex; flex-direction:column; justify-content:center; transition:box-shadow .2s, transform .2s;
-  }
-  .stand-box:hover{box-shadow:0 2px 8px rgba(0,0,0,0.15);}
-  .stand-letter{font-family:'Oswald',sans-serif; font-size:22px; font-weight:700; line-height:1;}
-  .stand-label{font-size:9px; color:var(--steel); margin-top:3px; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .stand-count{font-size:10px; font-family:'IBM Plex Mono'; margin-top:4px; color:var(--info); font-weight:600;}
-  .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px;}
-  .stand-box.highlight{
-    border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45);
-    animation:standPulse 1s ease-in-out 3;
-  }
-  @keyframes standPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
-  .location-badge{
-    display:inline-block; font-size:10px; font-family:'IBM Plex Mono'; font-weight:600;
-    background:var(--charcoal); color:#fff; padding:2px 7px; border-radius:10px; margin-left:6px; cursor:pointer;
-  }
-  .slot-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(60px,1fr)); gap:6px; margin-top:10px;}
-  .slot-cell{border:1px solid var(--steel-line); border-radius:3px; padding:6px 4px; text-align:center; font-size:11px; min-height:44px;}
-  .slot-cell.filled{background:#FFF7E0; border-color:var(--safety);}
-  .slot-num{font-family:'IBM Plex Mono'; font-weight:700; font-size:12px;}
-  .slot-item{font-size:9px; color:var(--charcoal-soft, var(--charcoal)); line-height:1.2; margin-top:2px; word-break:break-word;}
-
-  .cost-calc-box{
-    margin-top:6px; padding:8px 10px; background:#F7F5F0; border:1px dashed var(--steel-line);
-    border-radius:3px; font-size:11px; color:var(--steel); line-height:1.6; display:none;
-  }
-  .cost-calc-box.active{display:block;}
-  .cost-calc-box b{color:var(--charcoal); font-family:'IBM Plex Mono';}
-  .recent-update-row{
-    display:flex; justify-content:space-between; align-items:center; padding:8px 0;
-    border-top:1px solid var(--steel-line); font-size:12px;
-  }
-  .recent-update-row .ru-time{font-size:13px; color:var(--charcoal); font-weight:600; font-family:'IBM Plex Mono'; margin-top:2px;}
-  .last-update-note{
-    font-size:13px; color:var(--charcoal); font-weight:600; font-family:'IBM Plex Mono';
-    background:#FFF7E0; border:1px solid var(--safety); border-radius:3px;
-    padding:8px 10px; margin:2px 0 12px;
-  }
-  
-  .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
-
-  .qty-control{display:flex;align-items:center;justify-content:space-between;margin-top:10px;background:var(--concrete);padding:6px 10px;border-radius:var(--radius);}
-  .qty-btn{width:32px;height:32px;border:1px solid var(--steel-line);background:#fff;font-weight:bold;cursor:pointer;}
-  .qty-val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
-  
-  .sm-btn{background:none;border:none;color:var(--steel);font-size:11px;text-decoration:underline;cursor:pointer;}
-
-  #reader{width:100%;max-width:500px;margin:0 auto;border:2px dashed var(--steel-line);border-radius:var(--radius);}
-  #scan-result{margin-top:16px;}
-
-  .toast{
-    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-    background:var(--charcoal);color:#fff;padding:10px 20px;border-radius:20px;
-    font-size:12px;z-index:100;display:none;
-  }
-  .disabled-action{opacity:0.4;pointer-events:none;}
-
-  .report-box { background:var(--paper); border:1px solid var(--steel-line); padding:16px; border-radius:var(--radius); text-align:center; }
-  .report-box h3 { margin-top:0; font-family:'Oswald'; }
-  .report-box p { font-size:13px; color:var(--steel); margin-bottom:16px; }
-
-  .balance-box { background:#F7F5F0; padding:10px; border-radius:3px; margin-top:10px; text-align:center; font-family:'IBM Plex Mono'; font-size:18px; font-weight:bold; border:1px solid var(--steel-line);}
-  .balance-negative { color:var(--rust); }
-  .balance-positive { color:var(--success); }
-  .action-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:10px; }
-
-  .day-badge { display:inline-block; background:var(--info); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-top:4px; font-weight:600;}
-
-  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;}
-  .modal-content { background:var(--paper); width:90%; max-width:500px; border-radius:var(--radius); padding:20px; max-height:85vh; overflow-y:auto; position:relative; }
-  .modal-close { position:absolute; top:15px; right:15px; background:none; border:none; font-size:18px; cursor:pointer; font-weight:bold; color:var(--rust); }
-  
-
-  #print-area { display: none; }
-  #thermal-print-area { display: none; }
-
-  @page {
-    size: 58mm auto;
-    margin: 0;
-  }
-
-  @media print {
-    body * { visibility: hidden; }
-    
-    /* Etiket Modu */
-    body.printing-label #print-area, body.printing-label #print-area * { visibility: visible; }
-    body.printing-label #print-area { display: flex !important; flex-wrap: wrap; gap: 4mm; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
-    .sticker-label { width: 50mm; height: 30mm; border: 1px dashed #000; padding: 2mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
-    .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
-    .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; }
-    .sticker-qr img { width: 100% !important; height: 100% !important; }
-    .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
-
-    /* Termal Fiş Modu (Boyut ve Sayfa Taşma Koruması) */
-    body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area * { visibility: visible; }
-    body.printing-receipt #thermal-print-area { 
-      display: block !important; 
-      position: absolute; 
-      left: 0; 
-      top: 0; 
-      width: 56mm; 
-      margin: 0; 
-      padding: 0;
-      page-break-after: avoid;
+  <style>
+    :root {
+      --charcoal: #121212;
+      --steel: #6e757c;
+      --steel-line: #d1d5db;
+      --rust: #a93226;
+      --success: #27ae60;
+      --info: #2980b9;
+      --bg-body: #f4f5f7;
+      --card-bg: #ffffff;
+      --warning-bg: #fdfefe;
     }
-  }
-</style>
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-body);
+      color: var(--charcoal);
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background: var(--charcoal);
+      color: #fff;
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 3px solid var(--rust);
+    }
+
+    header h1 {
+      font-family: 'Oswald', sans-serif;
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.5px;
+    }
+
+    .admin-badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .role-guest { background: var(--steel); color: #fff; }
+    .role-staff { background: var(--info); color: #fff; }
+    .role-admin { background: var(--rust); color: #fff; }
+
+    .nav-tabs {
+      display: flex;
+      background: #e5e7eb;
+      overflow-x: auto;
+      border-bottom: 1px solid var(--steel-line);
+      padding: 0 10px;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 12px 18px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--steel);
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+    }
+
+    .tab-btn.active {
+      color: var(--charcoal);
+      border-bottom: 3px solid var(--rust);
+      background: #fff;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 15px;
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .summary-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .summary-card {
+      background: var(--card-bg);
+      padding: 15px;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      border-left: 4px solid var(--charcoal);
+    }
+
+    .summary-card h3 { margin: 0 0 5px 0; font-size: 12px; color: var(--steel); text-transform: uppercase; }
+    .summary-card .val { font-family: 'IBM Plex Mono', monospace; font-size: 20px; font-weight: 600; }
+
+    .controls-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .controls-bar input, .controls-bar select {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px;
+      border: 1px solid var(--steel-line);
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 4px;
+      font-family: 'Oswald', sans-serif;
+      font-size: 13px;
+      cursor: pointer;
+      text-transform: uppercase;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary { background: var(--charcoal); color: #fff; }
+    .btn-danger { background: var(--rust); color: #fff; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-info { background: var(--info); color: #fff; }
+    .btn-dark { background: #374151; color: #fff; }
+    .btn-sm { padding: 6px 10px; font-size: 11px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 15px;
+    }
+
+    .tag {
+      background: var(--card-bg);
+      border: 1px solid var(--steel-line);
+      border-radius: 6px;
+      padding: 15px;
+      position: relative;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .tag.low { border-color: var(--rust); background: #fdf5f5; }
+
+    .tag-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 10px;
+    }
+
+    .tag-title { font-weight: 600; font-size: 15px; margin-bottom: 2px; }
+    .tag-code { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--steel); }
+
+    .product-photo {
+      width: 100%;
+      height: 120px;
+      background: #eee;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .product-photo img { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
+    .photo-placeholder { font-size: 24px; color: var(--steel); }
+
+    .qty-control {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f9fafb;
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: 1px solid var(--steel-line);
+      margin: 10px 0;
+    }
+    .qty-btn { background: none; border: none; font-size: 16px; font-weight: bold; cursor: pointer; padding: 0 8px; }
+    .qty-val { font-family: 'IBM Plex Mono', monospace; font-weight: 600; font-size: 14px; }
+
+    .price-info-box {
+      font-size: 12px;
+      background: #f3f4f6;
+      padding: 6px 8px;
+      border-radius: 4px;
+      margin-top: 6px;
+    }
+
+    .qr-box-mini {
+      display: flex;
+      justify-content: center;
+      margin-top: 10px;
+    }
+    .qr-box-mini.hidden { display: none; }
+
+    .qr-toggle-link {
+      font-size: 10px;
+      color: var(--info);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      margin-top: 4px;
+      display: block;
+      text-align: center;
+      width: 100%;
+    }
+
+    .form-card {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+      margin-bottom: 20px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 15px;
+      margin-bottom: 15px;
+    }
+    .form-row div { display: flex; flex-direction: column; }
+    .form-row label { font-size: 12px; font-weight: 600; margin-bottom: 5px; color: var(--steel); }
+    .form-row input, .form-row select, .form-row textarea {
+      padding: 10px;
+      border: 1px solid var(--steel-line);
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .cost-calc-box {
+      background: #eef2f7;
+      border-left: 3px solid var(--info);
+      padding: 10px;
+      font-size: 12px;
+      margin-top: 5px;
+      display: none;
+    }
+    .cost-calc-box.active { display: block; }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: #fff;
+      padding: 25px;
+      border-radius: 6px;
+      width: 90%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+    }
+    .modal-close {
+      position: absolute;
+      top: 15px; right: 15px;
+      background: none; border: none;
+      font-size: 18px; font-weight: bold; cursor: pointer;
+    }
+
+    .disabled-action { opacity: 0.5; pointer-events: none; }
+    
+    .toast {
+      position: fixed;
+      bottom: 20px; right: 20px;
+      background: var(--charcoal); color: #fff;
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-size: 13px;
+      z-index: 2000;
+      display: none;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    /* Etiket Basım Stili */
+    @media print {
+      body * { visibility: hidden; }
+      body.printing-label #print-area, body.printing-label #print-area * { visibility: visible; }
+      body.printing-label #print-area {
+        position: absolute; left: 0; top: 0; width: 100%;
+      }
+      body.printing-receipt #thermal-receipt, body.printing-receipt #thermal-receipt * { visibility: visible; }
+      body.printing-receipt #thermal-receipt {
+        position: absolute; left: 0; top: 0; width: 58mm;
+      }
+    }
+
+    .sticker-label {
+      width: 50mm; height: 30mm;
+      padding: 2mm; box-sizing: border-box;
+      border: 1px dashed #999;
+      display: inline-flex; flex-direction: column; justify-content: space-between;
+      page-break-inside: avoid; margin: 2mm; background: #fff;
+    }
+    .sticker-title { font-size: 10px; font-weight: bold; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .sticker-qr { display: flex; justify-content: center; }
+    .sticker-footer { display: flex; justify-content: space-between; font-size: 9px; font-family: 'IBM Plex Mono'; }
+  </style>
 </head>
 <body>
 
-<div class="app">
-  <header>
-    <div class="brand">
-      <h1>Reyhani Cam Hırdavat</h1>
-      <span>Canlı Bulut &amp; QR Stok, Görev ve Fiş Paneli</span>
-    </div>
-    <div class="auth-status">
-      <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
-      <button class="btn btn-primary btn-sm" id="auth-btn" onclick="toggleAuth()">Giriş Yap</button>
-    </div>
-  </header>
+<header>
+  <div>
+    <h1>Reyhani Cam Hırdavat</h1>
+    <span style="font-size: 11px; color: #a0aec0;">Stok & Yönetim Paneli</span>
+  </div>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <span id="admin-status" class="admin-badge role-guest">Ziyaretçi Modu</span>
+    <button class="btn btn-sm btn-primary" id="auth-btn" onclick="toggleAuth()">Giriş Yap</button>
+  </div>
+</header>
 
-  <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('stok')">Stok Listesi</button>
-    <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')" style="display:none;">+ Ürün Ekle</button>
-    <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
-    <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Günlük Görevler</button>
-    <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
-    <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış / Sepet</button>
-    <button class="tab-btn" id="nav-yerlesim-btn" onclick="switchTab('yerlesim')" style="display:none;">🗺️ Yerleşim</button>
-    <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
+<div class="nav-tabs">
+  <button class="tab-btn active" onclick="switchTab('stok')">📦 Stok Listesi</button>
+  <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')">➕ Ürün Ekle</button>
+  <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
+  <button class="tab-btn" id="nav-siparis" onclick="switchTab('siparis')">🛒 Satış / Sepet</button>
+  <button class="tab-btn" id="nav-toptanci" onclick="switchTab('toptanci')">🏢 Toptancılar</button>
+  <button class="tab-btn" id="nav-yerlesim" onclick="switchTab('yerlesim')">🗺️ Kroki / Yerleşim</button>
+  <button class="tab-btn" id="nav-gorevler" onclick="switchTab('gorevler')">📋 Günlük Görevler</button>
+  <button class="tab-btn" id="nav-reports" onclick="switchTab('reports')">📊 Z Raporu & Raporlar</button>
+</div>
+
+<div class="container">
+
+  <!-- 1. STOK LİSTESİ TAB -->
+  <div id="tab-stok" class="tab-content active">
+    <div class="summary-bar">
+      <div class="summary-card">
+        <h3>Toplam Ürün Çeşit</h3>
+        <div class="val" id="sum-count">0</div>
+      </div>
+      <div class="summary-card">
+        <h3>Toplam Stok Adedi</h3>
+        <div class="val" id="sum-units">0</div>
+      </div>
+      <div class="summary-card">
+        <h3>Envanter Maliyet (Değer)</h3>
+        <div class="val" id="sum-value">₺0.00</div>
+      </div>
+    </div>
+
+    <div class="controls-bar">
+      <input type="text" id="search" placeholder="Ürün adı, barkod, kategori veya marka ara..." oninput="renderGrid()">
+      <button class="btn btn-primary" id="print-all-btn" onclick="printAllLabels()">🖨️ Tüm Etiketleri Bas</button>
+      <button class="btn btn-dark" id="backup-btn" onclick="exportBackup()">📥 Excel Yedek İndir</button>
+    </div>
+
+    <div class="grid" id="grid"></div>
   </div>
 
-  <main>
-    <!-- STOK LİSTESİ TABI -->
-    <div id="tab-stok" class="tab-content active">
-      <div class="summary">
-        <div class="card"><div class="num" id="sum-count">0</div><div class="lbl">Çeşit</div></div>
-        <div class="card"><div class="num" id="sum-units">0</div><div class="lbl">Toplam Miktar</div></div>
-        <div class="card"><div class="num" id="sum-value">***</div><div class="lbl">Envanter Değeri (Maliyet)</div></div>
+  <!-- 2. ÜRÜN EKLE TAB -->
+  <div id="tab-ekle" class="tab-content">
+    <div class="form-card" id="add-form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0; border-bottom:2px solid var(--charcoal); padding-bottom:8px;">Yeni Ürün ve Katalog Kaydı</h3>
+      
+      <div class="form-row">
+        <div>
+          <label>Ürün Adı *</label>
+          <input type="text" id="f-name" placeholder="Örn: Akfix Silikon 310ml">
+        </div>
+        <div>
+          <label>Kategori</label>
+          <input type="text" id="f-category" placeholder="Örn: Yapıştırıcılar">
+        </div>
       </div>
-      <div class="search-wrap">
-        <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
-        <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
-        <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
-      </div>
-      <div id="grid" class="grid"></div>
-    </div>
 
-    <!-- ÜRÜN EKLE TABI -->
-    <div id="tab-ekle" class="tab-content">
-      <div class="form-card disabled-action" id="add-form-card">
-        <h3 style="margin-top:0;font-family:'Oswald';">Yeni Ürün Ekle</h3>
-        <div class="form-row">
-          <div><label>Ürün Adı</label><input type="text" id="f-name" placeholder="Örn: Akfix Silikon 280ml"></div>
-          <div><label>Miktar</label><input type="number" id="f-qty" placeholder="0" step="any"></div>
+      <div class="form-row">
+        <div>
+          <label>Marka (Sadece Yönetici Değiştirebilir)</label>
+          <select id="f-brand" onchange="updateCostCalc('f'); updateAddProfit();" disabled>
+            <!-- Dinamik doldurulacak -->
+          </select>
+          <small id="brand-warning-text" style="font-size:10px; color:var(--rust); margin-top:2px; display:none;">Markayı sadece Yönetici değiştirebilir.</small>
         </div>
+        <div>
+          <label>QR / Barkod Kodu (Boş bırakılırsa otomatik üretilir)</label>
+          <input type="text" id="f-code" placeholder="RYH-123456">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label>Başlangıç Miktarı *</label>
+          <input type="number" id="f-qty" value="1" step="any">
+        </div>
+        <div>
+          <label>Ölçü Birimi</label>
+          <select id="f-unit">
+            <option value="Adet">Adet</option>
+            <option value="Kilogram">Kilogram</option>
+            <option value="Metre">Metre</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Fiyatlandırma Akışı: Geliş Fiyatı + Hedef Kâr + KDV -> Önerilen Satış Fiyatı -->
+      <div style="background:#f8fafc; padding:15px; border-radius:6px; border:1px solid var(--steel-line); margin-bottom:15px;">
+        <h4 style="margin:0 0 10px 0; font-family:'Oswald'; font-size:14px; color:var(--charcoal);">Fiyat Hesaplama & Kar Marjı Akışı</h4>
         <div class="form-row">
-          <div><label>Birim Fiyat (₺)</label><input type="number" id="f-price" step="0.01" placeholder="0.00" oninput="updateAddProfit()"></div>
-          <div><label>Ölçü Birimi</label>
-            <select id="f-unit">
-              <option value="Adet">Adet</option>
-              <option value="Kilogram">Kilogram</option>
-              <option value="Metre">Metre</option>
-            </select>
+          <div>
+            <label>Geliş Maliyet Fiyatı (₺)</label>
+            <input type="number" id="f-cost-price" placeholder="0.00" step="0.01" oninput="updateCostCalc('f'); updateAddProfit();">
           </div>
-        </div>
-        <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label>Hedef Kâr Oranı (%)</label>
+            <input type="number" id="f-target-profit-rate" placeholder="20" step="0.1" value="20" oninput="updateAddProfit();">
+          </div>
           <div>
             <label>KDV Oranı (%)</label>
-            <input type="number" id="f-vat" step="0.01" placeholder="0" oninput="updateAddProfit()">
-          </div>
-          <div>
-            <label>Yüzdelik Kar (%)</label>
-            <input type="text" id="f-profit" readonly placeholder="Otomatik Hesaplanır" style="background:#e9ecef; font-weight:bold;">
+            <input type="number" id="f-vat" value="18" step="1" oninput="updateCostCalc('f'); updateAddProfit();">
           </div>
         </div>
-        <div class="form-row" style="grid-template-columns: 1fr 1fr; margin-bottom:10px;">
-          <div><label>Ürün Sınıfı</label>
-            <select id="f-category">
-              <option value="Banyo">Banyo</option>
-              <option value="Bahçe">Bahçe</option>
-              <option value="Mutfak">Mutfak</option>
-              <option value="Boya">Boya</option>
-              <option value="Toz Grubu">Toz Grubu</option>
-              <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
-              <option value="Cam & Aksesuar">Cam & Aksesuar</option>
-              <option value="Silikon & Mastik">Silikon & Mastik</option>
-              <option value="Vida & Civata">Vida & Civata</option>
-              <option value="El Aletleri">El Aletleri</option>
-              <option value="Diğer">Diğer</option>
-            </select>
-          </div>
-          <div><label>Marka / Katalog Grubu</label>
-            <select id="f-brand" onchange="updateCostCalc('f')"></select>
-          </div>
-        </div>
-        <div class="form-row" style="grid-template-columns: 1fr;">
-          <div>
-            <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— maliyet, satış fiyatından farklı</span></label>
-            <input type="number" id="f-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('f'); updateAddProfit();">
-            <div class="cost-calc-box" id="f-cost-calc"></div>
-          </div>
-        </div>
-        <div style="margin-bottom:12px;">
-          <label>Özel QR Kodu No (Boş bırakırsanız otomatik üretilir)</label>
-          <input type="text" id="f-code" placeholder="Otomatik kod verilsin">
-        </div>
-        <button class="btn btn-primary" id="add-btn" onclick="addProduct()">Ürünü Canlı Sisteme Kaydet</button>
-      </div>
-
-      <div class="form-card disabled-action" id="brand-settings-card">
-        <h3 style="margin-top:0;font-family:'Oswald';">Marka İskonto / KDV Ayarları</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Her marka için kendi iskonto ve KDV yüzdenizi girip kaydedin. Bu oranlar markanın yanında saklanır, hesaplamaları buradan yönetebilirsiniz.</p>
-        <div id="brand-settings-list"></div>
-      </div>
-
-      <div class="form-card disabled-action" id="recent-updates-card">
-        <h3 style="margin-top:0;font-family:'Oswald';">🕒 Son Güncellenen Ürünler</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">En son eklenen veya düzenlenen (fiyat, miktar, kategori, konum vb.) ürünler — en yeniden eskiye, kimin güncellediğiyle birlikte.</p>
-        <div id="recent-updates-list"></div>
-      </div>
-    </div>
-
-    <!-- QR OKUT TABI -->
-    <div id="tab-okut" class="tab-content">
-      <div style="text-align:center;">
-        <p style="font-size:13px;color:var(--steel);">Kamerayı açarak ürün üzerindeki QR kodu okutun:</p>
-        <div id="reader"></div>
-        <div id="scan-result"></div>
-      </div>
-    </div>
-
-    <!-- GÜNLÜK GÖREVLER TABI -->
-    <div id="tab-gorevler" class="tab-content">
-      <div id="manager-task-section" style="display:none;">
-        <div class="form-card" style="border-left: 4px solid var(--safety);">
-          <h3 style="margin-top:0;font-family:'Oswald'; display:flex; justify-content:space-between; align-items:center;">
-            <span>📥 Toptancı / Ürün Giriş Bildirimleri</span>
-            <span id="notif-badge" style="background:var(--rust); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; display:none;">0 Yeni</span>
-          </h3>
-          <p style="font-size:12px; color:var(--steel); margin-top:-4px; margin-bottom:12px;">Dükkana eklenen ürünler buraya bildirim olarak düşer. İstediğiniz bildirimi çalışana görev olarak atayabilirsiniz.</p>
-          <div id="notifications-list">
-            <p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>
-          </div>
-        </div>
-
-        <div class="form-card">
-          <h3 style="margin-top:0;font-family:'Oswald';">Yönetici Görev veya Not Ata</h3>
-          <form onsubmit="handleManagerAssignTask(event)">
-            <div class="form-row">
-              <div><label>Görev / Not Açıklaması</label><input type="text" id="m-task-desc" placeholder="Örn: Vitrin camlarını sil ve düzenle" required></div>
-              <div><label>Atanacak Personel</label>
-                <select id="m-task-person">
-                  <option value="Ahmet Y.">Ahmet Y. (Çalışan)</option>
-                  <option value="Mehmet K.">Mehmet K. (Çalışan)</option>
-                  <option value="Tüm Ekip">Tüm Ekip</option>
-                </select>
-              </div>
-            </div>
-            <button type="submit" class="btn btn-dark">Görev / Notu Personele Gönder</button>
-          </form>
-        </div>
-      </div>
-
-      <div class="form-card">
-        <h3 style="margin-top:0;font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:8px;">📋 Günlük İş / Görev Listesi &amp; Takibi</h3>
-        <p style="font-size:12px; color:var(--steel); margin-bottom:12px;">Çalışanlar düzenlemeler bittikten sonra <strong>Yeşil Tik</strong> ile görevi işaretleyebilir, yönetici anlık olarak durumunu görebilir.</p>
         
-        <div id="bulk-task-actions" style="display:none; justify-content:space-between; align-items:center; background:#F7F5F0; padding:8px 12px; border:1px solid var(--steel-line); border-radius:3px; margin-bottom:10px;">
-          <span style="font-size:12px; font-weight:600; color:var(--charcoal);" id="selected-task-count">0 görev seçildi</span>
-          <button class="btn btn-danger btn-sm" id="bulk-del-btn" onclick="deleteSelectedTasks()" style="display:none;">🗑️ Seçilen Görevleri Sil</button>
-        </div>
+        <div class="cost-calc-box" id="f-cost-calc"></div>
 
-        <div style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:450px;">
-            <thead>
-              <tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
-                <th style="width:30px; padding-bottom:6px; text-align:center;"><input type="checkbox" id="select-all-tasks" onclick="toggleSelectAllTasks(this)" title="Tümünü Seç"></th>
-                <th style="padding-bottom:6px;">Görev / İş Açıklaması</th>
-                <th>Atanan Personel</th>
-                <th>Durum</th>
-                <th style="text-align:center;">İşlem (Yeşil Tik)</th>
-              </tr>
-            </thead>
-            <tbody id="tasks-table-body"></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TOPTANCILAR TABI -->
-    <div id="tab-toptanci" class="tab-content">
-      <div class="form-card">
-        <h3 style="margin-top:0;font-family:'Oswald';">Yeni Toptancı / Firma Ekle</h3>
-        <div class="form-row">
-          <div><label>Firma / Toptancı Adı</label><input type="text" id="w-name" placeholder="Örn: Koçtaş Hırdavat"></div>
-          <div><label>Telefon</label><input type="text" id="w-phone" placeholder="0555..."></div>
-        </div>
-        <div class="form-row">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px; background:#fff; padding:10px; border:1px solid var(--steel-line); border-radius:4px;">
           <div>
-            <label>Ziyaret Günü (Ne Zaman Gelir?)</label>
-            <select id="w-day">
-              <option value="Belirsiz">Belirsiz / Her Zaman</option>
-              <option value="Pazartesi">Pazartesi</option>
-              <option value="Salı">Salı</option>
-              <option value="Çarşamba">Çarşamba</option>
-              <option value="Perşembe">Perşembe</option>
-              <option value="Cuma">Cuma</option>
-              <option value="Cumartesi">Cumartesi</option>
-            </select>
+            <span style="font-size:12px; color:var(--steel);">Önerilen Satış Fiyatı (KDV Dahil):</span>
+            <div id="f-suggested-price-display" style="font-family:'IBM Plex Mono'; font-size:18px; font-weight:bold; color:var(--success);">₺0.00</div>
           </div>
-          <div style="display:flex; align-items:flex-end;">
-            <button class="btn btn-dark" onclick="addWholesaler()">Toptancıyı Kaydet</button>
-          </div>
+          <button class="btn btn-success btn-sm" type="button" onclick="applySuggestedPrice()">Önerilen Fiyatı Uygula</button>
         </div>
       </div>
-      <h3 style="font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Cari Hesaplar ve Planlar</h3>
-      <div id="wholesalers-grid" class="grid"></div>
+
+      <div class="form-row">
+        <div>
+          <label>Nihai Birim Satış Fiyatı (₺) *</label>
+          <input type="number" id="f-price" placeholder="0.00" step="0.01">
+        </div>
+        <div>
+          <label>Gerçekleşen Kâr Marjı (%)</label>
+          <input type="text" id="f-profit" readonly style="background:#f1f5f9; font-family:'IBM Plex Mono'; font-weight:bold;">
+        </div>
+      </div>
+
+      <button class="btn btn-primary" onclick="addProduct()">Ürünü Sisteme Kaydet</button>
     </div>
 
-    <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
-    <div id="tab-siparis" class="tab-content">
-      <div class="form-card">
-        <h3 style="margin-top:0; font-family:'Oswald';">Satış / Sepet Ekranı</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Satış yapılacak ürünleri sepete ekleyerek hem stoktan düşebilir hem de müşteri için fiş kesebilirsiniz.</p>
-        
-        <div class="form-row" style="grid-template-columns: 2fr 1fr;">
-          <div>
-            <label>Ürün Ara (İsme veya Koda Göre)</label>
-            <input list="order-product-list" id="cart-product" placeholder="Ürünü yazmaya başlayın...">
-            <datalist id="order-product-list"></datalist>
-          </div>
-          <div style="display:flex; gap:10px; align-items:flex-end;">
-            <div style="flex:1;">
-               <label>Miktar</label>
-               <input type="number" id="cart-qty" placeholder="1" value="1" min="0.1" step="any">
-            </div>
-            <button class="btn btn-primary" style="width:auto; padding:10px 15px;" onclick="addToCart()">Sepete Ekle</button>
-          </div>
-        </div>
-      </div>
-      
-      <div id="cart-container" class="form-card" style="display:none; padding:12px;">
-        <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Sepetteki Ürünler</h3>
-        <div style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width: 400px;" id="cart-table">
-             <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
-               <th style="padding-bottom:5px;">Ürün Bilgisi</th>
-               <th>B.Fiyat</th>
-               <th>Miktar</th>
-               <th>Ara Toplam</th>
-               <th>İşlem</th>
-             </tr></thead>
-             <tbody id="cart-items"></tbody>
-          </table>
-        </div>
-        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
-            Genel Toplam: <span id="cart-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
-        </div>
-        <button class="btn btn-success" style="margin-top:15px;" onclick="completeOrder()">Satışı Tamamla &amp; Fiş / Excel İşlemi</button>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-bottom: 1px solid var(--steel-line); padding-bottom: 5px;">
-        <h3 style="font-family:'Oswald'; margin: 0;">Geçmiş Satış / Sipariş Listeleri (Son 40 Gün)</h3>
-        <button class="btn btn-danger btn-sm" onclick="clearSalesHistory()">🗑️ Satış Geçmişini Temizle</button>
-      </div>
-      <div id="past-orders-list" style="margin-top: 10px;"></div>
+    <!-- Marka İskonto ve KDV Yönetim Kartı (Sadece Admin) -->
+    <div class="form-card" id="brand-settings-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Marka Bazlı İskonto ve KDV Ayarları</h3>
+      <p style="font-size:12px; color:var(--steel);">Toptancılardan alınan markalara ait iskonto oranlarını ve KDV yüzdelerini buradan yönetebilirsiniz.</p>
+      <div id="brand-settings-list"></div>
     </div>
 
-    <!-- YERLEŞİM (KROKİ) TABI -->
-    <div id="tab-yerlesim" class="tab-content">
-      <div class="form-card">
-        <h3 style="margin-top:0; font-family:'Oswald';">📍 Ürün Nerede? Ara</h3>
-        <input type="text" id="layout-search" placeholder="Ürün adı veya kodu yazın..." oninput="findProductLocation()">
+    <!-- Son Güncellemeler Havuzu -->
+    <div class="form-card" id="recent-updates-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Son İşlem Güncellemeleri</h3>
+      <div id="recent-updates-list" style="max-height:200px; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- 3. QR OKUT TAB -->
+  <div id="tab-okut" class="tab-content">
+    <div class="form-card" style="max-width: 600px; margin: 0 auto; text-align: center;">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Kamera ile QR Barkod Okutma</h3>
+      <p style="font-size: 12px; color: var(--steel);">Ürünün üzerindeki QR kodu kameraya gösterin.</p>
+      <div id="reader" style="width: 100%; max-width: 400px; margin: 0 auto 15px auto;"></div>
+      <div id="scan-result"></div>
+    </div>
+  </div>
+
+  <!-- 4. SATIŞ / SEPET TAB -->
+  <div id="tab-siparis" class="tab-content">
+    <div class="form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Hızlı Satış ve Fiş Kesme</h3>
+      <div class="form-row">
+        <div>
+          <label>Ürün Seç / Barkod Yaz</label>
+          <input type="text" id="cart-product" list="order-product-list" placeholder="Ürün adı veya kodu yazın...">
+          <datalist id="order-product-list"></datalist>
+        </div>
+        <div style="max-width: 120px;">
+          <label>Miktar</label>
+          <input type="number" id="cart-qty" value="1" step="any">
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <button class="btn btn-success" style="width:100%;" onclick="addToCart()">Sepete Ekle</button>
+        </div>
+      </div>
+
+      <div id="cart-container" style="margin-top: 20px; display:none;">
+        <h4 style="font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Aktif Sepet</h4>
+        <table style="width:100%; border-collapse: collapse; font-size: 13px; margin-bottom: 15px;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--charcoal); text-align:left;">
+              <th style="padding:6px 0;">Ürün</th>
+              <th>Birim Fiyat</th>
+              <th>Miktar</th>
+              <th>Toplam</th>
+              <th>İşlem</th>
+            </tr>
+          </thead>
+          <tbody id="cart-items"></tbody>
+        </table>
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:15px; border-radius:4px;">
+          <div style="font-family:'Oswald'; font-size:18px;">GENEL TOPLAM: <span id="cart-total" style="font-family:'IBM Plex Mono'; color:var(--success);">₺0.00</span></div>
+          <button class="btn btn-primary" onclick="completeOrder()">Satışı Tamamla & Fiş Yazdır</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="font-family:'Oswald'; margin:0;">Geçmiş Satış Fişleri</h3>
+        <button class="btn btn-danger btn-sm" onclick="clearSalesHistory()">Geçmişi Temizle</button>
+      </div>
+      <div id="past-orders-list" style="max-height:250px; overflow-y:auto;"></div>
+    </div>
+  </div>
+
+  <!-- 5. TOPTANCILAR TAB -->
+  <div id="tab-toptanci" class="tab-content">
+    <div class="form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Yeni Toptancı / Tedarikçi Ekle</h3>
+      <div class="form-row">
+        <div><label>Firma Adı</label><input type="text" id="w-name" placeholder="Örn: Kale Kilit A.Ş."></div>
+        <div><label>Telefon / İletişim</label><input type="text" id="w-phone" placeholder="0232 000 00 00"></div>
+        <div>
+          <label>Geliş / Ziyaret Günü</label>
+          <select id="w-day">
+            <option value="Pazartesi">Pazartesi</option>
+            <option value="Salı">Salı</option>
+            <option value="Çarşamba">Çarşamba</option>
+            <option value="Perşembe">Perşembe</option>
+            <option value="Cuma">Cuma</option>
+            <option value="Cumartesi">Cumartesi</option>
+            <option value="Pazar">Pazar</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="addWholesaler()">Toptancıyı Kaydet</button>
+    </div>
+
+    <div class="grid" id="wholesalers-grid"></div>
+  </div>
+
+  <!-- 6. KROKİ / YERLEŞİM TAB -->
+  <div id="tab-yerlesim" class="tab-content">
+    <div class="form-card">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="font-family:'Oswald'; margin:0;">Dükkan Yerleşim Kroki Sistemi</h3>
+        <button class="btn btn-primary btn-sm" id="toggle-stand-form-btn" onclick="toggleStandForm()">+ Yeni Stand Ekle</button>
+      </div>
+
+      <div id="stand-form-card" style="display:none; margin-top:15px; background:#f9fafb; padding:15px; border-radius:4px; border:1px solid var(--steel-line);">
+        <h4 style="margin:0 0 10px 0; font-family:'Oswald';">Stand Tanımla</h4>
+        <div class="form-row">
+          <div><label>Stand Harfi (Örn: A, B, C)</label><input type="text" id="ns-letter" style="text-transform:uppercase;" placeholder="A"></div>
+          <div><label>Bölme / Raf Sayısı</label><input type="number" id="ns-slots" value="12"></div>
+          <div><label>Açıklama / Grup</label><input type="text" id="ns-label" placeholder="Silikonlar ve Yapıştırıcılar"></div>
+        </div>
+        <button class="btn btn-success" onclick="addStand()">Standı Krokiye Ekle</button>
+      </div>
+
+      <div style="margin-top: 15px;">
+        <input type="text" id="layout-search" placeholder="Ürün adı veya kodu ile krokide yer bul..." oninput="findProductLocation()" style="width:100%; padding:10px; border:1px solid var(--steel-line); border-radius:4px;">
         <div id="layout-search-result"></div>
       </div>
-
-      <div class="form-card" id="stand-form-card" style="display:none;">
-        <h3 style="margin-top:0; font-family:'Oswald';">Yeni Stand Ekle</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Standın krokideki yerini satır/sütun numarasıyla belirleyin (0,0 sol üst köşedir).</p>
-        <div class="form-row">
-          <div><label>Stand Harfi</label><input type="text" id="ns-letter" maxlength="2" placeholder="Örn: A" style="text-transform:uppercase;"></div>
-          <div><label>Bölme (Numara) Adedi</label><input type="number" id="ns-slots" min="1" value="10" placeholder="10"></div>
-        </div>
-        <div class="form-row">
-          <div><label>Satır (Krokide yukarıdan aşağı)</label><input type="number" id="ns-row" min="0" value="0"></div>
-          <div><label>Sütun (Krokide soldan sağa)</label><input type="number" id="ns-col" min="0" value="0"></div>
-        </div>
-        <div style="margin-bottom:10px;"><label>Açıklama (isteğe bağlı)</label><input type="text" id="ns-label" placeholder="Örn: Vida & Civata Reyonu"></div>
-        <button class="btn btn-dark" onclick="addStand()">Standı Krokiye Ekle</button>
-      </div>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px;">
-        <h3 style="font-family:'Oswald'; margin:0; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex:1;">Mağaza Krokisi</h3>
-        <button class="btn btn-primary btn-sm" id="toggle-stand-form-btn" onclick="toggleStandForm()" style="width:auto; margin-left:10px; display:none;">+ Stand Ekle</button>
-      </div>
-      <p style="font-size:12px; color:var(--steel); margin-top:-4px;">Bir standa tıklayınca içindeki ürünleri bölme numarasına göre görebilirsiniz.</p>
-      <div id="layout-grid" class="layout-grid"></div>
-
-      <div class="modal-overlay" id="stand-detail-modal">
-        <div class="modal-content">
-          <button class="modal-close" onclick="closeStandDetail()">X</button>
-          <h3 style="margin-top:0; font-family:'Oswald';" id="stand-detail-title"></h3>
-          <div id="stand-detail-body"></div>
-        </div>
-      </div>
     </div>
 
-    <!-- RAPORLAR TABI -->
-    <div id="tab-raporlar" class="tab-content">
-      <div class="report-box">
-        <h3>GÜN SONU Z RAPORU OLUŞTURMA</h3>
-        <p>Bugün dükkanda yapılan tüm hareketleri derleyerek sistemde kalıcı bir Z Raporu oluşturun. Oluşturduğunuz raporlar aşağıda gün gün listelenir.</p>
-        <button class="btn btn-success" onclick="generateDailyZReport()">Bugünün Z Raporunu Oluştur &amp; Arşivle</button>
-      </div>
+    <!-- Kroki Görsel Alanı -->
+    <div class="form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Stand Planı</h3>
+      <div id="layout-grid" style="display:grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap:15px;"></div>
+    </div>
+  </div>
 
-      <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Geçmiş Z Raporları (Gün Gün Arşiv)</h3>
+  <!-- 7. GÜNLÜK GÖREVLER TAB -->
+  <div id="tab-gorevler" class="tab-content">
+    <div class="form-card" id="manager-task-section">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Yönetici Görev Atama Paneli</h3>
+      <form onsubmit="handleManagerAssignTask(event)">
+        <div class="form-row">
+          <div>
+            <label>Görev Açıklaması</label>
+            <input type="text" id="m-task-desc" placeholder="Örn: Depo temizliği ve kilit kontrolü yapılacak" required>
+          </div>
+          <div>
+            <label>Sorumlu Personel</label>
+            <select id="m-task-person">
+              <option value="Ahmet Y.">Ahmet Y.</option>
+              <option value="Mehmet S.">Mehmet S.</option>
+              <option value="Tüm Ekip">Tüm Ekip</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-primary" type="submit">Görev Ata</button>
+      </form>
+    </div>
+
+    <!-- Sistem Bildirimleri Alanı -->
+    <div class="form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Yeni Ürün Bildirimleri <span id="notif-badge" class="admin-badge role-admin" style="display:none;">0 Yeni</span></h3>
+      <div id="notifications-list"></div>
+    </div>
+
+    <div class="form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Aktif Günlük Görevler Listesi</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="border-bottom:2px solid var(--charcoal); text-align:left;">
+            <th style="width:30px; text-align:center;"><input type="checkbox" id="select-all-tasks" onclick="toggleSelectAllTasks(this)"></th>
+            <th style="padding:8px 0;">Görev Açıklaması</th>
+            <th>Sorumlu</th>
+            <th>Durum</th>
+            <th style="text-align:center;">İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="tasks-table-body"></tbody>
+      </table>
+      <div id="bulk-task-actions" style="margin-top:15px; display:none; gap:10px; align-items:center;">
+        <span id="selected-task-count" style="font-size:12px; font-weight:600;">0 görev seçildi</span>
+        <button class="btn btn-danger btn-sm" id="bulk-del-btn" onclick="deleteSelectedTasks()">Seçilenleri Sil</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 8. RAPORLAR & Z RAPORU TAB -->
+  <div id="tab-reports" class="tab-content">
+    <div class="form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Gün Sonu Z Raporu ve Envanter Analizi</h3>
+      <p style="font-size:12px; color:var(--steel);">Gün kapanışında bugünkü toplam satışları ve envanter durumunu arşivleyebilirsiniz.</p>
+      <button class="btn btn-primary" onclick="generateDailyZReport()">Bugünkü Z Raporunu Oluştur & Arşivle</button>
+    </div>
+
+    <div class="form-card">
+      <h3 style="font-family:'Oswald'; margin-top:0;">Arşivlenmiş Z Raporları</h3>
       <div id="past-z-reports-list"></div>
     </div>
+  </div>
 
-  </main>
 </div>
 
-<!-- GİZLİ YAZDIRMA ŞABLON ALANLARI -->
-<div id="print-area"></div>
-
-<!-- TERMAL FİŞ ŞABLONU -->
-<div id="thermal-print-area">
-  <div style="width: 54mm; font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #000; padding: 2mm; background: #fff; margin: 0 auto;">
-    <div style="text-align: center;">
-      <h3 style="font-size: 13px; margin: 0 0 3px 0; font-weight: bold;">REYHANİ CAM HIRDAVAT</h3>
-      <p style="margin: 2px 0; font-size: 9px;">Satış Fişi</p>
-      <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-    </div>
-    <div style="margin-bottom: 4px; font-size: 9px;">
-      <p style="margin: 2px 0;"><strong>Tarih:</strong> <span id="t-date"></span></p>
-      <p style="margin: 2px 0;"><strong>Saat:</strong> <span id="t-time"></span></p>
-    </div>
-    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-    <div id="t-items-list" style="margin-bottom: 4px;"></div>
-    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-    <div style="text-align: right; margin-top: 3px; font-weight: bold; font-size: 11px;">
-      TOPLAM: <span id="t-total"></span>
-    </div>
-    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-    <div style="text-align: center; margin-top: 5px;">
-      <p style="margin: 2px 0; font-size: 9px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
-    </div>
+<!-- Stand Detay / Bölme Modal -->
+<div class="modal-overlay" id="stand-detail-modal">
+  <div class="modal-content" style="max-width: 650px;">
+    <button class="modal-close" onclick="closeStandDetail()">X</button>
+    <h3 id="stand-detail-title" style="font-family:'Oswald'; margin-top:0;">Stand Detayı</h3>
+    <div id="stand-detail-body"></div>
   </div>
 </div>
 
-<!-- DÜZENLEME MODALI (KAPSAMLI VE EKLENEN KDV / KAR BÖLÜMÜ) -->
-<div class="modal-overlay" id="edit-modal" style="display:none;">
-  <div class="modal-content">
-    <button class="modal-close" onclick="closeEditModal()">X</button>
-    <h3 style="margin-top:0; font-family:'Oswald';">Ürün Düzenle</h3>
-    <input type="hidden" id="edit-code">
+<!-- Gizli Yazdırma Alanları -->
+<div id="print-area" style="display:none;"></div>
 
-    <div class="edit-photo-row">
-      <div class="edit-photo-preview" id="edit-photo-preview"><span class="photo-placeholder">📷</span></div>
-      <div style="flex:1;">
-        <label style="margin-bottom:6px;">Ürün Fotoğrafı</label>
-        <input type="file" accept="image/*" id="edit-photo-file" style="padding:4px; font-size:11px;">
-        <div style="display:flex; gap:8px; margin-top:6px;">
-          <button class="sm-btn" id="edit-photo-remove-btn" onclick="removeProductImage()" style="display:none; color:var(--rust);">Fotoğrafı Kaldır</button>
-        </div>
-        <div id="edit-photo-status" style="font-size:10px; color:var(--steel); margin-top:4px;"></div>
-      </div>
-    </div>
-
-    <div class="form-row">
-      <div><label>Ürün Adı</label><input type="text" id="edit-name"></div>
-      <div><label>Miktar</label><input type="number" id="edit-qty" step="any"></div>
-    </div>
-    <div class="form-row">
-      <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--rust); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01" oninput="updateEditProfit()"></div>
-      <div><label>Ölçü Birimi</label>
-        <select id="edit-unit">
-          <option value="Adet">Adet</option>
-          <option value="Kilogram">Kilogram</option>
-          <option value="Metre">Metre</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row" style="grid-template-columns: 1fr;">
-      <div><label>Ürün Sınıfı</label>
-        <select id="edit-category">
-          <option value="Banyo">Banyo</option>
-          <option value="Bahçe">Bahçe</option>
-          <option value="Mutfak">Mutfak</option>
-          <option value="Boya">Boya</option>
-          <option value="Toz Grubu">Toz Grubu</option>
-          <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
-          <option value="Cam & Aksesuar">Cam & Aksesuar</option>
-          <option value="Silikon & Mastik">Silikon & Mastik</option>
-          <option value="Vida & Civata">Vida & Civata</option>
-          <option value="El Aletleri">El Aletleri</option>
-          <option value="Diğer">Diğer</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-row" style="grid-template-columns: 1fr;">
-      <div><label>Marka / Katalog Grubu <span style="text-transform:none; color:var(--steel); font-size:9px;">— çalışan da değiştirebilir</span></label>
-        <select id="edit-brand" onchange="updateCostCalc('edit')"></select>
-      </div>
-    </div>
-    <div id="edit-cost-section" style="display:none;">
-      <div class="form-row" style="grid-template-columns: 1fr 1fr;">
-        <div>
-          <label>KDV Oranı (%) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici</span></label>
-          <input type="number" id="edit-vat" step="0.01" placeholder="0" oninput="updateEditProfit()">
-        </div>
-        <div>
-          <label>Yüzdelik Kar (%)</label>
-          <input type="text" id="edit-profit" readonly placeholder="Otomatik Hesaplanır" style="background:#e9ecef; font-weight:bold;">
-        </div>
-      </div>
-      <div class="form-row" style="grid-template-columns: 1fr;">
-        <div>
-          <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici, satış fiyatından farklı</span></label>
-          <input type="number" id="edit-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('edit'); updateEditProfit();">
-          <div class="cost-calc-box" id="edit-cost-calc"></div>
-        </div>
-      </div>
-      <div id="edit-last-update-note" class="last-update-note"></div>
-    </div>
-    <div class="form-row" style="grid-template-columns: 1fr 1fr;">
-      <div><label>Konum — Stand</label>
-        <select id="edit-stand" onchange="updateSlotMax()">
-          <option value="">Atanmamış</option>
-        </select>
-      </div>
-      <div><label>Bölme No</label><input type="number" id="edit-slot" min="1" placeholder="örn: 3"></div>
-    </div>
-    <button class="btn btn-primary" onclick="saveEditProduct()">Değişiklikleri Kaydet</button>
+<div id="thermal-receipt" style="display:none; font-family:'IBM Plex Mono', monospace; width: 58mm; padding: 5px; background:#fff; color:#000;">
+  <div style="text-align: center; font-weight: bold; font-size: 13px;">REYHANİ CAM HIRDAVAT</div>
+  <div style="text-align: center; font-size: 9px; margin-bottom: 6px;">Stok ve Satış Fişi</div>
+  <div style="font-size: 9px; border-bottom: 1px dashed #000; padding-bottom: 4px; margin-bottom: 4px;">
+    Tarih: <span id="t-date"></span> <span id="t-time"></span>
+  </div>
+  <table style="width: 100%; font-size: 9px; border-collapse: collapse;">
+    <thead>
+      <tr style="border-bottom: 1px solid #000;">
+        <th style="text-align: left; padding-bottom: 2px;">Ürün</th>
+        <th style="text-align: center; padding-bottom: 2px;">Mikt</th>
+        <th style="text-align: right; padding-bottom: 2px;">Fiyat</th>
+        <th style="text-align: right; padding-bottom: 2px;">Toplam</th>
+      </tr>
+    </thead>
+    <tbody id="t-items"></tbody>
+  </table>
+  <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+  <div style="text-align: right; font-size: 11px; font-weight: bold; margin-top: 4px;">
+    GENEL TOPLAM: <span id="t-total"></span>
+  </div>
+  <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+  <div style="text-align: center; font-size: 8px; margin-top: 6px;">
+    <p style="margin: 2px 0;">Reyhani Cam Hırdavat — İyi Günler Dileriz!</p>
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
-
-<!-- GÖRSEL BÜYÜTME MODALI -->
-<div class="modal-overlay" id="image-modal" style="display:none; z-index: 2000;" onclick="closeImageModal()">
-  <div style="position:relative; max-width:90%; max-height:90%; margin:auto; top:50%; transform:translateY(-50%); text-align:center;">
-    <button style="position:absolute; top:-15px; right:-15px; background:var(--rust); color:#fff; border:none; border-radius:50%; width:30px; height:30px; font-weight:bold; cursor:pointer;" onclick="closeImageModal()">X</button>
-    <img id="enlarged-image" src="" style="max-width:100%; max-height:85vh; border-radius:8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-  </div>
-</div>
+<div class="toast" id="toast">İşlem başarıyla gerçekleştirildi.</div>
 
 <script>
-  // FIREBASE BAĞLANTISI
-  const firebaseConfig = { databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/" };
-  firebase.initializeApp(firebaseConfig);
+  // --- FIREBASE & GENEL DEĞİŞKENLER ---
+  const firebaseConfig = {
+    databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/"
+  };
   
-  const dbRoot = firebase.database().ref();
-  const db = dbRoot.child('products');
-  const dbMovements = dbRoot.child('daily_movements');
-  const dbWholesalers = dbRoot.child('wholesalers');
-  const dbOrders = dbRoot.child('orders');
-  const dbNotifications = dbRoot.child('notifications');
-  const dbTasks = dbRoot.child('tasks');
-  const dbZReports = dbRoot.child('z_reports');
-  const dbProductImages = dbRoot.child('product_images'); // ürün listesinden AYRI tutulur — ana liste hafif kalır
-  const dbLayout = dbRoot.child('store_layout');
-  const dbBrandSettings = dbRoot.child('brand_settings');
-  const dbBrandMeta = dbRoot.child('brand_settings_meta');
-  // Bu artık sadece İLK KURULUMDA bir kereliğine kullanılan başlangıç listesi.
-  // Marka ekleme/silme artık admin tarafından panelden yapılıyor (bkz. addBrandGroup / deleteBrandGroup).
-  const DEFAULT_BRANDS = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon"];
-  let brandSeedChecked = false;
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+  const db = firebase.database();
 
-  let productsData = {};
-  let wholesalersData = {};
-  let globalPastOrders = {};
-  let globalZReports = {};
-  let movementsData = {};
-  let notificationsData = {};
-  let tasksData = {};
-  let selectedTaskIds = new Set();
-  let imageCache = {}; // { code: dataUrl | null } — bir kez indirilen fotoğraf tekrar indirilmez
-  let pendingImageDataUrl = null; // düzenleme modalında henüz kaydedilmemiş yeni fotoğraf
-  let layoutData = { stands: {} };
-  let brandSettingsData = {};
-  let highlightTimer = null;
-  
-  let html5QrcodeScanner = null;
-  let currentRole = 'guest';
+  let products = [];
   let cart = [];
-  const actionCooldowns = {};
+  let wholesalers = [];
+  let stands = [];
+  let tasks = [];
+  let pastOrders = [];
+  let brandSettings = {};
+  let recentUpdates = [];
+  let pastZReports = [];
 
-  // Şifreler artık düz metin olarak DEĞİL, SHA-256 özeti (hash) olarak tutuluyor.
-  // Bu, kaynak koduna bakan birinin şifreyi doğrudan okumasını engeller — ancak
-  // gerçek/tam güvenlik değildir; asıl koruma Firebase Rules + Authentication'dır.
-  const ADMIN_HASH = "50e65b1455800c98b480cec56db88524fabd630ddd992df1a58faf5a6edd2430";
-  const STAFF_HASH = "2b084c9efd9150fb848e4efb0b5f03f455470f68b153814944e14a6204ec5b9a";
+  let currentUserRole = 'guest'; // 'guest', 'staff', 'admin'
+  let html5QrCode = null;
 
-  async function sha256Hex(text) {
-    const enc = new TextEncoder().encode(text);
-    const buf = await crypto.subtle.digest('SHA-256', enc);
-    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-  }
+  // Standart Markalar Listesi
+  const defaultBrands = [
+    "Akfix", "Kale Kilit", "İzeltaş", "Marshall Boya", "Dyo", 
+    "Fırat Plastik", "Hekimoğlu", "Assa Abloy", "Neutrik", "Genel Hırdavat"
+  ];
 
-  // Klasör seçimi için File System Access API yönetimi (Reyhani Yapi Satis Raporlari için)
-  let reyhaniDirHandle = null;
+  // --- SAYFA YÜKLENİNCE ---
+  window.addEventListener('DOMContentLoaded', () => {
+    initBrandSelects();
+    initBrandSettingsList();
+    loadDataFromFirebase();
+  });
 
-  async function getReyhaniFolder() {
-    if (!reyhaniDirHandle && window.showDirectoryPicker) {
-      try {
-        alert("Lütfen raporların ve fişlerin otomatik kaydedilmesi için tarayıcınızda 'Reyhani Yapi Satis Raporlari' adında bir klasör seçin veya oluşturun.");
-        reyhaniDirHandle = await window.showDirectoryPicker();
-      } catch (err) {
-        console.log("Klasör seçimi iptal edildi:", err);
-      }
-    }
-    return reyhaniDirHandle;
-  }
-
-  async function saveExcelFile(wb, defaultFilename) {
-    let savedViaFolder = false;
-    const dirHandle = await getReyhaniFolder();
+  // --- TAB DEĞİŞTİRME ---
+  function switchTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
     
-    if (dirHandle) {
-      try {
-        const fileHandle = await dirHandle.getFileHandle(defaultFilename, { create: true });
-        const writable = await fileHandle.createWritable();
-        const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-        const blob = new Blob([wbout], { type: 'application/octet-stream' });
-        
-        await writable.write(blob);
-        await writable.close();
-        savedViaFolder = true;
-        showToast(`Dosya seçilen klasöre kaydedildi: ${defaultFilename}`);
-      } catch (err) {
-        console.error("Klasöre yazma hatası:", err);
-      }
-    }
-    
-    if (!savedViaFolder) {
-      XLSX.writeFile(wb, defaultFilename);
-      showToast(`Dosya indirildi: ${defaultFilename}`);
-    }
-  }
+    document.getElementById('tab-' + tabId).classList.add('active');
+    event && event.currentTarget && event.currentTarget.classList.add('active');
 
-  function formatMoney(amount) {
-    return Number(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  }
-
-  // ============================================================
-  // GÖRSEL BÜYÜTME FONKSİYONLARI
-  // ============================================================
-  function openImageModal(src) {
-    if(!src) return;
-    document.getElementById('enlarged-image').src = src;
-    document.getElementById('image-modal').style.display = 'block';
-  }
-  function closeImageModal() {
-    document.getElementById('image-modal').style.display = 'none';
-  }
-
-  // ============================================================
-  // ÜRÜN FOTOĞRAFLARI
-  // ------------------------------------------------------------
-  // Firebase Cloud Storage artık ücretsiz planda çalışmadığı için
-  // (3 Şubat 2026'dan itibaren kredi kartı bağlama zorunlu), fotoğraflar
-  // sıkıştırılıp Realtime Database'e ayrı bir yolda (/product_images)
-  // kaydediliyor. Ana ürün listesi ile birlikte SENKRONİZE EDİLMEZ —
-  // her ürünün fotoğrafı sadece o kart ekrana geldiğinde, tek seferlik
-  // indirilir ve tarayıcı belleğinde önbelleğe alınır.
-  // ============================================================
-
-  function compressImageFile(file, maxDim, quality) {
-    maxDim = maxDim || 360;
-    quality = quality || 0.55;
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onerror = () => reject(new Error("Dosya okunamadı"));
-      reader.onload = () => {
-        const img = new Image();
-        img.onerror = () => reject(new Error("Görsel yüklenemedi"));
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
-          else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
-          const canvas = document.createElement('canvas');
-          canvas.width = width; canvas.height = height;
-          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', quality));
-        };
-        img.src = reader.result;
-      };
-      reader.readAsDataURL(file);
-    });
-  }
-
-  function setEditPhotoPreview(dataUrl) {
-    const box = document.getElementById('edit-photo-preview');
-    const removeBtn = document.getElementById('edit-photo-remove-btn');
-    if (dataUrl) {
-      box.innerHTML = `<img src="${dataUrl}" style="cursor:pointer;" onclick="openImageModal('${dataUrl}')">`;
-      removeBtn.style.display = 'inline-block';
+    if (tabId === 'okut') {
+      setTimeout(startQrScanner, 300);
     } else {
-      box.innerHTML = `<span class="photo-placeholder">📷</span>`;
-      removeBtn.style.display = 'none';
+      stopQrScanner();
     }
   }
 
-  document.getElementById('edit-photo-file').addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const code = document.getElementById('edit-code').value;
-    const statusEl = document.getElementById('edit-photo-status');
-    statusEl.textContent = "Sıkıştırılıyor ve yükleniyor...";
-    try {
-      const dataUrl = await compressImageFile(file);
-      pendingImageDataUrl = dataUrl;
-      setEditPhotoPreview(dataUrl);
-      dbProductImages.child(code).set(dataUrl, (err) => {
-        if (err) { statusEl.textContent = "Yükleme başarısız."; return; }
-        imageCache[code] = dataUrl;
-        statusEl.textContent = "Fotoğraf kaydedildi (~" + Math.round(dataUrl.length / 1024) + " KB).";
-        refreshCardPhoto(code);
-      });
-    } catch (err) {
-      statusEl.textContent = "Fotoğraf işlenemedi, tekrar deneyin.";
-      console.error(err);
-    }
-  });
-
-  function removeProductImage() {
-    const code = document.getElementById('edit-code').value;
-    if (!code) return;
-    if (!confirm("Bu ürünün fotoğrafını kaldırmak istiyor musunuz?")) return;
-    dbProductImages.child(code).remove(() => {
-      imageCache[code] = null;
-      pendingImageDataUrl = null;
-      setEditPhotoPreview(null);
-      document.getElementById('edit-photo-status').textContent = "Fotoğraf kaldırıldı.";
-      refreshCardPhoto(code);
-    });
-  }
-
-  function refreshCardPhoto(code) {
-    const el = document.getElementById(`photo-${code}`);
-    if (!el) return;
-    const dataUrl = imageCache[code];
-    el.innerHTML = dataUrl ? `<img src="${dataUrl}" style="cursor:pointer;" onclick="openImageModal('${dataUrl}')">` : `<span class="photo-placeholder">📷</span>`;
-  }
-
-  // Kart ekrana geldiğinde fotoğrafı tembel şekilde indirir (bir kez), önbelleğe alır.
-  function loadProductImageIntoCard(code) {
-    const el = document.getElementById(`photo-${code}`);
-    if (!el) return;
-
-    if (Object.prototype.hasOwnProperty.call(imageCache, code)) {
-      el.innerHTML = imageCache[code] ? `<img src="${imageCache[code]}" style="cursor:pointer;" onclick="openImageModal('${imageCache[code]}')">` : `<span class="photo-placeholder">📷</span>`;
-      return;
-    }
-
-    dbProductImages.child(code).once('value', snap => {
-      const val = snap.val();
-      imageCache[code] = val || null;
-      const el2 = document.getElementById(`photo-${code}`);
-      if (el2) el2.innerHTML = val ? `<img src="${val}" style="cursor:pointer;" onclick="openImageModal('${val}')">` : `<span class="photo-placeholder">📷</span>`;
-    });
-  }
-
-  // Karekod, kart ilk açıldığında ÜRETİLMEZ — sadece link tıklanınca oluşturulur.
-  function toggleQR(code) {
-    const box = document.getElementById(`grid-qr-${code}`);
-    if (!box) return;
-    const isHidden = box.classList.contains('hidden');
-    if (isHidden && box.childElementCount === 0) {
-      const currentBaseUrl = window.location.href.split('?')[0];
-      new QRCode(box, { text: `${currentBaseUrl}?item=${code}`, width: 68, height: 68 });
-    }
-    box.classList.toggle('hidden');
-  }
-
-  const urlParams = new URLSearchParams(window.location.search);
-  const targetCode = urlParams.get('item');
-
-  db.on('value', (snapshot) => {
-    productsData = snapshot.val() || {};
-    renderGrid();
-    updateOrderProductList();
-    renderLayoutGrid();
-    if(currentRole === 'admin') renderRecentUpdates();
-    if (targetCode && productsData[targetCode]) {
-      document.getElementById('search').value = targetCode;
-      renderGrid();
-    }
-  });
-
-  dbWholesalers.on('value', (snapshot) => {
-    wholesalersData = snapshot.val() || {};
-    if(currentRole === 'admin') renderWholesalers();
-  });
-
-  dbMovements.on('value', (snapshot) => {
-    movementsData = snapshot.val() || {};
-  });
-
-  dbNotifications.on('value', (snapshot) => {
-    notificationsData = snapshot.val() || {};
-    if(currentRole === 'admin') renderNotifications();
-  });
-
-  dbTasks.on('value', (snapshot) => {
-    tasksData = snapshot.val() || {};
-    renderTasks();
-  });
-
-  dbLayout.on('value', (snapshot) => {
-    layoutData = snapshot.val() || { stands: {} };
-    if (!layoutData.stands) layoutData.stands = {};
-    renderLayoutGrid();
-  });
-
-  dbBrandSettings.on('value', (snapshot) => {
-    brandSettingsData = snapshot.val() || {};
-    renderBrandSettings();
-    const fBrandSel = document.getElementById('f-brand');
-    if (fBrandSel) populateBrandSelect('f-brand', fBrandSel.value);
-    if (!brandSeedChecked) {
-      brandSeedChecked = true;
-      maybeSeedDefaultBrands();
-    }
-  });
-
-  dbZReports.on('value', (snapshot) => {
-    const data = snapshot.val() || {};
-    const listDiv = document.getElementById('past-z-reports-list');
-    if(!listDiv) return;
-    listDiv.innerHTML = '';
-    globalZReports = {};
-    
-    let hasReports = false;
-    Object.keys(data).sort().reverse().forEach(dateStr => {
-      hasReports = true;
-      const rep = data[dateStr];
-      globalZReports[dateStr] = rep;
-      
-      listDiv.innerHTML += `
-        <div class="tag" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-           <div>
-              <div class="tag-title">📅 Z Raporu: ${rep.date}</div>
-              <div class="tag-code">🕒 Oluşturma: ${rep.time || 'N/A'} | 📦 Mal Giriş: ${rep.malGirisi} | 📤 Mal Çıkış: ${rep.malCikisi}</div>
-              <div style="font-size:12px; margin-top:4px; color:var(--charcoal);">
-                 Para Girişi: <strong style="color:var(--success);">₺${formatMoney(rep.paraGirisi)}</strong> | 
-                 Para Çıkışı: <strong style="color:var(--rust);">₺${formatMoney(rep.paraCikisi)}</strong>
-              </div>
-           </div>
-           <div style="text-align:right;">
-              <button class="btn btn-success btn-sm" onclick="downloadZReportByDate('${dateStr}')">📊 Z Raporu Excel İndir</button>
-           </div>
+  // --- YETKİ (AUTH) KONTROLÜ ---
+  function toggleAuth() {
+    const modalHtml = `
+      <div class="modal-overlay" id="auth-modal" style="display:flex;">
+        <div class="modal-content" style="max-width:320px; text-align:center;">
+          <button class="modal-close" onclick="document.getElementById('auth-modal').remove()">X</button>
+          <h3 style="font-family:'Oswald'; margin-top:0;">Giriş Rolü Seçin</h3>
+          <p style="font-size:12px; color:var(--steel); margin-bottom:15px;">Lütfen bağlandığınız yetki seviyesini seçin:</p>
+          <button class="btn btn-dark" style="margin-bottom:8px;" onclick="setRole('guest')">👤 Ziyaretçi</button>
+          <button class="btn btn-info" style="margin-bottom:8px;" onclick="setRole('staff')">🛠️ Çalışan (Marka değiştiremez)</button>
+          <button class="btn btn-primary" onclick="setRole('admin')">👑 Yönetici (Tam Yetki)</button>
         </div>
-      `;
-    });
-    
-    if(!hasReports) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
-  });
-
-  dbOrders.on('value', snapshot => {
-    const data = snapshot.val() || {};
-    const listDiv = document.getElementById('past-orders-list');
-    if(!listDiv) return;
-    listDiv.innerHTML = '';
-    globalPastOrders = {};
-    
-    const cutoffDate = new Date(); 
-    cutoffDate.setDate(cutoffDate.getDate() - 40);
-    const cutoffStr = cutoffDate.toISOString().slice(0, 10);
-    
-    let hasOrders = false;
-    
-    Object.keys(data).sort().reverse().forEach(dateStr => {
-      if(dateStr < cutoffStr) {
-        // Artık burada otomatik/sessiz silme YAPILMIYOR — bu her sayfa
-        // yüklemesinde çalışıp geri dönüşü olmayan veri kaybına yol açabiliyordu.
-        // İsterseniz "🗑️ Satış Geçmişini Temizle" butonuyla elle (onaylı) temizleyin.
-        return;
-      }
-      
-      const ordersOnDate = data[dateStr];
-      Object.keys(ordersOnDate).reverse().forEach(orderId => {
-        hasOrders = true;
-        const order = ordersOnDate[orderId];
-        globalPastOrders[orderId] = { orderData: order, date: dateStr };
-
-        listDiv.innerHTML += `
-          <div class="tag" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
-             <div>
-                <div class="tag-title">Satış / Sipariş: ${dateStr}</div>
-                <div class="tag-code">🕒 ${order.time} | 📦 ${order.items.length} Çeşit Ürün</div>
-             </div>
-             <div style="text-align:right;">
-                <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--charcoal);">₺${formatMoney(order.total)}</div>
-                <button class="btn btn-info btn-sm" onclick="downloadOrderById('${orderId}')">İndir (Excel)</button>
-             </div>
-          </div>
-        `;
-      });
-    });
-    
-    if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
-  });
-
-  // SATIŞ GEÇMİŞİNİ VE 40 GÜNLÜK ARŞİVİ TEMİZLEME FONKSİYONU
-  function clearSalesHistory() {
-    if(currentRole !== 'admin') {
-      alert("Bu işlem için yönetici yetkisi gereklidir!");
-      return;
-    }
-    
-    if (confirm("Tüm satış geçmişi ve 40 günlük arşiv kayıtları kalıcı olarak silinecektir. Devam etmek istiyor musunuz?")) {
-      dbOrders.remove((err) => {
-        if (!err) {
-          globalPastOrders = {};
-          document.getElementById('past-orders-list').innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
-          showToast("Satış geçmişi ve arşiv başarıyla sıfırlandı!");
-        } else {
-          alert("Temizleme sırasında bir hata oluştu.");
-        }
-      });
-    }
-  }
-
-  function logMovement(code, name, change, type) {
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const timeStr = new Date().toLocaleTimeString('tr-TR');
-    dbMovements.child(dateStr).push({ time: timeStr, code: code, name: name, change: change, type: type });
-  }
-
-  async function toggleAuth() {
-    if(currentRole === 'guest') {
-      const p = prompt("Giriş Şifresini Giriniz:");
-      if (p === null) return;
-      let hash;
-      try {
-        hash = await sha256Hex(p);
-      } catch (e) {
-        alert("Şifre doğrulaması bu bağlantıda çalışamadı. Sitenin https:// ile açıldığından emin olun.");
-        return;
-      }
-      if(hash === ADMIN_HASH) { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
-      else if(hash === STAFF_HASH) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
-      else { alert("Hatalı Şifre!"); return; }
-    } else {
-      currentRole = 'guest'; showToast("Çıkış yapıldı.");
-    }
-    updateAuthUI();
-  }
-
-  function updateAuthUI() {
-    const statusBadge = document.getElementById('admin-status');
-    const authBtn = document.getElementById('auth-btn');
-    const addCard = document.getElementById('add-form-card');
-    const backupBtn = document.getElementById('backup-btn');
-    const printAllBtn = document.getElementById('print-all-btn');
-    
-    document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
-    document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
-    
-    const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
-    document.getElementById('nav-siparis-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
-    document.getElementById('nav-yerlesim-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
-    document.getElementById('nav-reports-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
-    document.getElementById('nav-gorevler-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
-
-    if(currentRole === 'admin') {
-      statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
-      addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
-      printAllBtn.style.display = 'inline-block';
-      document.getElementById('manager-task-section').style.display = 'block';
-      document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
-      document.getElementById('brand-settings-card').classList.remove('disabled-action');
-      document.getElementById('recent-updates-card').classList.remove('disabled-action');
-      document.getElementById('recent-updates-card').style.display = 'block';
-    } else if(currentRole === 'staff') {
-      statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
-      addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
-      printAllBtn.style.display = 'inline-block';
-      document.getElementById('manager-task-section').style.display = 'none';
-      document.getElementById('toggle-stand-form-btn').style.display = 'none';
-      document.getElementById('stand-form-card').style.display = 'none';
-      document.getElementById('brand-settings-card').classList.add('disabled-action');
-      document.getElementById('recent-updates-card').style.display = 'none';
-    } else {
-      statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
-      addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
-      printAllBtn.style.display = 'none';
-      document.getElementById('manager-task-section').style.display = 'none';
-      document.getElementById('toggle-stand-form-btn').style.display = 'none';
-      document.getElementById('stand-form-card').style.display = 'none';
-      document.getElementById('brand-settings-card').classList.add('disabled-action');
-      document.getElementById('recent-updates-card').style.display = 'none';
-    }
-    renderGrid();
-    renderLayoutGrid();
-    renderBrandSettings();
-    if(currentRole === 'admin') {
-        renderWholesalers();
-        renderRecentUpdates();
-        renderNotifications();
-    }
-    renderTasks();
-  }
-
-  // ============================================================
-  // MAĞAZA KROKİSİ / YERLEŞİM
-  // ------------------------------------------------------------
-  // /store_layout/stands/{HARF} = { row, col, slotCount, label }
-  // Ürünlerde: product.location = "A-3" (Stand A, 3. bölme)
-  // ============================================================
-
-  function toggleStandForm() {
-    if (currentRole !== 'admin') return;
-    const card = document.getElementById('stand-form-card');
-    card.style.display = (card.style.display === 'none' || !card.style.display) ? 'block' : 'none';
-  }
-
-  function addStand() {
-    if (currentRole !== 'admin') return;
-    const letter = document.getElementById('ns-letter').value.trim().toUpperCase();
-    const slots = parseInt(document.getElementById('ns-slots').value, 10) || 1;
-    const row = parseInt(document.getElementById('ns-row').value, 10) || 0;
-    const col = parseInt(document.getElementById('ns-col').value, 10) || 0;
-    const label = document.getElementById('ns-label').value.trim();
-
-    if (!letter || !/^[A-ZÇĞİÖŞÜ0-9]{1,2}$/.test(letter)) {
-      alert("Stand harfi 1-2 karakter olmalı (örn: A, B, K2).");
-      return;
-    }
-    if (layoutData.stands && layoutData.stands[letter]) {
-      alert("Bu harfte bir stand zaten var: " + letter);
-      return;
-    }
-
-    dbLayout.child('stands').child(letter).set({ row, col, slotCount: slots, label }, (err) => {
-      if (err) { alert("Kaydedilemedi: " + err.message); return; }
-      showToast("Stand eklendi: " + letter);
-      document.getElementById('ns-letter').value = '';
-      document.getElementById('ns-label').value = '';
-      document.getElementById('stand-form-card').style.display = 'none';
-    });
-  }
-
-  function deleteStand(evt, letter) {
-    if (currentRole !== 'admin') return;
-    evt.stopPropagation();
-    if (!confirm(`"${letter}" standını krokiden silmek istiyor musunuz? (Bu standa atanmış ürünlerin konum bilgisi otomatik temizlenmez, gerekirse elle güncelleyin.)`)) return;
-    dbLayout.child('stands').child(letter).remove(() => showToast("Stand silindi."));
-  }
-
-  function productsInStand(letter) {
-    return Object.values(productsData).filter(p => p.location && p.location.split('-')[0] === letter);
-  }
-
-  function renderLayoutGrid() {
-    const grid = document.getElementById('layout-grid');
-    if (!grid) return;
-    const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
-    const letters = Object.keys(stands).sort();
-
-    if (letters.length === 0) {
-      grid.innerHTML = `<p style="grid-column:1/-1; text-align:center; color:var(--steel); font-size:13px; padding:20px;">Henüz kroki oluşturulmadı. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
-      return;
-    }
-
-    let maxRow = 0;
-    letters.forEach(l => { if ((stands[l].row || 0) > maxRow) maxRow = stands[l].row || 0; });
-
-    grid.innerHTML = '';
-    letters.forEach(letter => {
-      const s = stands[letter];
-      const count = productsInStand(letter).length;
-      const box = document.createElement('div');
-      box.className = 'stand-box';
-      box.id = 'stand-' + letter;
-      box.style.gridRow = (s.row || 0) + 1;
-      box.style.gridColumn = (s.col || 0) + 1;
-      box.onclick = () => openStandDetail(letter);
-      box.innerHTML = `
-        ${currentRole === 'admin' ? `<button class="stand-del" onclick="deleteStand(event, '${letter}')">✕</button>` : ''}
-        <div class="stand-letter">${letter}</div>
-        <div class="stand-label">${s.label || ''}</div>
-        <div class="stand-count">${count} ürün · ${s.slotCount || 0} bölme</div>
-      `;
-      grid.appendChild(box);
-    });
-  }
-
-  function openStandDetail(letter) {
-    const s = layoutData.stands[letter];
-    if (!s) return;
-    document.getElementById('stand-detail-title').textContent = `Stand ${letter}${s.label ? ' — ' + s.label : ''}`;
-    const itemsInStand = productsInStand(letter);
-    const bySlot = {};
-    itemsInStand.forEach(p => {
-      const slotNum = p.location.split('-')[1] || '?';
-      if (!bySlot[slotNum]) bySlot[slotNum] = [];
-      bySlot[slotNum].push(p);
-    });
-
-    let html = '<div class="slot-grid">';
-    const slotCount = s.slotCount || 0;
-    for (let i = 1; i <= slotCount; i++) {
-      const items = bySlot[String(i)] || [];
-      html += `
-        <div class="slot-cell ${items.length ? 'filled' : ''}">
-          <div class="slot-num">${letter}-${i}</div>
-          ${items.map(p => `<div class="slot-item">${p.name}</div>`).join('') || '<div class="slot-item" style="color:var(--steel-line);">boş</div>'}
-        </div>
-      `;
-    }
-    html += '</div>';
-    document.getElementById('stand-detail-body').innerHTML = html;
-    document.getElementById('stand-detail-modal').style.display = 'block';
-  }
-
-  function closeStandDetail() {
-    document.getElementById('stand-detail-modal').style.display = 'none';
-  }
-
-  function findProductLocation() {
-    const q = document.getElementById('layout-search').value.trim().toLowerCase();
-    const resultBox = document.getElementById('layout-search-result');
-    if (highlightTimer) { clearTimeout(highlightTimer); highlightTimer = null; }
-    document.querySelectorAll('.stand-box.highlight').forEach(el => el.classList.remove('highlight'));
-
-    if (!q) { resultBox.innerHTML = ''; return; }
-
-    const matches = Object.values(productsData).filter(p =>
-      (p.name && p.name.toLowerCase().includes(q)) || (p.code && p.code.toLowerCase().includes(q))
-    ).slice(0, 8);
-
-    if (matches.length === 0) {
-      resultBox.innerHTML = `<p style="font-size:12px; color:var(--steel); margin-top:8px;">Eşleşen ürün yok.</p>`;
-      return;
-    }
-
-    resultBox.innerHTML = matches.map(p => `
-      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--steel-line);">
-        <span style="font-size:13px;">${p.name}</span>
-        ${p.location
-          ? `<span class="location-badge" onclick="highlightStand('${p.location.split('-')[0]}')">📍 ${p.location}</span>`
-          : `<span style="font-size:11px; color:var(--steel);">Konum atanmamış</span>`}
-      </div>
-    `).join('');
-  }
-
-  function highlightStand(letter) {
-    const box = document.getElementById('stand-' + letter);
-    if (!box) { showToast("Bu stand krokide bulunamadı: " + letter); return; }
-    document.querySelectorAll('.stand-box.highlight').forEach(el => el.classList.remove('highlight'));
-    box.classList.add('highlight');
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (highlightTimer) clearTimeout(highlightTimer);
-    highlightTimer = setTimeout(() => box.classList.remove('highlight'), 4000);
-  }
-
-  // Stok listesindeki 📍 rozetine tıklayınca doğrudan krokiye gidip standı vurgular
-  function goToLocation(location) {
-    if (!location) return;
-    switchTab('yerlesim');
-    setTimeout(() => highlightStand(location.split('-')[0]), 150);
-  }
-
-  // ============================================================
-  // MARKA / KATALOG GRUBU
-  // ------------------------------------------------------------
-  // /brand_settings/{MARKA} = { discount: yüzde, vat: yüzde }
-  // Yüzdeleri admin kendisi "Ürün Ekle" sekmesindeki panelden girer.
-  // ============================================================
-
-  function currentBrandList() {
-    return Object.keys(brandSettingsData).sort((a, b) => a.localeCompare(b, 'tr'));
-  }
-
-  function maybeSeedDefaultBrands() {
-    // Liste tamamen boşsa (önceki hatalı sürümde marka kayıtları hiç oluşmamış olabilir),
-    // bayrağa bakmaksızın varsayılan markaları tekrar oluştur — kendi kendini onarır.
-    if (Object.keys(brandSettingsData).length > 0) return;
-    const updates = {};
-    DEFAULT_BRANDS.forEach(b => {
-      updates['brand_settings/' + b] = { discount: 0, vat: 0 };
-    });
-    dbRoot.update(updates);
-  }
-
-  function populateBrandSelect(selectId, selectedValue) {
-    const sel = document.getElementById(selectId);
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Marka Seçilmedi</option>' +
-      currentBrandList().map(b => `<option value="${b}">${b}</option>`).join('');
-    sel.value = selectedValue || '';
-  }
-
-  function addBrandGroup() {
-    if (currentRole !== 'admin') return;
-    const input = document.getElementById('new-brand-name');
-    const name = input.value.trim();
-    if (!name) { alert("Marka adı girin."); return; }
-    if (brandSettingsData[name]) { alert("Bu marka zaten listede: " + name); return; }
-    dbBrandSettings.child(name).set({ discount: 0, vat: 0 }, (err) => {
-      if (err) { alert("Eklenemedi: " + err.message); return; }
-      input.value = '';
-      showToast("Marka eklendi: " + name);
-    });
-  }
-
-  function deleteBrandGroup(evt, brand) {
-    if (currentRole !== 'admin') return;
-    evt.stopPropagation();
-    if (!confirm(`"${brand}" markasını listeden kalıcı olarak silmek istiyor musunuz? (Bu markaya atanmış ürünlerin marka bilgisi otomatik temizlenmez.)`)) return;
-    dbBrandSettings.child(brand).remove(() => showToast("Marka silindi: " + brand));
-  }
-
-  function renderBrandSettings() {
-    const box = document.getElementById('brand-settings-list');
-    if (!box) return;
-    const brands = currentBrandList();
-
-    let html = `
-      <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:10px; margin-bottom:4px; border-bottom:2px solid var(--charcoal);">
-        <div style="flex:1;"><label style="margin-bottom:2px;">Yeni Marka Adı</label><input type="text" id="new-brand-name" placeholder="Örn: Makita"></div>
-        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="addBrandGroup()">+ Marka Ekle</button>
       </div>
     `;
-
-    if (brands.length === 0) {
-      html += `<p style="font-size:12px; color:var(--steel); text-align:center; padding:14px 0;">Henüz marka eklenmedi.</p>`;
-    } else {
-      html += brands.map(brand => {
-        const s = brandSettingsData[brand] || {};
-        return `
-          <div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-top:1px solid var(--steel-line);">
-            <div style="flex:1.2;"><label style="margin-bottom:2px;">${brand}</label></div>
-            <div style="flex:1;">
-              <label style="margin-bottom:2px;">İskonto %</label>
-              <input type="number" step="0.01" id="bs-discount-${brand}" value="${s.discount != null ? s.discount : ''}" placeholder="0">
-            </div>
-            <div style="flex:1;">
-              <label style="margin-bottom:2px;">KDV %</label>
-              <input type="number" step="0.01" id="bs-vat-${brand}" value="${s.vat != null ? s.vat : ''}" placeholder="0">
-            </div>
-            <button class="btn btn-dark btn-sm" style="width:auto;" onclick="saveBrandSetting('${brand}')">Kaydet</button>
-            <button class="stand-del" style="position:static; font-size:16px;" onclick="deleteBrandGroup(event, '${brand}')" title="Markayı Sil">✕</button>
-          </div>
-        `;
-      }).join('');
-    }
-
-    box.innerHTML = html;
+    const existing = document.getElementById('auth-modal');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
   }
 
-  function saveBrandSetting(brand) {
-    if (currentRole !== 'admin') return;
-    const discount = parseFloat(document.getElementById(`bs-discount-${brand}`).value) || 0;
-    const vat = parseFloat(document.getElementById(`bs-vat-${brand}`).value) || 0;
-    dbBrandSettings.child(brand).set({ discount, vat }, (err) => {
-      if (err) { alert("Kaydedilemedi: " + err.message); return; }
-      showToast(`${brand} için oranlar kaydedildi.`);
+  function setRole(role) {
+    currentUserRole = role;
+    const badge = document.getElementById('admin-status');
+    const authBtn = document.getElementById('auth-btn');
+    
+    const navAdd = document.getElementById('nav-add-btn');
+    const navGorevler = document.getElementById('nav-gorevler-btn');
+    const navToptanci = document.getElementById('nav-toptanci-btn');
+    const navSiparis = document.getElementById('nav-siparis');
+    const navYerlesim = document.getElementById('nav-yerlesim');
+    const navReports = document.getElementById('nav-reports');
+    const printAllBtn = document.getElementById('print-all-btn');
+    const toggleStandBtn = document.getElementById('toggle-stand-form-btn');
+    const backupBtn = document.getElementById('backup-btn');
+    
+    const addFormCard = document.getElementById('add-form-card');
+    const brandSettingsCard = document.getElementById('brand-settings-card');
+    const recentUpdatesCard = document.getElementById('recent-updates-card');
+    const standFormCard = document.getElementById('stand-form-card');
+    const managerTaskSection = document.getElementById('manager-task-section');
+    const brandSelect = document.getElementById('f-brand');
+    const brandWarning = document.getElementById('brand-warning-text');
+
+    // Çalışanlar ve Adminler için marka seçimi kısıtlaması (Çalışan değiştiremez, Admin değiştirebilir)
+    if (role === 'admin') {
+      brandSelect.disabled = false;
+      brandWarning.style.display = 'none';
+    } else {
+      brandSelect.disabled = true;
+      brandWarning.style.display = 'block';
+    }
+
+    if (role === 'guest') {
+      badge.className = 'admin-badge role-guest';
+      badge.innerText = 'Ziyaretçi Modu';
+      authBtn.innerText = 'Giriş Yap';
+      
+      navAdd.style.display = 'none';
+      navGorevler.style.display = 'none';
+      navToptanci.style.display = 'none';
+      navSiparis.style.display = 'none';
+      navYerlesim.style.display = 'none';
+      navReports.style.display = 'none';
+      printAllBtn.style.display = 'none';
+      if(toggleStandBtn) toggleStandBtn.style.display = 'none';
+      if(standFormCard) standFormCard.style.display = 'none';
+      if(managerTaskSection) managerTaskSection.style.display = 'none';
+
+      addFormCard.classList.add('disabled-action');
+      brandSettingsCard.classList.add('disabled-action');
+      recentUpdatesCard.classList.add('disabled-action');
+      backupBtn.classList.add('disabled-action');
+
+    } else if (role === 'staff') {
+      badge.className = 'admin-badge role-staff';
+      badge.innerText = 'Çalışan Modu';
+      authBtn.innerText = 'Rol Değiştir';
+
+      navAdd.style.display = 'block';
+      navGorevler.style.display = 'block';
+      navToptanci.style.display = 'block';
+      navSiparis.style.display = 'block';
+      navYerlesim.style.display = 'block';
+      navReports.style.display = 'none';
+      printAllBtn.style.display = 'inline-block';
+      if(toggleStandBtn) toggleStandBtn.style.display = 'inline-block';
+      if(managerTaskSection) managerTaskSection.style.display = 'none';
+
+      addFormCard.classList.remove('disabled-action');
+      brandSettingsCard.classList.remove('disabled-action');
+      recentUpdatesCard.classList.remove('disabled-action');
+      backupBtn.classList.remove('disabled-action');
+
+    } else if (role === 'admin') {
+      badge.className = 'admin-badge role-admin';
+      badge.innerText = 'Yönetici (Admin)';
+      authBtn.innerText = 'Çıkış Yap / Değiştir';
+
+      navAdd.style.display = 'block';
+      navGorevler.style.display = 'block';
+      navToptanci.style.display = 'block';
+      navSiparis.style.display = 'block';
+      navYerlesim.style.display = 'block';
+      navReports.style.display = 'block';
+      printAllBtn.style.display = 'inline-block';
+      if(toggleStandBtn) toggleStandBtn.style.display = 'inline-block';
+      if(managerTaskSection) managerTaskSection.style.display = 'block';
+
+      addFormCard.classList.remove('disabled-action');
+      brandSettingsCard.classList.remove('disabled-action');
+      recentUpdatesCard.classList.remove('disabled-action');
+      backupBtn.classList.remove('disabled-action');
+    }
+
+    const modal = document.getElementById('auth-modal');
+    if (modal) modal.remove();
+    showToast(badge.innerText + ' ile devam ediliyor.');
+    renderGrid();
+  }
+
+  // --- FIREBASE VERİ SENKRONİZASYONU ---
+  function loadDataFromFirebase() {
+    db.ref('reyhani_db').on('value', (snapshot) => {
+      const data = snapshot.val() || {};
+      products = data.products || [];
+      wholesalers = data.wholesalers || [];
+      stands = data.stands || [];
+      tasks = data.tasks || [];
+      pastOrders = data.pastOrders || [];
+      brandSettings = data.brandSettings || {};
+      recentUpdates = data.recentUpdates || [];
+      pastZReports = data.pastZReports || [];
+
+      defaultBrands.forEach(b => {
+        if (!brandSettings[b]) {
+          brandSettings[b] = { discount: 0, vat: 18 };
+        }
+      });
+
+      renderGrid();
+      renderWholesalers();
+      renderLayoutGrid();
+      renderTasks();
+      renderPastOrders();
+      renderBrandSettingsList();
+      renderRecentUpdates();
+      renderPastZReports();
+      updateCartProductList();
+      updateNotificationsBadge();
     });
   }
 
+  function saveDataToFirebase() {
+    db.ref('reyhani_db').set({
+      products: products,
+      wholesalers: wholesalers,
+      stands: stands,
+      tasks: tasks,
+      pastOrders: pastOrders,
+      brandSettings: brandSettings,
+      recentUpdates: recentUpdates,
+      pastZReports: pastZReports
+    });
+  }
+
+  // --- MARKA VE FİYAT HESAPLAMA MANTIĞI (TERSİNE AKIŞ) ---
+  function initBrandSelects() {
+    const selectEl = document.getElementById('f-brand');
+    if (!selectEl) return;
+    selectEl.innerHTML = '';
+    defaultBrands.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b;
+      opt.innerText = b;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  function initBrandSettingsList() {
+    renderBrandSettingsList();
+  }
+
+  function renderBrandSettingsList() {
+    const container = document.getElementById('brand-settings-list');
+    if (!container) return;
+    let html = '';
+    defaultBrands.forEach(b => {
+      const bs = brandSettings[b] || { discount: 0, vat: 18 };
+      html += `
+        <div style="display:grid; grid-template-columns: 2fr 1fr 1fr auto; gap:8px; align-items:center; margin-bottom:8px; background:#fff; padding:8px; border:1px solid var(--steel-line); border-radius:3px;">
+          <strong style="font-size:13px;">${b}</strong>
+          <div>
+            <label style="font-size:9px; margin-bottom:2px;">İskonto (%)</label>
+            <input type="number" id="bs-disc-${b}" value="${bs.discount}" step="0.1" style="padding:6px; font-size:12px;" oninput="saveBrandSetting('${b}')">
+          </div>
+          <div>
+            <label style="font-size:9px; margin-bottom:2px;">KDV (%)</label>
+            <input type="number" id="bs-vat-${b}" value="${bs.vat}" step="1" style="padding:6px; font-size:12px;" oninput="saveBrandSetting('${b}')">
+          </div>
+          <div style="padding-top:14px;">
+            <span style="font-size:10px; color:var(--success); font-weight:600;">Aktif</span>
+          </div>
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
+  function saveBrandSetting(brandName) {
+    const discInput = document.getElementById(`bs-disc-${brandName}`);
+    const vatInput = document.getElementById(`bs-vat-${brandName}`);
+    if (!discInput || !vatInput) return;
+
+    if (!brandSettings[brandName]) brandSettings[brandName] = {};
+    brandSettings[brandName].discount = parseFloat(discInput.value) || 0;
+    brandSettings[brandName].vat = parseFloat(vatInput.value) || 0;
+    
+    saveDataToFirebase();
+  }
 
   function updateCostCalc(prefix) {
-    const brand = document.getElementById(`${prefix}-brand`).value;
-    const costPrice = parseFloat(document.getElementById(`${prefix}-cost-price`).value);
-    const box = document.getElementById(`${prefix}-cost-calc`);
+    const brandSelect = document.getElementById(prefix === 'f' ? 'f-brand' : 'e-brand');
+    const costInput = document.getElementById(prefix === 'f' ? 'f-cost-price' : 'e-cost-price');
+    const calcBox = document.getElementById(prefix === 'f' ? 'f-cost-calc' : 'e-cost-calc');
 
-    if (!brand || isNaN(costPrice) || costPrice <= 0) {
-      box.classList.remove('active');
-      box.innerHTML = '';
+    if (!brandSelect || !costInput || !calcBox) return;
+
+    const brand = brandSelect.value;
+    const cost = parseFloat(costInput.value) || 0;
+    const bs = brandSettings[brand] || { discount: 0, vat: 18 };
+
+    if (cost <= 0) {
+      calcBox.classList.remove('active');
       return;
     }
 
-    const s = brandSettingsData[brand];
-    if (!s || (s.discount == null && s.vat == null)) {
-      box.classList.add('active');
-      box.innerHTML = `<b>${brand}</b> için henüz iskonto/KDV oranı girilmemiş — "Marka İskonto/KDV Ayarları" panelinden ekleyin.`;
-      return;
-    }
+    let discountedCost = cost * (1 - (bs.discount / 100));
+    let costWithVat = discountedCost * (1 + (bs.vat / 100));
 
-    const discount = s.discount || 0;
-    const vat = s.vat || 0;
-    const afterDiscount = costPrice * (1 - discount / 100);
-    const netCost = afterDiscount * (1 + vat / 100);
-
-    box.classList.add('active');
-    box.innerHTML = `
-      Geliş Fiyatı: <b>₺${costPrice.toFixed(2)}</b> →
-      İskonto (%${discount}) sonrası: <b>₺${afterDiscount.toFixed(2)}</b> →
-      + KDV (%${vat}) = Net Maliyet: <b>₺${netCost.toFixed(2)}</b>
+    calcBox.classList.add('active');
+    calcBox.innerHTML = `
+      <b>${brand}</b> İskonto: <b>%${bs.discount}</b> | KDV: <b>%${bs.vat}</b><br>
+      İskontolu Maliyet: <b>₺${discountedCost.toFixed(2)}</b> | KDV Dahil Maliyet: <b>₺${costWithVat.toFixed(2)}</b>
     `;
   }
 
-  // Yüzdelik Kar Hesaplayıcı (Düzenleme Modülü için)
+  // İstediğin ters akış: Geliş Fiyatı + Hedef Kâr + KDV -> Önerilen Satış Fiyatı Hesaplama
   function updateAddProfit() {
-    const cost = parseFloat(document.getElementById('f-cost-price').value);
-    const price = parseFloat(document.getElementById('f-price').value) || 0;
-    const vat = parseFloat(document.getElementById('f-vat').value) || 0;
+    const costInput = document.getElementById('f-cost-price');
+    const targetProfitInput = document.getElementById('f-target-profit-rate');
+    const vatInput = document.getElementById('f-vat');
+    const suggestedDisplay = document.getElementById('f-suggested-price-display');
     const profitInput = document.getElementById('f-profit');
+    const priceInput = document.getElementById('f-price');
 
-    if (!isNaN(cost) && cost > 0) {
-        const costWithVat = cost * (1 + (vat / 100));
-        if (costWithVat > 0) {
-            const profit = ((price - costWithVat) / costWithVat) * 100;
-            profitInput.value = "% " + profit.toFixed(2);
-            profitInput.style.color = profit >= 0 ? 'var(--success)' : 'var(--rust)';
-        } else {
-            profitInput.value = "-";
-        }
+    const cost = parseFloat(costInput.value) || 0;
+    const targetProfit = parseFloat(targetProfitInput.value) || 0;
+    const vat = parseFloat(vatInput.value) || 0;
+
+    if (cost > 0) {
+      // İskontolu maliyet üzerinden hesaplama
+      const brand = document.getElementById('f-brand').value;
+      const bs = brandSettings[brand] || { discount: 0 };
+      let discountedCost = cost * (1 - (bs.discount / 100));
+
+      // Hedef kâr eklenmiş net fiyat + KDV
+      let priceWithProfit = discountedCost * (1 + (targetProfit / 100));
+      let finalSuggestedPrice = priceWithProfit * (1 + (vat / 100));
+
+      suggestedDisplay.innerText = '₺' + finalSuggestedPrice.toFixed(2);
+      window._lastSuggestedPrice = finalSuggestedPrice;
+
+      const currentPrice = parseFloat(priceInput.value) || 0;
+      if (currentPrice > 0) {
+        const actualProfitRate = ((currentPrice / (1 + vat/100) - discountedCost) / discountedCost) * 100;
+        profitInput.value = `%${actualProfitRate.toFixed(1)}`;
+      } else {
+        profitInput.value = `%${targetProfit.toFixed(1)}`;
+      }
     } else {
-        profitInput.value = "-";
+      suggestedDisplay.innerText = '₺0.00';
+      window._lastSuggestedPrice = 0;
     }
   }
 
-  function updateEditProfit() {
-    const cost = parseFloat(document.getElementById('edit-cost-price').value);
-    const price = parseFloat(document.getElementById('edit-price').value) || 0;
-    const vat = parseFloat(document.getElementById('edit-vat').value) || 0;
-    const profitInput = document.getElementById('edit-profit');
-
-    if (!isNaN(cost) && cost > 0) {
-        const costWithVat = cost * (1 + (vat / 100));
-        if (costWithVat > 0) {
-            const profit = ((price - costWithVat) / costWithVat) * 100;
-            profitInput.value = "% " + profit.toFixed(2);
-            profitInput.style.color = profit >= 0 ? 'var(--success)' : 'var(--rust)';
-        } else {
-            profitInput.value = "-";
-        }
+  function applySuggestedPrice() {
+    if (window._lastSuggestedPrice && window._lastSuggestedPrice > 0) {
+      document.getElementById('f-price').value = window._lastSuggestedPrice.toFixed(2);
+      updateAddProfit();
+      showToast('Önerilen satış fiyatı uygulandı.');
     } else {
-        profitInput.value = "-";
+      alert('Önce geçerli bir geliş maliyeti giriniz.');
     }
+  }
+
+  // --- ÜRÜN EKLEME ---
+  function addProduct() {
+    if (currentUserRole === 'guest') {
+      alert('Ziyaretçi modunda ürün ekleyemezsiniz!');
+      return;
+    }
+
+    const name = document.getElementById('f-name').value.trim();
+    const qty = parseFloat(document.getElementById('f-qty').value);
+    const price = parseFloat(document.getElementById('f-price').value);
+    const unit = document.getElementById('f-unit').value;
+    const vat = parseFloat(document.getElementById('f-vat').value) || 0;
+    const category = document.getElementById('f-category').value;
+    const brand = document.getElementById('f-brand').value;
+    const costPrice = parseFloat(document.getElementById('f-cost-price').value) || 0;
+    const targetProfitRate = parseFloat(document.getElementById('f-target-profit-rate').value) || 0;
+    let code = document.getElementById('f-code').value.trim();
+
+    if (!name || isNaN(qty) || isNaN(price)) {
+      alert('Lütfen ürün adını, miktarını ve birim fiyatını eksiksiz girin.');
+      return;
+    }
+
+    if (!code) {
+      code = 'RYH-' + Math.floor(100000 + Math.random() * 900000);
+    }
+
+    if (products.some(p => p.code === code)) {
+      alert('Bu QR kod sistemde zaten kayıtlı!');
+      return;
+    }
+
+    const newProd = {
+      id: Date.now().toString(),
+      name,
+      qty,
+      price,
+      unit,
+      vat,
+      category,
+      brand,
+      costPrice,
+      targetProfitRate,
+      code,
+      photo: '',
+      stand: '',
+      slot: ''
+    };
+
+    products.push(newProd);
+    addRecentUpdate(name, 'Yeni Ürün Eklendi');
+    addNotificationItem(name, qty, unit, brand);
+    saveDataToFirebase();
+
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-qty').value = '';
+    document.getElementById('f-price').value = '';
+    document.getElementById('f-cost-price').value = '';
+    document.getElementById('f-code').value = '';
+    document.getElementById('f-profit').value = '';
+    document.getElementById('f-cost-calc').classList.remove('active');
+
+    showToast('Ürün başarıyla sisteme eklendi!');
+    switchTab('stok');
+  }
+
+  // --- SON GÜNCELLEMELER & BİLDİRİMLER ---
+  function addRecentUpdate(prodName, actionType) {
+    const userTitle = currentUserRole === 'admin' ? 'Yönetici' : (currentUserRole === 'staff' ? 'Çalışan' : 'Ziyaretçi');
+    const nowStr = new Date().toLocaleString('tr-TR');
+    recentUpdates.unshift({
+      time: nowStr,
+      text: `${prodName} — ${actionType} (${userTitle})`
+    });
+    if (recentUpdates.length > 25) recentUpdates.pop();
   }
 
   function renderRecentUpdates() {
-    const box = document.getElementById('recent-updates-list');
-    if (!box) return;
-    const all = Object.values(productsData);
-    const withDate = all.filter(p => p.lastPriceUpdate).sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate));
-    const withoutDate = all.filter(p => !p.lastPriceUpdate).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
-    const list = withDate.slice(0, 25);
-    const extraCount = withoutDate.length;
+    const listEl = document.getElementById('recent-updates-list');
+    if (!listEl) return;
+    if (recentUpdates.length === 0) {
+      listEl.innerHTML = '<p style="font-size:13px; color:var(--steel);">Henüz güncel işlem kaydı bulunmuyor.</p>';
+      return;
+    }
+    let html = '';
+    recentUpdates.forEach(item => {
+      html += `
+        <div class="recent-update-row" style="padding:6px 0; border-bottom:1px solid var(--steel-line); font-size:12px;">
+          <div>${item.text}</div>
+          <div class="ru-time" style="font-size:10px; color:var(--steel);">${item.time}</div>
+        </div>
+      `;
+    });
+    listEl.innerHTML = html;
+  }
 
-    if (list.length === 0 && extraCount === 0) {
-      box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hiç ürün yok.</p>`;
+  function addNotificationItem(prodName, qty, unit, brand) {
+    if (!tasks) tasks = [];
+    const notifTask = {
+      id: 'notif-' + Date.now(),
+      desc: `[Yeni Ürün Bildirimi] ${brand} - ${prodName} (${qty} ${unit}) dükkana eklendi.`,
+      person: 'Yönetici / Ekip',
+      status: 'Bildirim',
+      completed: false,
+      date: new Date().toLocaleString('tr-TR')
+    };
+    tasks.unshift(notifTask);
+    updateNotificationsBadge();
+  }
+
+  function updateNotificationsBadge() {
+    const badge = document.getElementById('notif-badge');
+    const notifList = document.getElementById('notifications-list');
+    if (!badge || !notifList) return;
+
+    const notifs = tasks.filter(t => t.status === 'Bildirim' && !t.completed);
+    if (notifs.length > 0) {
+      badge.style.display = 'inline-block';
+      badge.innerText = notifs.length + ' Yeni';
+      
+      let html = '';
+      notifs.forEach(n => {
+        html += `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:#fff; padding:8px; border:1px solid var(--steel-line); border-radius:3px; margin-bottom:6px; font-size:12px;">
+            <div>${n.desc} <br><small style="color:var(--steel);">${n.date}</small></div>
+            <button class="btn btn-primary btn-sm" onclick="convertNotifToTask('${n.id}')">Görev Ata</button>
+          </div>
+        `;
+      });
+      notifList.innerHTML = html;
+    } else {
+      badge.style.display = 'none';
+      notifList.innerHTML = '<p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>';
+    }
+  }
+
+  function convertNotifToTask(taskId) {
+    const t = tasks.find(x => x.id === taskId);
+    if (!t) return;
+    t.status = 'Bekliyor';
+    t.person = document.getElementById('m-task-person') ? document.getElementById('m-task-person').value : 'Ahmet Y.';
+    saveDataToFirebase();
+    showToast('Bildirim görev olarak atandı.');
+  }
+
+  // --- STOK LİSTESİ RENDER & FİLTRELEME ---
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    const searchVal = document.getElementById('search').value.toLowerCase();
+    if (!grid) return;
+
+    let filtered = products.filter(p => 
+      p.name.toLowerCase().includes(searchVal) || 
+      p.category.toLowerCase().includes(searchVal) || 
+      p.code.toLowerCase().includes(searchVal) ||
+      (p.brand && p.brand.toLowerCase().includes(searchVal))
+    );
+
+    let totalCount = products.length;
+    let totalUnits = products.reduce((acc, p) => acc + (parseFloat(p.qty) || 0), 0);
+    let totalValue = products.reduce((acc, p) => acc + ((parseFloat(p.costPrice) || 0) * (parseFloat(p.qty) || 0)), 0);
+
+    document.getElementById('sum-count').innerText = totalCount;
+    document.getElementById('sum-units').innerText = totalUnits.toLocaleString('tr-TR');
+    
+    const sumValEl = document.getElementById('sum-value');
+    if (currentUserRole === 'admin' || currentUserRole === 'staff') {
+      sumValEl.innerText = '₺' + totalValue.toLocaleString('tr-TR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    } else {
+      sumValEl.innerText = '*** (Yetki Yok)';
+    }
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:var(--steel); padding:20px;">Aradığınız kritere uygun ürün bulunamadı.</p>';
       return;
     }
 
-    let html = list.map(p => {
-      const d = new Date(p.lastPriceUpdate);
-      const dateStr = d.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-      return `
-        <div class="recent-update-row">
-          <div>
-            <div>${p.name} <span style="color:var(--steel); font-size:10px;">(${p.code})</span></div>
-            <div class="ru-time">${dateStr}${p.lastUpdatedBy ? ' · ' + p.lastUpdatedBy : ''}</div>
-          </div>
-          <div style="text-align:right;">
-            <div>Satış: <b>₺${formatMoney(p.price || 0)}</b></div>
-            ${p.costPrice != null ? `<div style="color:var(--steel);">Geliş: ₺${formatMoney(p.costPrice)}</div>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('');
+    let html = '';
+    filtered.forEach(p => {
+      let isLow = p.qty <= 3;
+      let photoHtml = p.photo 
+        ? `<div class="product-photo"><img src="${p.photo}" onclick="openPhotoModal('${p.id}')" title="Büyüt"></div>`
+        : `<div class="product-photo"><div class="photo-placeholder">📷</div></div>`;
 
-    if (extraCount > 0) {
+      let locationBadge = p.stand ? `<span class="location-badge" onclick="jumpToStand('${p.stand}')" style="cursor:pointer; background:#e2e8f0; padding:2px 6px; border-radius:3px; font-size:10px;">Konum: ${p.stand}-${p.slot}</span>` : '';
+      let costDisplay = (currentUserRole === 'admin' || currentUserRole === 'staff') ? `<div class="price-info-box">Geliş Maliyet: <b>₺${(p.costPrice || 0).toFixed(2)}</b></div>` : '';
+
       html += `
-        <div class="recent-update-row" style="color:var(--steel); font-style:italic;">
-          <div>${extraCount} üründe henüz güncelleme tarihi yok (bu özellik eklenmeden önce oluşturulmuş — bir kez düzenleyip kaydedince tarih başlayacak).</div>
-        </div>
-      `;
-    }
+        <div class="tag ${isLow ? 'low' : ''}" id="product-card-${p.id}">
+          <div class="tag-header">
+            <div>
+              <div class="tag-title">${p.name} ${locationBadge}</div>
+              <div class="tag-code">${p.code} | <span style="color:var(--info);">${p.category}</span> | <b style="color:var(--charcoal);">${p.brand || 'Genel'}</b></div>
+            </div>
+            <button class="btn btn-sm btn-dark" onclick="printSingleLabel('${p.id}')">🖨️ Etiket</button>
+          </div>
 
-    box.innerHTML = html;
-  }
+          ${photoHtml}
 
-  function switchTab(tabName) {
-    if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
-    if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
-    if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+          <div class="qty-control">
+            <button class="qty-btn" onclick="updateQty('${p.id}', -1)">-</button>
+            <span class="qty-val">${p.qty} ${p.unit}</span>
+            <button class="qty-btn" onclick="updateQty('${p.id}', 1)">+</button>
+          </div>
 
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    
-    document.getElementById('tab-' + tabName).classList.add('active');
-    
-    const allBtns = document.querySelectorAll('.tab-btn');
-    for(let i=0; i<allBtns.length; i++) {
-        if(allBtns[i].id === 'nav-' + tabName + '-btn' || (tabName === 'stok' && i===0) || (tabName==='okut' && allBtns[i].textContent.includes('QR'))) {
-            allBtns[i].classList.add('active');
-        }
-    }
-    if(tabName === 'okut') startScanner(); else stopScanner();
-  }
+          <div class="price-info-box" style="margin-top:8px;">
+            <span>Satış Fiyatı: <b>₺${p.price.toFixed(2)}</b> (+%${p.vat} KDV)</span>
+          </div>
+          ${costDisplay}
 
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg; t.style.display = 'block';
-    setTimeout(() => t.style.display = 'none', 2500);
-  }
+          <div class="qr-box-mini" id="qr-mini-${p.id}"></div>
+          <button class="qr-toggle-link" onclick="toggleQrMini('${p.id}')">QR Kodunu Göster / Gizle</button>
 
-  function printThermalReceipt(items, total) {
-    const now = new Date();
-    document.getElementById('t-date').textContent = now.toLocaleDateString('tr-TR');
-    document.getElementById('t-time').textContent = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    
-    let itemsHtml = '';
-    items.forEach(item => {
-      itemsHtml += `
-        <div style="margin-bottom: 3px; display:flex; justify-content:space-between; font-size:10px;">
-          <span>${item.name} (${item.qty} ${item.unit || 'Adet'})</span>
-          <span>₺${formatMoney(item.total)}</span>
+          <div style="display:flex; gap:6px; margin-top:10px;">
+            <button class="btn btn-dark btn-sm" style="flex:1;" onclick="openEditModal('${p.id}')">Düzenle</button>
+            <button class="btn btn-danger btn-sm" style="flex:1;" onclick="deleteProduct('${p.id}')">Sil</button>
+          </div>
         </div>
       `;
     });
 
-    document.getElementById('t-items-list').innerHTML = itemsHtml;
-    document.getElementById('t-total').textContent = '₺' + formatMoney(total);
+    grid.innerHTML = html;
 
-    document.body.className = 'printing-receipt';
+    filtered.forEach(p => {
+      const container = document.getElementById(`qr-mini-${p.id}`);
+      if (container && container.innerHTML === '') {
+        new QRCode(container, {
+          text: p.code,
+          width: 70,
+          height: 70
+        });
+      }
+    });
+  }
+
+  function toggleQrMini(id) {
+    const box = document.getElementById(`qr-mini-${id}`);
+    if (box) box.classList.toggle('hidden');
+  }
+
+  function updateQty(id, amount) {
+    if (currentUserRole === 'guest') {
+      alert('Ziyaretçi modunda stok değiştiremezsiniz!');
+      return;
+    }
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    p.qty = Math.max(0, p.qty + amount);
+    addRecentUpdate(p.name, `Miktar Değişti (${amount > 0 ? '+' + amount : amount})`);
+    saveDataToFirebase();
+  }
+
+  function deleteProduct(id) {
+    if (currentUserRole !== 'admin') {
+      alert('Ürün silmek için Yönetici yetkisi gereklidir!');
+      return;
+    }
+    if (confirm('Bu ürünü silmek istediğinize emin misiniz?')) {
+      const p = products.find(x => x.id === id);
+      if (p) addRecentUpdate(p.name, 'Ürün Silindi');
+      products = products.filter(x => x.id !== id);
+      saveDataToFirebase();
+      showToast('Ürün silindi.');
+    }
+  }
+
+  // --- ÜRÜN DÜZENLEME MODALI ---
+  function openEditModal(id) {
+    if (currentUserRole === 'guest') {
+      alert('Ziyaretçi modunda düzenleme yapamazsınız!');
+      return;
+    }
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+
+    let brandOptions = '';
+    defaultBrands.forEach(b => {
+      brandOptions += `<option value="${b}" ${p.brand === b ? 'selected' : ''}>${b}</option>`;
+    });
+
+    // Çalışan marka değiştiremez, Yönetici değiştirebilir
+    const isBrandDisabled = (currentUserRole !== 'admin') ? 'disabled' : '';
+
+    const modalHtml = `
+      <div class="modal-overlay" id="edit-modal" style="display:flex;">
+        <div class="modal-content">
+          <button class="modal-close" onclick="document.getElementById('edit-modal').remove()">X</button>
+          <h3 style="font-family:'Oswald'; margin-top:0;">Ürünü Düzenle</h3>
+          
+          <div style="display:flex; gap:10px; margin-bottom:12px; align-items:center;">
+            <div id="edit-photo-preview-box" style="width:60px; height:60px; background:#eee; border-radius:4px; overflow:hidden; display:flex; align-items:center; justify-content:center;">
+              ${p.photo ? `<img src="${p.photo}" style="width:100%;height:100%;object-fit:cover;">` : '<div style="font-size:16px;">📷</div>'}
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:11px; color:var(--steel);">Fotoğraf Yükle</label>
+              <input type="file" accept="image/*" onchange="handleEditPhotoUpload(event, '${p.id}')" style="font-size:11px; padding:4px;">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div><label>Ürün Adı</label><input type="text" id="e-name" value="${p.name}"></div>
+            <div><label>Miktar</label><input type="number" id="e-qty" value="${p.qty}" step="any"></div>
+          </div>
+          <div class="form-row">
+            <div><label>Birim Satış Fiyatı (₺)</label><input type="number" id="e-price" value="${p.price}" step="0.01"></div>
+            <div><label>Ölçü Birimi</label>
+              <select id="e-unit">
+                <option value="Adet" ${p.unit==='Adet'?'selected':''}>Adet</option>
+                <option value="Kilogram" ${p.unit==='Kilogram'?'selected':''}>Kilogram</option>
+                <option value="Metre" ${p.unit==='Metre'?'selected':''}>Metre</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div><label>KDV Oranı (%)</label><input type="number" id="e-vat" value="${p.vat}" step="0.01"></div>
+            <div><label>Geliş Maliyet (₺)</label><input type="number" id="e-cost" value="${p.costPrice || 0}" step="0.01"></div>
+          </div>
+          <div class="form-row">
+            <div><label>Kategori</label><input type="text" id="e-category" value="${p.category}"></div>
+            <div>
+              <label>Marka ${currentUserRole !== 'admin' ? '(Sadece Admin Değiştirebilir)' : ''}</label>
+              <select id="e-brand" ${isBrandDisabled}>${brandOptions}</select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div><label>Stand Harfi</label><input type="text" id="e-stand" value="${p.stand || ''}" style="text-transform:uppercase;"></div>
+            <div><label>Bölme No</label><input type="number" id="e-slot" value="${p.slot || ''}"></div>
+          </div>
+          <button class="btn btn-primary" style="margin-top:10px;" onclick="saveEditedProduct('${p.id}')">Değişiklikleri Kaydet</button>
+        </div>
+      </div>
+    `;
+    const existing = document.getElementById('edit-modal');
+    if (existing) existing.remove();
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  }
+
+  function handleEditPhotoUpload(event, productId) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const p = products.find(x => x.id === productId);
+      if (p) {
+        p.photo = e.target.result;
+        const previewBox = document.getElementById('edit-photo-preview-box');
+        if (previewBox) previewBox.innerHTML = `<img src="${p.photo}" style="width:100%;height:100%;object-fit:cover;">`;
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function saveEditedProduct(id) {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+
+    p.name = document.getElementById('e-name').value.trim();
+    p.qty = parseFloat(document.getElementById('e-qty').value) || 0;
+    p.price = parseFloat(document.getElementById('e-price').value) || 0;
+    p.unit = document.getElementById('e-unit').value;
+    p.vat = parseFloat(document.getElementById('e-vat').value) || 0;
+    p.costPrice = parseFloat(document.getElementById('e-cost').value) || 0;
+    p.category = document.getElementById('e-category').value.trim();
+    
+    // Çalışan marka değiştiremez, sadece admin değiştirebilir
+    if (currentUserRole === 'admin') {
+      p.brand = document.getElementById('e-brand').value;
+    }
+
+    p.stand = document.getElementById('e-stand').value.trim().toUpperCase();
+    p.slot = document.getElementById('e-slot').value.trim();
+
+    addRecentUpdate(p.name, 'Ürün Bilgileri Güncellendi');
+    saveDataToFirebase();
+
+    const modal = document.getElementById('edit-modal');
+    if (modal) modal.remove();
+    showToast('Ürün güncellendi.');
+  }
+
+  function openPhotoModal(id) {
+    const p = products.find(x => x.id === id);
+    if (!p || !p.photo) return;
+    const modalHtml = `
+      <div class="modal-overlay" id="photo-modal" style="display:flex;" onclick="this.remove()">
+        <div class="modal-content" style="background:none; text-align:center; max-width:600px; padding:0;">
+          <img src="${p.photo}" style="max-width:100%; max-height:85vh; border-radius:4px;">
+        </div>
+      </div>
+    `;
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+  }
+
+  // --- QR OKUTUCU ---
+  function startQrScanner() {
+    const readerEl = document.getElementById('reader');
+    if (!readerEl) return;
+    if (html5QrCode) stopQrScanner();
+
+    html5QrCode = new Html5Qrcode("reader");
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+    html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure).catch(err => {
+      console.warn("Kamera başlatılamadı:", err);
+      document.getElementById('scan-result').innerHTML = `<p style="color:var(--rust);">Kamera izni alınamadı veya kamera bulunamadı.</p>`;
+    });
+  }
+
+  function stopQrScanner() {
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+      }).catch(err => console.log(err));
+    }
+  }
+
+  function onScanSuccess(decodedText) {
+    const p = products.find(x => x.code === decodedText);
+    const resultDiv = document.getElementById('scan-result');
+    
+    if (p) {
+      resultDiv.innerHTML = `
+        <div class="form-card" style="border:2px solid var(--success); background:#e8f5e9;">
+          <h3 style="margin-top:0; color:var(--success);">✅ Ürün Bulundu!</h3>
+          <p><b>Ad:</b> ${p.name}</p>
+          <p><b>Kod:</b> ${p.code} | <b>Marka:</b> ${p.brand}</p>
+          <p><b>Stok Miktarı:</b> <span style="font-size:18px; font-family:'IBM Plex Mono'; font-weight:bold;">${p.qty} ${p.unit}</span></p>
+          <p><b>Fiyat:</b> ₺${p.price.toFixed(2)}</p>
+          <div style="display:flex; gap:10px; margin-top:10px;">
+            <button class="btn btn-success" style="flex:1;" onclick="updateQty('${p.id}', 1); alert('Miktar 1 artırıldı!');">Stok +1 Ekle</button>
+            <button class="btn btn-dark" style="flex:1;" onclick="openEditModal('${p.id}')">Düzenle</button>
+          </div>
+        </div>
+      `;
+      showToast('QR Kod Eşleşti: ' + p.name);
+    } else {
+      resultDiv.innerHTML = `
+        <div class="form-card" style="border:2px solid var(--rust); background:#ffebee;">
+          <h3 style="margin-top:0; color:var(--rust);">⚠️ Tanımsız Kod</h3>
+          <p>Okutulan Kod: <b>${decodedText}</b></p>
+          <button class="btn btn-primary" onclick="switchTab('ekle'); document.getElementById('f-code').value='${decodedText}';">Bu Kodla Ürün Ekle</button>
+        </div>
+      `;
+    }
+  }
+
+  function onScanFailure(error) {}
+
+  // --- ETİKET & YEDEKLEME ---
+  function printAllLabels() {
+    const printArea = document.getElementById('print-area');
+    let html = '';
+    products.forEach(p => {
+      html += `
+        <div class="sticker-label">
+          <div class="sticker-title">${p.name}</div>
+          <div class="sticker-qr" id="print-qr-${p.id}"></div>
+          <div class="sticker-footer">
+            <span>₺${p.price.toFixed(2)}</span>
+            <span>${p.code}</span>
+          </div>
+        </div>
+      `;
+    });
+    printArea.innerHTML = html;
+
+    products.forEach(p => {
+      const qrEl = document.getElementById(`print-qr-${p.id}`);
+      if (qrEl) new QRCode(qrEl, { text: p.code, width: 68, height: 68 });
+    });
+
+    document.body.classList.add('printing-label');
     setTimeout(() => {
       window.print();
-      document.body.className = '';
-    }, 250);
+      document.body.classList.remove('printing-label');
+    }, 500);
   }
 
-  function renderNotifications() {
-    const listDiv = document.getElementById('notifications-list');
-    const badge = document.getElementById('notif-badge');
-    if(!listDiv) return;
-    
-    listDiv.innerHTML = '';
-    const keys = Object.keys(notificationsData);
-    
-    if(keys.length === 0) {
-      listDiv.innerHTML = '<p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>';
-      badge.style.display = 'none';
+  function printSingleLabel(id) {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    const printArea = document.getElementById('print-area');
+    printArea.innerHTML = `
+      <div class="sticker-label" style="width:50mm; height:30mm;">
+        <div class="sticker-title">${p.name}</div>
+        <div class="sticker-qr" id="single-print-qr"></div>
+        <div class="sticker-footer">
+          <span>₺${p.price.toFixed(2)}</span>
+          <span>${p.code}</span>
+        </div>
+      </div>
+    `;
+    new QRCode(document.getElementById('single-print-qr'), { text: p.code, width: 68, height: 68 });
+
+    document.body.classList.add('printing-label');
+    setTimeout(() => {
+      window.print();
+      document.body.classList.remove('printing-label');
+    }, 400);
+  }
+
+  function exportBackup() {
+    if (currentUserRole === 'guest') {
+      alert('Ziyaretçi modunda yedek indiremezsiniz!');
       return;
     }
-    
-    badge.style.display = 'inline-block';
-    badge.textContent = keys.length + " Yeni";
-    
-    keys.reverse().forEach(key => {
-      const n = notificationsData[key];
-      listDiv.innerHTML += `
-        <div style="background:#F7F5F0; border:1px solid var(--steel-line); padding:10px; border-radius:3px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-           <div>
-              <div style="font-size:12px; font-weight:bold; color:var(--charcoal);">📥 ${n.text}</div>
-              <div style="font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';">🕒 ${n.time}</div>
-           </div>
-           <div style="display:flex; flex-direction:column; gap:4px;">
-             <button class="btn btn-primary btn-sm" onclick="convertNotifToTask('${key}')" style="white-space:nowrap;">Çalışana Görev Ata</button>
-             <button class="sm-btn" onclick="dismissNotification('${key}')" style="color:var(--steel);">Yoksay / Kapat</button>
-           </div>
+    let dataToExport = products.map(p => ({
+      "QR Kodu": p.code,
+      "Ürün Adı": p.name,
+      "Kategori": p.category,
+      "Marka": p.brand || "",
+      "Miktar": p.qty,
+      "Birim": p.unit,
+      "Birim Fiyat (₺)": p.price,
+      "KDV (%)": p.vat,
+      "Maliyet (₺)": p.costPrice || 0,
+      "Stand": p.stand || "",
+      "Bölme": p.slot || ""
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stok Listesi");
+    XLSX.writeFile(workbook, "Reyhani_Stok_Raporu_" + new Date().toISOString().slice(0,10) + ".xlsx");
+    showToast('Excel yedek indirildi.');
+  }
+
+  // --- TOPTANCILAR ---
+  function addWholesaler() {
+    if (currentUserRole === 'guest') {
+      alert('Ziyaretçi modunda toptancı ekleyemezsiniz!');
+      return;
+    }
+    const name = document.getElementById('w-name').value.trim();
+    const phone = document.getElementById('w-phone').value.trim();
+    const day = document.getElementById('w-day').value;
+
+    if (!name) { alert('Firma adını giriniz.'); return; }
+
+    wholesalers.push({ id: Date.now().toString(), name, phone, day, balance: 0, notes: [] });
+    saveDataToFirebase();
+    document.getElementById('w-name').value = '';
+    document.getElementById('w-phone').value = '';
+    showToast('Toptancı kaydedildi.');
+  }
+
+  function renderWholesalers() {
+    const grid = document.getElementById('wholesalers-grid');
+    if (!grid) return;
+    if (wholesalers.length === 0) {
+      grid.innerHTML = '<p style="grid-column:1/-1; color:var(--steel); text-align:center;">Henüz kayıtlı toptancı bulunmuyor.</p>';
+      return;
+    }
+
+    let html = '';
+    wholesalers.forEach(w => {
+      let notesHtml = '';
+      if (w.notes && w.notes.length > 0) {
+        w.notes.forEach((n, idx) => {
+          notesHtml += `<div style="font-size:11px; color:var(--charcoal); margin-top:2px;">• ${n} <button class="btn btn-sm" style="color:var(--rust); background:none; border:none; float:right;" onclick="deleteWholesalerNote('${w.id}', ${idx})">Sil</button></div>`;
+        });
+      } else {
+        notesHtml = '<div style="font-size:11px; color:var(--steel);">Not bulunmuyor.</div>';
+      }
+
+      html += `
+        <div class="form-card" style="margin-bottom:0;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <h4 style="margin:0; font-family:'Oswald'; font-size:16px;">${w.name}</h4>
+              <p style="font-size:12px; color:var(--steel); margin:2px 0;">📞 ${w.phone || 'Yok'}</p>
+              <span style="font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:3px;">Günü: ${w.day}</span>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="deleteWholesaler('${w.id}')">Sil</button>
+          </div>
+          <div style="font-family:'IBM Plex Mono'; font-weight:bold; margin:10px 0; font-size:14px;">Bakiye: ₺${w.balance.toFixed(2)}</div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-success btn-sm" style="flex:1;" onclick="updateWholesalerBalance('${w.id}', 1000)">Borç Ekle (+)</button>
+            <button class="btn btn-info btn-sm" style="flex:1;" onclick="updateWholesalerBalance('${w.id}', -1000)">Ödeme Yap (-)</button>
+          </div>
+          <div style="margin-top:10px; border-top:1px solid var(--steel-line); padding-top:6px;">
+            <div style="max-height:60px; overflow-y:auto; margin-bottom:4px;">${notesHtml}</div>
+            <div style="display:flex; gap:4px;">
+              <input type="text" id="wn-input-${w.id}" placeholder="Not ekle..." style="font-size:11px; padding:4px; flex:1;">
+              <button class="btn btn-dark btn-sm" onclick="addWholesalerNote('${w.id}')">Ekle</button>
+            </div>
+          </div>
         </div>
       `;
     });
+    grid.innerHTML = html;
   }
 
-  function dismissNotification(notifKey) {
-    if(currentRole !== 'admin') return;
-    dbNotifications.child(notifKey).remove();
+  function updateWholesalerBalance(id, amount) {
+    if (currentUserRole === 'guest') { alert('Ziyaretçi modunda işlem yapamazsınız!'); return; }
+    const w = wholesalers.find(x => x.id === id);
+    if (!w) return;
+    let val = prompt(`Miktar giriniz:`, Math.abs(amount));
+    if (val === null) return;
+    let num = parseFloat(val);
+    if (isNaN(num)) return;
+    if (amount > 0) w.balance += num; else w.balance -= num;
+    saveDataToFirebase();
+    showToast('Cari bakiye güncellendi.');
   }
 
-  function convertNotifToTask(notifKey) {
-    if(currentRole !== 'admin') return;
-    const n = notificationsData[notifKey];
-    if(!n) return;
-    
-    const personSelect = document.getElementById('m-task-person');
-    const assignedPerson = personSelect ? personSelect.value : "Tüm Ekip";
-    const taskText = `Ürün Giriş Yerleşimi: ${n.text}`;
-    dbTasks.push({
-      text: taskText,
-      person: assignedPerson,
-      category: "Ürün Kabul",
-      status: "Bekliyor",
-      time: "-"
-    }, (err) => {
-      if(!err) {
-        dbNotifications.child(notifKey).remove();
-        showToast("Bildirim başarıyla çalışana görev olarak atandı!");
-      }
+  function addWholesalerNote(id) {
+    const input = document.getElementById(`wn-input-${id}`);
+    if (!input || !input.value.trim()) return;
+    const w = wholesalers.find(x => x.id === id);
+    if (!w) return;
+    if (!w.notes) w.notes = [];
+    w.notes.push(input.value.trim() + ` (${new Date().toLocaleDateString('tr-TR')})`);
+    saveDataToFirebase();
+    input.value = '';
+    showToast('Not eklendi.');
+  }
+
+  function deleteWholesalerNote(wId, noteIdx) {
+    const w = wholesalers.find(x => x.id === wId);
+    if (!w || !w.notes) return;
+    w.notes.splice(noteIdx, 1);
+    saveDataToFirebase();
+  }
+
+  function deleteWholesaler(id) {
+    if (currentUserRole !== 'admin') { alert('Yetki gerekiyor!'); return; }
+    if (confirm('Silmek istiyor musunuz?')) {
+      wholesalers = wholesalers.filter(x => x.id !== id);
+      saveDataToFirebase();
+      showToast('Toptancı silindi.');
+    }
+  }
+
+  // --- SATIŞ / SEPET ---
+  function updateCartProductList() {
+    const datalist = document.getElementById('order-product-list');
+    if (!datalist) return;
+    let html = '';
+    products.forEach(p => {
+      html += `<option value="${p.name} (${p.code}) - Fiyat: ₺${p.price.toFixed(2)}">`;
     });
-  }
-
-  function handleManagerAssignTask(e) {
-    e.preventDefault();
-    if(currentRole !== 'admin') return;
-    
-    const text = document.getElementById('m-task-desc').value.trim();
-    const person = document.getElementById('m-task-person').value;
-    
-    if(!text) return;
-    
-    dbTasks.push({
-      text: text,
-      person: person,
-      category: "Yönetici Talimatı",
-      status: "Bekliyor",
-      time: "-"
-    }, (err) => {
-      if(!err) {
-        document.getElementById('m-task-desc').value = '';
-        showToast("Görev başarıyla eklendi!");
-      }
-    });
-  }
-
-  function toggleTaskStatus(taskId) {
-    if(currentRole !== 'admin' && currentRole !== 'staff') return;
-    const task = tasksData[taskId];
-    if(!task) return;
-    
-    const newStatus = task.status === 'Tamamlandı' ? 'Bekliyor' : 'Tamamlandı';
-    const newTime = newStatus === 'Tamamlandı' ? new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}) : '-';
-    
-    dbTasks.child(taskId).update({
-      status: newStatus,
-      time: newTime
-    }, (err) => {
-      if(!err) {
-        showToast(newStatus === 'Tamamlandı' ? "Görev tamamlandı olarak işaretlendi! ✅" : "Görev durumu güncellendi.");
-      }
-    });
-  }
-
-  function deleteTask(taskId) {
-    if(currentRole !== 'admin') return;
-    if(confirm("Bu görevi silmek istediğinize emin misiniz?")) {
-      dbTasks.child(taskId).remove();
-      showToast("Görev silindi.");
-    }
-  }
-
-  function toggleSelectAllTasks(masterCheckbox) {
-    selectedTaskIds.clear();
-    if (masterCheckbox.checked) {
-      Object.keys(tasksData).forEach(id => selectedTaskIds.add(id));
-    }
-    renderTasks();
-  }
-
-  function toggleTaskSelection(taskId, checkbox) {
-    if (checkbox.checked) {
-      selectedTaskIds.add(taskId);
-    } else {
-      selectedTaskIds.delete(taskId);
-    }
-    updateBulkDeleteUI();
-
-    const master = document.getElementById('select-all-tasks');
-    const allKeys = Object.keys(tasksData);
-    if (master) {
-      master.checked = allKeys.length > 0 && allKeys.every(k => selectedTaskIds.has(k));
-    }
-  }
-
-  function updateBulkDeleteUI() {
-    const actionContainer = document.getElementById('bulk-task-actions');
-    const bulkBtn = document.getElementById('bulk-del-btn');
-    const countSpan = document.getElementById('selected-task-count');
-    
-    if (!actionContainer || !bulkBtn) return;
-
-    if (currentRole === 'admin') {
-      actionContainer.style.display = 'flex';
-      countSpan.textContent = `${selectedTaskIds.size} görev seçildi`;
-      if (selectedTaskIds.size > 0) {
-        bulkBtn.style.display = 'inline-block';
-      } else {
-        bulkBtn.style.display = 'none';
-      }
-    } else {
-      actionContainer.style.display = 'none';
-    }
-  }
-
-  function deleteSelectedTasks() {
-    if (currentRole !== 'admin') return;
-    if (selectedTaskIds.size === 0) return;
-
-    if (confirm(`Seçilen ${selectedTaskIds.size} görevi kalıcı olarak silmek istediğinize emin misiniz?`)) {
-      const updates = {};
-      selectedTaskIds.forEach(id => {
-        updates[id] = null;
-      });
-
-      dbTasks.update(updates, (err) => {
-        if (!err) {
-          showToast(`${selectedTaskIds.size} görev silindi.`);
-          selectedTaskIds.clear();
-          renderTasks();
-        }
-      });
-    }
-  }
-
-  function renderTasks() {
-    const tbody = document.getElementById('tasks-table-body');
-    if(!tbody) return;
-    tbody.innerHTML = '';
-    
-    const keys = Object.keys(tasksData);
-    selectedTaskIds.forEach(id => { if(!tasksData[id]) selectedTaskIds.delete(id); });
-    updateBulkDeleteUI();
-
-    if(keys.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:var(--steel);">Kayıtlı görev bulunmuyor.</td></tr>`;
-      const master = document.getElementById('select-all-tasks');
-      if(master) master.checked = false;
-      return;
-    }
-    
-    keys.reverse().forEach(key => {
-      const t = tasksData[key];
-      const isDone = t.status === 'Tamamlandı';
-      const isSelected = selectedTaskIds.has(key);
-      const isAdmin = currentRole === 'admin';
-      
-      tbody.innerHTML += `
-        <tr style="border-bottom:1px dashed var(--steel-line);">
-          <td style="padding:10px 4px; text-align:center;">
-            <input type="checkbox" value="${key}" ${isSelected ? 'checked' : ''} onclick="toggleTaskSelection('${key}', this)">
-          </td>
-          <td style="padding:10px 4px;">
-            <strong>${t.text}</strong><br>
-            <span style="font-size:10px; color:var(--steel);">Kategori: ${t.category || 'Genel'}</span>
-          </td>
-          <td style="padding:10px 4px; font-weight:500;">${t.person}</td>
-          <td style="padding:10px 4px;">
-            ${isDone ? `<span style="color:var(--success); font-weight:bold; font-size:12px;">✅ Tamamlandı (${t.time})</span>` : `<span style="color:var(--rust); font-weight:bold; font-size:12px;">⏳ Bekliyor</span>`}
-          </td>
-          <td style="padding:10px 4px; text-align:center; white-space:nowrap;">
-            <button class="btn btn-sm ${isDone ? 'btn-success' : 'btn-dark'}" onclick="toggleTaskStatus('${key}')">
-              ${isDone ? '✅ Tamamlandı (Geri Al)' : '🔲 Yeşil Tik İle Bitir'}
-            </button>
-            ${isAdmin ? `<button class="sm-btn" onclick="deleteTask('${key}')" style="color:var(--rust); margin-left:8px;">Sil</button>` : ''}
-          </td>
-        </tr>
-      `;
-    });
-
-    const master = document.getElementById('select-all-tasks');
-    if(master) {
-      master.checked = keys.length > 0 && keys.every(k => selectedTaskIds.has(k));
-    }
-  }
-
-  function updateOrderProductList() {
-    const dl = document.getElementById('order-product-list');
-    if(!dl) return;
-    dl.innerHTML = '';
-    Object.values(productsData).forEach(p => {
-        const opt = document.createElement('option');
-        opt.value = `${p.code} - ${p.name}`;
-        dl.appendChild(opt);
-    });
+    datalist.innerHTML = html;
   }
 
   function addToCart() {
-    if(currentRole !== 'admin' && currentRole !== 'staff') return;
     const inputVal = document.getElementById('cart-product').value;
-    const qty = parseFloat(document.getElementById('cart-qty').value);
-    
-    if(!inputVal || isNaN(qty) || qty <= 0) {
-      alert("Lütfen geçerli bir ürün ve miktar girin.");
-      return;
+    const qtyVal = parseFloat(document.getElementById('cart-qty').value) || 1;
+    if (!inputVal) return;
+
+    let prod = products.find(p => inputVal.includes(p.code) || inputVal.includes(p.name));
+    if (!prod) { alert('Ürün bulunamadı!'); return; }
+    if (prod.qty < qtyVal) { alert(`Stokta yeterli miktar yok! (Mevcut: ${prod.qty})`); return; }
+
+    let cartItem = cart.find(c => c.id === prod.id);
+    if (cartItem) cartItem.cartQty += qtyVal;
+    else {
+      cart.push({ id: prod.id, name: prod.name, code: prod.code, price: prod.price, vat: prod.vat, unit: prod.unit, cartQty: qtyVal });
     }
-    
-    const code = inputVal.split(' - ')[0].trim();
-    const p = productsData[code];
-    
-    if(!p) { alert("Ürün bulunamadı! Lütfen listeden seçin."); return; }
-    
-    const existingIndex = cart.findIndex(item => item.code === code);
-    if(existingIndex !== -1) {
-        cart[existingIndex].qty += qty;
-        cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
-    } else {
-        const price = Number(p.price || 0);
-        cart.push({ code: p.code, name: p.name, price: price, qty: qty, unit: p.unit || 'Adet', total: price * qty });
-    }
-    
+
     document.getElementById('cart-product').value = '';
     document.getElementById('cart-qty').value = '1';
     renderCart();
-    showToast("Ürün sepete eklendi!");
   }
 
   function renderCart() {
     const container = document.getElementById('cart-container');
     const tbody = document.getElementById('cart-items');
-    
-    if(cart.length === 0) { container.style.display = 'none'; return; }
-    
+    const totalEl = document.getElementById('cart-total');
+    if (!container || !tbody) return;
+
+    if (cart.length === 0) { container.style.display = 'none'; return; }
     container.style.display = 'block';
-    tbody.innerHTML = '';
-    let grandTotal = 0;
-    
+
+    let html = '';
+    let genTotal = 0;
     cart.forEach((item, index) => {
-        grandTotal += item.total;
-        tbody.innerHTML += `
-          <tr style="border-bottom:1px dashed var(--steel-line);">
-            <td style="padding:10px 0; line-height:1.3;">
-              <strong>${item.name}</strong><br>
-              <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code}</small>
-            </td>
-            <td>₺${formatMoney(item.price)}</td>
-            <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
-            <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
-            <td><button class="btn btn-dark btn-sm" onclick="removeFromCart(${index})">Çıkar</button></td>
-          </tr>
-        `;
+      let subtotal = item.price * item.cartQty * (1 + (item.vat / 100));
+      genTotal += subtotal;
+      html += `
+        <tr style="border-bottom:1px solid var(--steel-line);">
+          <td style="padding:6px 0;"><b>${item.name}</b><br><small>${item.code}</small></td>
+          <td>₺${item.price.toFixed(2)}</td>
+          <td>${item.cartQty} ${item.unit}</td>
+          <td>₺${subtotal.toFixed(2)}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="removeFromCart(${index})">X</button></td>
+        </tr>
+      `;
     });
-    
-    document.getElementById('cart-total').textContent = "₺" + formatMoney(grandTotal);
+    tbody.innerHTML = html;
+    totalEl.innerText = '₺' + genTotal.toLocaleString('tr-TR', {minimumFractionDigits: 2});
   }
 
   function removeFromCart(index) {
@@ -1848,599 +1752,270 @@
     renderCart();
   }
 
-  async function completeOrder() {
-    if(cart.length === 0) return;
-    
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-    const orderId = "SATIŞ-" + new Date().getTime();
-    
-    let grandTotal = 0;
-    cart.forEach(i => grandTotal += i.total);
-    
+  function completeOrder() {
+    if (cart.length === 0) return;
+    let totalAmount = 0;
     cart.forEach(item => {
-      if(!productsData[item.code]) return;
-      let appliedChange = 0;
-      db.child(item.code).child('qty').transaction((currentQty) => {
-        const cur = Number(currentQty || 0);
-        const next = Math.max(0, cur - item.qty);
-        appliedChange = next - cur;
-        return next;
-      }, (error, committed) => {
-        if (error) { console.error(error); return; }
-        if (committed && appliedChange !== 0) {
-          logMovement(item.code, item.name, appliedChange, 'SATIŞ YAPILDI (SEPET)');
-        }
-      });
+      let subtotal = item.price * item.cartQty * (1 + (item.vat / 100));
+      totalAmount += subtotal;
+      let p = products.find(x => x.id === item.id);
+      if (p) p.qty = Math.max(0, p.qty - item.cartQty);
     });
 
-    const orderData = { time: timeStr, items: cart, total: grandTotal };
-    
-    dbOrders.child(dateStr).child(orderId).set(orderData, async (err) => {
-        if(!err) {
-            // Kullanıcıya satış için Excel dosyası çıkarılsın mı diye soruyoruz
-            if(confirm("Satış başarıyla tamamlandı. Bu satış için Excel raporu oluşturulsun ve kaydedilsin mi?")) {
-                await generateOrderExcel(orderData, orderId, dateStr);
-            }
-            
-            if(confirm("Müşteri için termal fiş basılsın mı?")) {
-              printThermalReceipt(cart, grandTotal);
-            }
-            
-            cart = [];
-            renderCart();
-            renderGrid();
-            showToast("Satış ve sepet işlemleri başarıyla tamamlandı!");
-        }
-    });
-  }
-
-  async function generateOrderExcel(order, orderId, dateStr) {
-    const dataRow = [["Sıra", "Ürün Kodu", "Ürün Adı", "Birim Fiyat", "Miktar", "Toplam"]];
-    order.items.forEach((item, idx) => {
-        dataRow.push([idx+1, item.code, item.name, item.price, item.qty, item.total]);
-    });
-    dataRow.push(["", "", "", "", "GENEL TOPLAM:", order.total]);
-
-    const ws = XLSX.utils.aoa_to_sheet(dataRow);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Satis");
-    
-    await saveExcelFile(wb, `Reyhani_Satis_${dateStr}_${orderId}.xlsx`);
-  }
-
-  async function downloadOrderById(orderId) {
-    const target = globalPastOrders[orderId];
-    if(target) {
-      if(confirm("Bu geçmiş satış için Excel raporu tekrar indirilsin mi?")) {
-        await generateOrderExcel(target.orderData, orderId, target.date);
-      }
-    } else {
-      alert("Bu satışın detayları bulunamadı.");
-    }
-  }
-
-  function renderGrid() {
-    const grid = document.getElementById('grid');
-    const search = document.getElementById('search').value.toLowerCase();
-    grid.innerHTML = '';
-    
-    let count = 0, units = 0, value = 0;
-    const canEdit = (currentRole === 'admin' || currentRole === 'staff');
-    const isAdmin = (currentRole === 'admin');
-    const currentBaseUrl = window.location.href.split('?')[0];
-    const matchedCodes = [];
-
-    Object.values(productsData).forEach(p => {
-      const pName = p.name ? p.name.toLowerCase() : '';
-      const pCat = p.category ? p.category.toLowerCase() : '';
-      const pCode = p.code ? p.code.toLowerCase() : '';
-      const pLoc = p.location ? p.location.toLowerCase() : '';
-      const pBrand = p.brand ? p.brand.toLowerCase() : '';
-      
-      if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
-        count++;
-        units += parseFloat(p.qty || 0);
-        
-        // ENVANTER DEĞERİ (MALİYET) HESAPLAMA
-        const itemCost = p.costPrice != null ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
-        value += parseFloat(p.qty || 0) * itemCost;
-        
-        matchedCodes.push(p.code);
-        const isLow = p.qty <= 5;
-        
-        let editActions = '';
-        if (canEdit) {
-          editActions = `
-            <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--steel-line); padding-top:8px;">
-              <button class="sm-btn" onclick="openEditModal('${p.code}')">✏️ Düzenle</button>
-              ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--rust);">🗑️ Sil</button>` : ''}
-            </div>
-          `;
-        }
-
-        grid.innerHTML += `
-          <div class="tag ${isLow ? 'low' : ''}" id="card-${p.code}">
-            <div class="tag-header">
-              <div>
-                <div class="tag-title">${p.name}</div>
-                <div class="tag-code">${p.code} • ${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
-              </div>
-              <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
-            </div>
-
-            <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
-            <button class="qr-toggle-link" onclick="toggleQR('${p.code}')">🔳 Karekodu Görüntüle</button>
-            <div class="qr-box-mini hidden" id="grid-qr-${p.code}"></div>
-
-            <div class="price-info-box">
-               <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
-               <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
-            </div>
-
-            <div class="qty-control">
-              <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
-              <div class="qty-val">${p.qty} <span style="font-size:10px;font-family:'Inter';color:var(--steel);">${p.unit || 'Adet'}</span></div>
-              <button class="qty-btn" onclick="updateQty('${p.code}', 1)" ${!canEdit ? 'disabled' : ''}>+</button>
-            </div>
-            ${editActions}
-          </div>
-        `;
-      }
-    });
-
-    matchedCodes.forEach(code => loadProductImageIntoCard(code));
-
-    document.getElementById('sum-count').textContent = count;
-    document.getElementById('sum-units').textContent = units.toFixed(1);
-    document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
-  }
-
-  function addProduct() {
-    if(currentRole !== 'admin') return;
-    const name = document.getElementById('f-name').value.trim();
-    const qty = parseFloat(document.getElementById('f-qty').value) || 0;
-    const price = parseFloat(document.getElementById('f-price').value) || 0;
-    const unit = document.getElementById('f-unit').value;
-    let code = document.getElementById('f-code').value.trim().toUpperCase();
-    const category = document.getElementById('f-category').value;
-    const brand = document.getElementById('f-brand').value;
-    const costPriceRaw = document.getElementById('f-cost-price').value;
-    const costPrice = costPriceRaw === '' ? null : Math.max(0, parseFloat(costPriceRaw) || 0);
-    const vat = parseFloat(document.getElementById('f-vat').value) || 0;
-    
-    if(!name) { alert("Lütfen ürün adını giriniz."); return; }
-    if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
-
-    db.child(code).once('value', snapshot => {
-       if(snapshot.exists()) {
-           alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor!`);
-       } else {
-           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, vat, code, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (error) => {
-             if(!error) {
-               if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
-               dbNotifications.push({
-                 text: `Yeni Ürün Eklendi: ${name} (${qty} ${unit}) - Kategori: ${category}`,
-                 time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
-               });
-               showToast("Ürün eklendi ve bildirim gönderildi!");
-               document.getElementById('f-name').value = ''; 
-               document.getElementById('f-qty').value = ''; 
-               document.getElementById('f-price').value = ''; 
-               document.getElementById('f-code').value = '';
-               document.getElementById('f-vat').value = '';
-               document.getElementById('f-profit').value = '';
-               document.getElementById('f-cost-price').value = '';
-               document.getElementById('f-cost-calc').innerHTML = '';
-               document.getElementById('f-cost-calc').classList.remove('active');
-             } else {
-               alert("Kaydedilemedi: " + error.message);
-             }
-           });
-       }
-    });
-  }
-
-  function updateQty(code, change) {
-    if (currentRole !== 'admin' && currentRole !== 'staff') return;
-    const now = Date.now();
-    if (actionCooldowns[code] && now - actionCooldowns[code] < 500) return;
-    actionCooldowns[code] = now;
-
-    db.child(code).child('qty').transaction((currentQty) => {
-      const cur = Number(currentQty || 0);
-      const next = cur + change;
-      return next < 0 ? 0 : next;
-    }, (error, committed, snapshot) => {
-      if (error) { alert("Hata: " + error.message); return; }
-      if (committed) {
-        const p = productsData[code];
-        if (p) logMovement(code, p.name, change, change > 0 ? 'STOK EKLENDİ' : 'STOK DÜŞÜLDÜ');
-      }
-    });
-  }
-
-  function updatePrice(code) {
-    if (currentRole !== 'admin') return;
-    const p = productsData[code];
-    if (!p) return;
-    const newPrice = prompt(`${p.name} için yeni fiyatı giriniz (₺):`, p.price);
-    if (newPrice === null) return;
-    const parsed = parseFloat(newPrice);
-    if (!isNaN(parsed) && parsed >= 0) {
-      db.child(code).update({ price: parsed, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (err) => {
-        if (!err) showToast("Fiyat güncellendi!");
-      });
-    }
-  }
-
-  function openEditModal(code) {
-    if (currentRole !== 'admin' && currentRole !== 'staff') return;
-    const p = productsData[code];
-    if (!p) return;
-    
-    document.getElementById('edit-code').value = p.code;
-    document.getElementById('edit-name').value = p.name || '';
-    document.getElementById('edit-qty').value = p.qty || 0;
-    document.getElementById('edit-price').value = p.price || 0;
-    document.getElementById('edit-unit').value = p.unit || 'Adet';
-    document.getElementById('edit-category').value = p.category || 'Diğer';
-    
-    // KDV and Profit
-    document.getElementById('edit-vat').value = p.vat || 0;
-    
-    const priceInput = document.getElementById('edit-price');
-    const priceLockNote = document.getElementById('price-lock-note');
-    if (currentRole === 'staff') {
-      priceInput.readOnly = true;
-      priceInput.style.backgroundColor = '#e9ecef';
-      priceLockNote.style.display = 'inline';
-      document.getElementById('edit-cost-section').style.display = 'none';
-    } else {
-      priceInput.readOnly = false;
-      priceInput.style.backgroundColor = '#FCFBF9';
-      priceLockNote.style.display = 'none';
-      document.getElementById('edit-cost-section').style.display = 'block';
-    }
-
-    populateBrandSelect('edit-brand', p.brand);
-    document.getElementById('edit-cost-price').value = p.costPrice != null ? p.costPrice : '';
-    updateCostCalc('edit');
-
-    const standSel = document.getElementById('edit-stand');
-    const stands = layoutData.stands || {};
-    standSel.innerHTML = '<option value="">Atanmamış</option>' + Object.keys(stands).sort().map(l => `<option value="${l}">${l} (${stands[l].label || ''})</option>`).join('');
-    
-    if (p.location) {
-      const parts = p.location.split('-');
-      standSel.value = parts[0] || '';
-      document.getElementById('edit-slot').value = parts[1] || '';
-    } else {
-      standSel.value = '';
-      document.getElementById('edit-slot').value = '';
-    }
-    updateSlotMax();
-    updateEditProfit();
-
-    document.getElementById('edit-photo-status').textContent = '';
-    if (imageCache[p.code]) {
-      setEditPhotoPreview(imageCache[p.code]);
-    } else {
-      setEditPhotoPreview(null);
-      dbProductImages.child(p.code).once('value', snap => {
-        const val = snap.val();
-        imageCache[p.code] = val || null;
-        setEditPhotoPreview(imageCache[p.code]);
-      });
-    }
-
-    if (p.lastPriceUpdate) {
-      const d = new Date(p.lastPriceUpdate);
-      document.getElementById('edit-last-update-note').textContent = `Son Güncelleme: ${d.toLocaleString('tr-TR')} (${p.lastUpdatedBy || 'Bilinmiyor'})`;
-      document.getElementById('edit-last-update-note').style.display = 'block';
-    } else {
-      document.getElementById('edit-last-update-note').style.display = 'none';
-    }
-
-    document.getElementById('edit-modal').style.display = 'flex';
-  }
-
-  function closeEditModal() {
-    document.getElementById('edit-modal').style.display = 'none';
-    pendingImageDataUrl = null;
-  }
-
-  function updateSlotMax() {
-    const standLetter = document.getElementById('edit-stand').value;
-    const slotInput = document.getElementById('edit-slot');
-    if (!standLetter) { slotInput.value = ''; slotInput.disabled = true; return; }
-    slotInput.disabled = false;
-    const s = layoutData.stands[standLetter];
-    if (s && s.slotCount) {
-      slotInput.max = s.slotCount;
-      slotInput.placeholder = `1 - ${s.slotCount}`;
-    }
-  }
-
-  function saveEditProduct() {
-    const code = document.getElementById('edit-code').value;
-    if (!code) return;
-    const p = productsData[code];
-    if (!p) return;
-
-    const updates = {
-      name: document.getElementById('edit-name').value.trim(),
-      qty: parseFloat(document.getElementById('edit-qty').value) || 0,
-      unit: document.getElementById('edit-unit').value,
-      category: document.getElementById('edit-category').value,
-      brand: document.getElementById('edit-brand').value || null,
-      lastPriceUpdate: new Date().toISOString(),
-      lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+    const orderRecord = {
+      id: 'SPS-' + Date.now(),
+      date: new Date().toLocaleString('tr-TR'),
+      items: [...cart],
+      total: totalAmount
     };
 
-    if (currentRole === 'admin') {
-      updates.price = parseFloat(document.getElementById('edit-price').value) || 0;
-      updates.vat = parseFloat(document.getElementById('edit-vat').value) || 0;
-      const costRaw = document.getElementById('edit-cost-price').value;
-      updates.costPrice = costRaw === '' ? null : Math.max(0, parseFloat(costRaw) || 0);
-    }
+    if (!pastOrders) pastOrders = [];
+    pastOrders.unshift(orderRecord);
+    addRecentUpdate('Satış İşlemi', `Tutar: ₺${totalAmount.toFixed(2)}`);
 
-    const stand = document.getElementById('edit-stand').value;
-    const slot = document.getElementById('edit-slot').value;
-    if (stand && slot) updates.location = `${stand}-${slot}`;
-    else updates.location = null;
+    printThermalReceipt(orderRecord);
+    cart = [];
+    saveDataToFirebase();
+    renderCart();
+    showToast('Satış tamamlandı.');
+  }
 
-    db.child(code).update(updates, (err) => {
-      if (!err) {
-        showToast("Ürün güncellendi!");
-        closeEditModal();
-        if (pendingImageDataUrl) { refreshCardPhoto(code); pendingImageDataUrl = null; }
-      }
+  function printThermalReceipt(order) {
+    document.getElementById('t-date').innerText = order.date.split(' ')[0];
+    document.getElementById('t-time').innerText = order.date.split(' ')[1] || '';
+    
+    let tbody = document.getElementById('t-items');
+    let html = '';
+    order.items.forEach(i => {
+      let sub = i.price * i.cartQty * (1 + (i.vat / 100));
+      html += `<tr><td>${i.name}</td><td style="text-align:center;">${i.cartQty}</td><td style="text-align:right;">₺${i.price.toFixed(2)}</td><td style="text-align:right;">₺${sub.toFixed(2)}</td></tr>`;
     });
-  }
+    tbody.innerHTML = html;
+    document.getElementById('t-total').innerText = '₺' + order.total.toFixed(2);
 
-  function deleteProduct(code) {
-    if (currentRole !== 'admin') return;
-    if (confirm("Bu ürünü silmek istediğinize emin misiniz?")) {
-      db.child(code).remove();
-      dbProductImages.child(code).remove();
-    }
-  }
-
-  function printQR(code) {
-    const p = productsData[code];
-    if (!p) return;
-    const printArea = document.getElementById('print-area');
-    const currentBaseUrl = window.location.href.split('?')[0];
-    
-    printArea.innerHTML = `
-      <div class="sticker-label">
-        <div class="sticker-title">${p.name}</div>
-        <div class="sticker-qr" id="print-qr-${p.code}"></div>
-        <div class="sticker-footer">
-          <span>${p.code}</span>
-          <span>₺${formatMoney(p.price)}</span>
-        </div>
-      </div>
-    `;
-    
-    new QRCode(document.getElementById(`print-qr-${p.code}`), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128 });
-    
-    document.body.className = 'printing-label';
+    document.body.classList.add('printing-receipt');
     setTimeout(() => {
       window.print();
-      document.body.className = '';
-    }, 300);
+      document.body.classList.remove('printing-receipt');
+    }, 400);
   }
 
-  function printAllLabels() {
-    if(currentRole !== 'admin' && currentRole !== 'staff') return;
-    const printArea = document.getElementById('print-area');
-    printArea.innerHTML = '';
-    const currentBaseUrl = window.location.href.split('?')[0];
-
-    const search = document.getElementById('search').value.toLowerCase();
-    const toPrint = Object.values(productsData).filter(p => {
-        const pName = p.name ? p.name.toLowerCase() : '';
-        const pCat = p.category ? p.category.toLowerCase() : '';
-        const pCode = p.code ? p.code.toLowerCase() : '';
-        return (pName.includes(search) || pCat.includes(search) || pCode.includes(search));
-    });
-
-    if(toPrint.length === 0) { alert("Yazdırılacak ürün bulunamadı!"); return; }
-    if(toPrint.length > 50) { if(!confirm(`${toPrint.length} adet etiket yazdırılacak, onaylıyor musunuz?`)) return; }
-
-    toPrint.forEach(p => {
-        const div = document.createElement('div');
-        div.className = 'sticker-label';
-        div.innerHTML = `
-            <div class="sticker-title">${p.name}</div>
-            <div class="sticker-qr" id="print-all-qr-${p.code}"></div>
-            <div class="sticker-footer">
-                <span>${p.code}</span>
-                <span>₺${formatMoney(p.price)}</span>
-            </div>
-        `;
-        printArea.appendChild(div);
-        new QRCode(div.querySelector('.sticker-qr'), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128 });
-    });
-
-    document.body.className = 'printing-label';
-    setTimeout(() => {
-      window.print();
-      document.body.className = '';
-    }, 500);
-  }
-
-  async function exportBackup() {
-    if(currentRole !== 'admin') return;
-    const dataRow = [["Ürün Kodu", "Ürün Adı", "Kategori", "Marka", "Miktar", "Birim", "Satış Fiyatı", "Geliş Fiyatı", "Konum", "Envanter (Maliyet)"]];
-    Object.values(productsData).forEach(p => {
-        const cost = p.costPrice != null ? p.costPrice : (p.price || 0);
-        dataRow.push([
-            p.code, p.name, p.category || '', p.brand || '', p.qty, p.unit || 'Adet',
-            p.price, p.costPrice || '', p.location || '', parseFloat(p.qty) * cost
-        ]);
-    });
-    const ws = XLSX.utils.aoa_to_sheet(dataRow);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Stok");
-    const dateStr = new Date().toISOString().slice(0,10);
-    await saveExcelFile(wb, `Reyhani_Stok_Yedek_${dateStr}.xlsx`);
-  }
-
-  function startScanner() {
-    if(html5QrcodeScanner) return;
-    html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-    html5QrcodeScanner.render((text) => {
-        let code = text;
-        if(text.includes('?item=')) {
-            code = text.split('?item=')[1];
-        }
-        document.getElementById('scan-result').innerHTML = `<p style="color:var(--success);font-weight:bold;">Okundu: ${code}</p>`;
-        
-        if (productsData[code]) {
-            switchTab('stok');
-            document.getElementById('search').value = code;
-            renderGrid();
-        } else {
-            document.getElementById('scan-result').innerHTML += `<p style="color:var(--rust);">Ürün sistemde bulunamadı.</p>`;
-        }
-    }, (err) => {});
-  }
-
-  function stopScanner() {
-    if(html5QrcodeScanner) {
-        html5QrcodeScanner.clear().catch(e => console.error(e));
-        html5QrcodeScanner = null;
+  function renderPastOrders() {
+    const container = document.getElementById('past-orders-list');
+    if (!container) return;
+    if (!pastOrders || pastOrders.length === 0) {
+      container.innerHTML = '<p style="font-size:13px; color:var(--steel);">Geçmiş satış bulunmuyor.</p>';
+      return;
     }
-  }
-
-  // WHOLESALERS
-  function addWholesaler() {
-    if(currentRole !== 'admin') return;
-    const name = document.getElementById('w-name').value.trim();
-    const phone = document.getElementById('w-phone').value.trim();
-    const day = document.getElementById('w-day').value;
-    
-    if(!name) { alert("Firma adı giriniz."); return; }
-    
-    dbWholesalers.push({ name, phone, day, balance: 0 }, (err) => {
-      if(!err) {
-        showToast("Toptancı eklendi!");
-        document.getElementById('w-name').value = '';
-        document.getElementById('w-phone').value = '';
-      }
-    });
-  }
-
-  function renderWholesalers() {
-    const grid = document.getElementById('wholesalers-grid');
-    if(!grid) return;
-    grid.innerHTML = '';
-    
-    Object.keys(wholesalersData).forEach(key => {
-      const w = wholesalersData[key];
-      const isNegative = w.balance < 0;
-      grid.innerHTML += `
-        <div class="tag">
-          <div class="tag-header">
-            <div>
-              <div class="tag-title">${w.name}</div>
-              <div class="tag-code">📞 ${w.phone || '-'} | 📅 Ziyaret: ${w.day}</div>
-            </div>
-            ${currentRole === 'admin' ? `<button class="sm-btn" style="color:var(--rust);" onclick="deleteWholesaler('${key}')">Sil</button>` : ''}
-          </div>
-          <div class="balance-box ${isNegative ? 'balance-negative' : 'balance-positive'}">
-            Bakiye: ₺${formatMoney(w.balance || 0)}
-          </div>
-          <div class="action-grid">
-            <button class="btn btn-success btn-sm" onclick="updateBalance('${key}', 1)">+ Ödeme Yap</button>
-            <button class="btn btn-danger btn-sm" onclick="updateBalance('${key}', -1)">- Borç Ekle</button>
-          </div>
+    let html = '';
+    pastOrders.forEach(o => {
+      html += `
+        <div class="form-card" style="padding:8px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+          <div><strong style="font-family:'IBM Plex Mono';">${o.id}</strong> — <span style="font-size:11px; color:var(--steel);">${o.date}</span></div>
+          <div style="text-align:right;"><span style="font-weight:bold; color:var(--success);">₺${o.total.toFixed(2)}</span> <button class="btn btn-dark btn-sm" onclick='printThermalReceipt(${JSON.stringify(o)})'>🖨️ Fiş</button></div>
         </div>
       `;
     });
+    container.innerHTML = html;
   }
 
-  function deleteWholesaler(key) {
-    if (currentRole !== 'admin') return;
-    const w = wholesalersData[key];
-    if (!confirm(`"${w ? w.name : ''}" toptancısını silmek istediğinize emin misiniz?`)) return;
-    dbWholesalers.child(key).remove(() => showToast("Toptancı silindi."));
-  }
-
-  function updateBalance(key, mult) {
-    if(currentRole !== 'admin') return;
-    const w = wholesalersData[key];
-    const amount = prompt(`${w.name} için ${mult > 0 ? 'yapılan ödeme' : 'eklenen borç'} tutarını giriniz (₺):`);
-    if(amount === null) return;
-    const parsed = parseFloat(amount);
-    
-    if(!isNaN(parsed) && parsed > 0) {
-      dbWholesalers.child(key).child('balance').transaction(cur => (cur || 0) + (parsed * mult), (err) => {
-        if(!err) showToast("Bakiye güncellendi.");
-      });
+  function clearSalesHistory() {
+    if (currentUserRole !== 'admin') { alert('Yetki gerekiyor!'); return; }
+    if (confirm('Temizlensin mi?')) {
+      pastOrders = [];
+      saveDataToFirebase();
+      showToast('Geçmiş temizlendi.');
     }
   }
 
-  // Z-REPORTS
+  // --- GÖREVLER ---
+  function handleManagerAssignTask(e) {
+    e.preventDefault();
+    if (currentUserRole !== 'admin') { alert('Yetki gerekiyor!'); return; }
+    const desc = document.getElementById('m-task-desc').value.trim();
+    const person = document.getElementById('m-task-person').value;
+    if (!desc) return;
+
+    tasks.push({ id: 'tsk-' + Date.now(), desc, person, status: 'Bekliyor', completed: false, date: new Date().toLocaleDateString('tr-TR') });
+    saveDataToFirebase();
+    document.getElementById('m-task-desc').value = '';
+    showToast('Görev atandı.');
+  }
+
+  function renderTasks() {
+    const tbody = document.getElementById('tasks-table-body');
+    if (!tbody) return;
+    const activeTasks = tasks.filter(t => t.status !== 'Bildirim');
+    if (activeTasks.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--steel); padding:10px;">Kayıtlı görev yok.</td></tr>';
+      return;
+    }
+    let html = '';
+    activeTasks.forEach(t => {
+      html += `
+        <tr style="border-bottom:1px solid var(--steel-line); ${t.completed ? 'background:#f1f8e9; text-decoration:line-through; color:var(--steel);' : ''}">
+          <td style="text-align:center;"><input type="checkbox" class="task-checkbox" data-id="${t.id}" onclick="updateBulkTaskSelection()"></td>
+          <td style="padding:6px 0;">${t.desc}</td>
+          <td><b>${t.person}</b></td>
+          <td>${t.completed ? 'Tamamlandı' : 'Bekliyor'}</td>
+          <td style="text-align:center;"><button class="btn btn-sm ${t.completed ? 'btn-dark' : 'btn-success'}" onclick="toggleTaskStatus('${t.id}')">${t.completed ? 'Geri Al' : 'Tamamla'}</button></td>
+        </tr>
+      `;
+    });
+    tbody.innerHTML = html;
+  }
+
+  function toggleTaskStatus(id) {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    t.completed = !t.completed;
+    saveDataToFirebase();
+  }
+
+  function toggleSelectAllTasks(master) {
+    document.querySelectorAll('.task-checkbox').forEach(cb => cb.checked = master.checked);
+    updateBulkTaskSelection();
+  }
+
+  function updateBulkTaskSelection() {
+    const checkboxes = document.querySelectorAll('.task-checkbox:checked');
+    const bulkDiv = document.getElementById('bulk-task-actions');
+    if (checkboxes.length > 0) {
+      bulkDiv.style.display = 'flex';
+      document.getElementById('selected-task-count').innerText = checkboxes.length + ' görev seçildi';
+    } else { bulkDiv.style.display = 'none'; }
+  }
+
+  function deleteSelectedTasks() {
+    if (currentUserRole !== 'admin') return;
+    const ids = Array.from(document.querySelectorAll('.task-checkbox:checked')).map(cb => cb.getAttribute('data-id'));
+    tasks = tasks.filter(t => !ids.includes(t.id));
+    saveDataToFirebase();
+    showToast('Görevler silindi.');
+  }
+
+  // --- KROKİ ---
+  function toggleStandForm() {
+    const form = document.getElementById('stand-form-card');
+    if (form) form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  }
+
+  function addStand() {
+    if (currentUserRole === 'guest') return;
+    const letter = document.getElementById('ns-letter').value.trim().toUpperCase();
+    const slots = parseInt(document.getElementById('ns-slots').value) || 10;
+    const label = document.getElementById('ns-label').value.trim();
+    if (!letter) return;
+
+    stands.push({ id: Date.now().toString(), letter, slots, label });
+    saveDataToFirebase();
+    document.getElementById('ns-letter').value = '';
+    showToast('Stand eklendi.');
+  }
+
+  function renderLayoutGrid() {
+    const grid = document.getElementById('layout-grid');
+    if (!grid) return;
+    if (stands.length === 0) {
+      grid.innerHTML = '<p style="grid-column:1/-1; text-align:center; color:var(--steel);">Stand yok.</p>';
+      return;
+    }
+    let html = '';
+    stands.forEach(s => {
+      let count = products.filter(p => p.stand === s.letter).length;
+      html += `
+        <div style="background:#fff; border:1px solid var(--steel-line); padding:12px; border-radius:4px; cursor:pointer;" onclick="openStandDetailModal('${s.letter}')">
+          <div style="font-family:'Oswald'; font-size:18px;">Stand ${s.letter}</div>
+          <div style="font-size:12px; color:var(--steel);">${s.label || ''}</div>
+          <div style="font-size:11px; margin-top:6px; font-weight:600;">${count} Ürün</div>
+        </div>
+      `;
+    });
+    grid.innerHTML = html;
+  }
+
+  function openStandDetailModal(standLetter) {
+    const s = stands.find(x => x.letter === standLetter);
+    if (!s) return;
+    document.getElementById('stand-detail-title').innerText = `Stand ${s.letter} Detayı`;
+    let body = `<div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">`;
+    for (let i = 1; i <= s.slots; i++) {
+      let prod = products.find(p => p.stand === s.letter && parseInt(p.slot) === i);
+      body += `<div style="background:#f8fafc; border:1px solid #ddd; padding:8px; border-radius:4px; font-size:11px;"><b>#${i}</b><br>${prod ? prod.name : 'Boş'}</div>`;
+    }
+    body += `</div>`;
+    document.getElementById('stand-detail-body').innerHTML = body;
+    document.getElementById('stand-detail-modal').style.display = 'flex';
+  }
+
+  function closeStandDetail() {
+    document.getElementById('stand-detail-modal').style.display = 'none';
+  }
+
+  function findProductLocation() {
+    const q = document.getElementById('layout-search').value.toLowerCase();
+    const resDiv = document.getElementById('layout-search-result');
+    if (!q) { resDiv.innerHTML = ''; return; }
+    let found = products.filter(p => p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q));
+    let html = '';
+    found.forEach(p => {
+      html += `<div style="background:#fff; padding:6px; margin-top:4px; font-size:12px; border:1px solid #ddd;"><b>${p.name}</b> — Stand: <b>${p.stand || 'Yok'}</b>, Bölme: <b>#${p.slot || 'Yok'}</b></div>`;
+    });
+    resDiv.innerHTML = html;
+  }
+
+  // --- Z RAPORU ---
   function generateDailyZReport() {
-    if(currentRole !== 'admin') { alert("Sadece yönetici Z raporu oluşturabilir."); return; }
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const timeStr = new Date().toLocaleTimeString('tr-TR');
-    
-    let totalSales = 0;
-    if (globalPastOrders) {
-       Object.values(globalPastOrders).forEach(o => {
-         if (o.date === dateStr) {
-           totalSales += o.orderData.total;
-         }
-       });
-    }
-    
-    const reportData = {
-      date: dateStr,
-      time: timeStr,
-      malGirisi: 0,
-      malCikisi: 0,
-      paraGirisi: totalSales,
-      paraCikisi: 0,
-      movements: movementsData[dateStr] || {}
+    if (currentUserRole !== 'admin') { alert('Yetki gerekiyor!'); return; }
+    let totalUnits = products.reduce((acc, p) => acc + (parseFloat(p.qty) || 0), 0);
+    let inventoryCost = products.reduce((acc, p) => acc + ((parseFloat(p.costPrice) || 0) * (parseFloat(p.qty) || 0)), 0);
+    let todayStr = new Date().toLocaleDateString('tr-TR');
+    let todayOrders = pastOrders.filter(o => o.date.includes(todayStr));
+    let todaySalesTotal = todayOrders.reduce((acc, o) => acc + o.total, 0);
+
+    const zReport = {
+      id: 'Z-' + Date.now(),
+      date: todayStr,
+      productCount: products.length,
+      totalUnits,
+      inventoryCost,
+      todaySalesCount: todayOrders.length,
+      todaySalesTotal
     };
 
-    dbZReports.child(dateStr).set(reportData, (err) => {
-      if(!err) {
-        showToast("Bugünün Z Raporu oluşturuldu ve arşivlendi!");
-      } else {
-        alert("Z Raporu oluşturulurken hata oluştu.");
-      }
-    });
+    if (!pastZReports) pastZReports = [];
+    pastZReports.unshift(zReport);
+    saveDataToFirebase();
+    renderPastZReports();
+    showToast('Z Raporu oluşturuldu.');
   }
 
-  async function downloadZReportByDate(dateStr) {
-    const report = globalZReports[dateStr];
-    if(!report) { alert("Rapor bulunamadı."); return; }
-    
-    const dataRow = [["Saat", "Ürün Kodu", "Ürün Adı", "Değişim", "İşlem Tipi"]];
-    if(report.movements) {
-      Object.values(report.movements).forEach(m => {
-        dataRow.push([m.time, m.code, m.name, m.change, m.type]);
-      });
-    } else {
-      dataRow.push(["", "", "Bu tarihte hareket yok", "", ""]);
+  function renderPastZReports() {
+    const container = document.getElementById('past-z-reports-list');
+    if (!container) return;
+    if (!pastZReports || pastZReports.length === 0) {
+      container.innerHTML = '<p style="font-size:13px; color:var(--steel);">Rapor yok.</p>';
+      return;
     }
-    
-    dataRow.push(["", "", "", "", ""]);
-    dataRow.push(["ÖZET BİLGİLER", "", "", "", ""]);
-    dataRow.push(["Para Girişi (Satışlar)", "₺" + report.paraGirisi, "", "", ""]);
-    
-    const ws = XLSX.utils.aoa_to_sheet(dataRow);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Z Raporu " + dateStr);
-    
-    await saveExcelFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
+    let html = '';
+    pastZReports.forEach(z => {
+      html += `
+        <div class="form-card" style="padding:10px; margin-bottom:6px; font-size:12px;">
+          <b>${z.id}</b> — ${z.date} | Satış: <b style="color:var(--success);">₺${z.todaySalesTotal.toFixed(2)}</b> (${z.todaySalesCount} işlem)
+        </div>
+      `;
+    });
+    container.innerHTML = html;
+  }
+
+  function showToast(msg) {
+    const toast = document.getElementById('toast');
+    if (!toast) return;
+    toast.innerText = msg;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3000);
   }
 </script>
+
 </body>
 </html>
