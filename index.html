@@ -276,23 +276,13 @@
           <div><label>Miktar</label><input type="number" id="f-qty" placeholder="0" step="any"></div>
         </div>
         <div class="form-row">
-          <div><label>Birim Fiyat (₺)</label><input type="number" id="f-price" step="0.01" placeholder="0.00" oninput="updateAddProfit()"></div>
+          <div><label>Birim Fiyat (₺)</label><input type="number" id="f-price" step="0.01" placeholder="0.00"></div>
           <div><label>Ölçü Birimi</label>
             <select id="f-unit">
               <option value="Adet">Adet</option>
               <option value="Kilogram">Kilogram</option>
               <option value="Metre">Metre</option>
             </select>
-          </div>
-        </div>
-        <div class="form-row" style="grid-template-columns: 1fr 1fr;">
-          <div>
-            <label>KDV Oranı (%)</label>
-            <input type="number" id="f-vat" step="0.01" placeholder="0" oninput="updateAddProfit()">
-          </div>
-          <div>
-            <label>Yüzdelik Kar (%)</label>
-            <input type="text" id="f-profit" readonly placeholder="Otomatik Hesaplanır" style="background:#e9ecef; font-weight:bold;">
           </div>
         </div>
         <div class="form-row" style="grid-template-columns: 1fr 1fr; margin-bottom:10px;">
@@ -320,6 +310,23 @@
             <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— maliyet, satış fiyatından farklı</span></label>
             <input type="number" id="f-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('f'); updateAddProfit();">
             <div class="cost-calc-box" id="f-cost-calc"></div>
+          </div>
+        </div>
+        <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label>KDV Oranı (%)</label>
+            <input type="number" id="f-vat" step="0.01" placeholder="0" oninput="updateAddProfit()">
+          </div>
+          <div>
+            <label>Hedef Kâr (%)</label>
+            <input type="number" id="f-profit" step="0.01" placeholder="Örn: 25" oninput="updateAddProfit()">
+          </div>
+        </div>
+        <div class="form-row" style="grid-template-columns: 1fr; margin-bottom:10px;">
+          <div>
+            <label>Önerilen Satış Fiyatı</label>
+            <input type="text" id="f-suggested-price" readonly placeholder="Geliş fiyatı ve kâr girin" style="background:#e9ecef; font-weight:bold;">
+            <button type="button" class="sm-btn" onclick="applySuggestedPrice('f')" style="margin-top:6px;">↳ Bu Fiyatı Birim Fiyata Uygula</button>
           </div>
         </div>
         <div style="margin-bottom:12px;">
@@ -594,7 +601,7 @@
       <div><label>Miktar</label><input type="number" id="edit-qty" step="any"></div>
     </div>
     <div class="form-row">
-      <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--rust); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01" oninput="updateEditProfit()"></div>
+      <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--rust); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01"></div>
       <div><label>Ölçü Birimi</label>
         <select id="edit-unit">
           <option value="Adet">Adet</option>
@@ -620,20 +627,11 @@
         </select>
       </div>
     </div>
-    <div class="form-row" style="grid-template-columns: 1fr;">
-      <div><label>Marka / Katalog Grubu <span style="text-transform:none; color:var(--steel); font-size:9px;">— çalışan da değiştirebilir</span></label>
-        <select id="edit-brand" onchange="updateCostCalc('edit')"></select>
-      </div>
-    </div>
     <div id="edit-cost-section" style="display:none;">
-      <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+      <div class="form-row" style="grid-template-columns: 1fr;">
         <div>
-          <label>KDV Oranı (%) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici</span></label>
-          <input type="number" id="edit-vat" step="0.01" placeholder="0" oninput="updateEditProfit()">
-        </div>
-        <div>
-          <label>Yüzdelik Kar (%)</label>
-          <input type="text" id="edit-profit" readonly placeholder="Otomatik Hesaplanır" style="background:#e9ecef; font-weight:bold;">
+          <label>Marka / Katalog Grubu <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici</span></label>
+          <select id="edit-brand" onchange="updateCostCalc('edit')"></select>
         </div>
       </div>
       <div class="form-row" style="grid-template-columns: 1fr;">
@@ -641,6 +639,23 @@
           <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici, satış fiyatından farklı</span></label>
           <input type="number" id="edit-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('edit'); updateEditProfit();">
           <div class="cost-calc-box" id="edit-cost-calc"></div>
+        </div>
+      </div>
+      <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+        <div>
+          <label>KDV Oranı (%)</label>
+          <input type="number" id="edit-vat" step="0.01" placeholder="0" oninput="updateEditProfit()">
+        </div>
+        <div>
+          <label>Hedef Kâr (%)</label>
+          <input type="number" id="edit-profit" step="0.01" placeholder="Örn: 25" oninput="updateEditProfit()">
+        </div>
+      </div>
+      <div class="form-row" style="grid-template-columns: 1fr;">
+        <div>
+          <label>Önerilen Satış Fiyatı</label>
+          <input type="text" id="edit-suggested-price" readonly placeholder="Geliş fiyatı ve kâr girin" style="background:#e9ecef; font-weight:bold;">
+          <button type="button" class="sm-btn" onclick="applySuggestedPrice('edit')" style="margin-top:6px;">↳ Bu Fiyatı Birim Fiyata Uygula</button>
         </div>
       </div>
       <div id="edit-last-update-note" class="last-update-note"></div>
@@ -1417,44 +1432,47 @@
   }
 
   // Yüzdelik Kar Hesaplayıcı (Düzenleme Modülü için)
+  // Geliş Fiyatı + KDV + Hedef Kâr → Önerilen Satış Fiyatı
   function updateAddProfit() {
     const cost = parseFloat(document.getElementById('f-cost-price').value);
-    const price = parseFloat(document.getElementById('f-price').value) || 0;
     const vat = parseFloat(document.getElementById('f-vat').value) || 0;
-    const profitInput = document.getElementById('f-profit');
+    const profit = parseFloat(document.getElementById('f-profit').value) || 0;
+    const suggestedInput = document.getElementById('f-suggested-price');
 
     if (!isNaN(cost) && cost > 0) {
         const costWithVat = cost * (1 + (vat / 100));
-        if (costWithVat > 0) {
-            const profit = ((price - costWithVat) / costWithVat) * 100;
-            profitInput.value = "% " + profit.toFixed(2);
-            profitInput.style.color = profit >= 0 ? 'var(--success)' : 'var(--rust)';
-        } else {
-            profitInput.value = "-";
-        }
+        const suggested = costWithVat * (1 + (profit / 100));
+        suggestedInput.value = "₺ " + suggested.toFixed(2);
+        suggestedInput.dataset.value = suggested.toFixed(2);
     } else {
-        profitInput.value = "-";
+        suggestedInput.value = "";
+        suggestedInput.dataset.value = "";
     }
   }
 
   function updateEditProfit() {
     const cost = parseFloat(document.getElementById('edit-cost-price').value);
-    const price = parseFloat(document.getElementById('edit-price').value) || 0;
     const vat = parseFloat(document.getElementById('edit-vat').value) || 0;
-    const profitInput = document.getElementById('edit-profit');
+    const profit = parseFloat(document.getElementById('edit-profit').value) || 0;
+    const suggestedInput = document.getElementById('edit-suggested-price');
 
     if (!isNaN(cost) && cost > 0) {
         const costWithVat = cost * (1 + (vat / 100));
-        if (costWithVat > 0) {
-            const profit = ((price - costWithVat) / costWithVat) * 100;
-            profitInput.value = "% " + profit.toFixed(2);
-            profitInput.style.color = profit >= 0 ? 'var(--success)' : 'var(--rust)';
-        } else {
-            profitInput.value = "-";
-        }
+        const suggested = costWithVat * (1 + (profit / 100));
+        suggestedInput.value = "₺ " + suggested.toFixed(2);
+        suggestedInput.dataset.value = suggested.toFixed(2);
     } else {
-        profitInput.value = "-";
+        suggestedInput.value = "";
+        suggestedInput.dataset.value = "";
     }
+  }
+
+  function applySuggestedPrice(prefix) {
+    const suggestedInput = document.getElementById(`${prefix}-suggested-price`);
+    const val = suggestedInput.dataset.value;
+    if (!val) { showToast("Önce geliş fiyatı ve hedef kârı girin."); return; }
+    document.getElementById(`${prefix}-price`).value = val;
+    showToast("Birim fiyat ₺" + val + " olarak dolduruldu.");
   }
 
   function renderRecentUpdates() {
@@ -2008,6 +2026,7 @@
     const costPriceRaw = document.getElementById('f-cost-price').value;
     const costPrice = costPriceRaw === '' ? null : Math.max(0, parseFloat(costPriceRaw) || 0);
     const vat = parseFloat(document.getElementById('f-vat').value) || 0;
+    const targetProfit = document.getElementById('f-profit').value === '' ? null : parseFloat(document.getElementById('f-profit').value) || 0;
     
     if(!name) { alert("Lütfen ürün adını giriniz."); return; }
     if(!code) code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
@@ -2016,7 +2035,7 @@
        if(snapshot.exists()) {
            alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor!`);
        } else {
-           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, vat, code, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (error) => {
+           db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, vat, targetProfit, code, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (error) => {
              if(!error) {
                if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
                dbNotifications.push({
@@ -2030,6 +2049,7 @@
                document.getElementById('f-code').value = '';
                document.getElementById('f-vat').value = '';
                document.getElementById('f-profit').value = '';
+               document.getElementById('f-suggested-price').value = '';
                document.getElementById('f-cost-price').value = '';
                document.getElementById('f-cost-calc').innerHTML = '';
                document.getElementById('f-cost-calc').classList.remove('active');
@@ -2088,6 +2108,7 @@
     
     // KDV and Profit
     document.getElementById('edit-vat').value = p.vat || 0;
+    document.getElementById('edit-profit').value = p.targetProfit != null ? p.targetProfit : '';
     
     const priceInput = document.getElementById('edit-price');
     const priceLockNote = document.getElementById('price-lock-note');
@@ -2106,6 +2127,7 @@
     populateBrandSelect('edit-brand', p.brand);
     document.getElementById('edit-cost-price').value = p.costPrice != null ? p.costPrice : '';
     updateCostCalc('edit');
+    updateEditProfit();
 
     const standSel = document.getElementById('edit-stand');
     const stands = layoutData.stands || {};
@@ -2173,14 +2195,16 @@
       qty: parseFloat(document.getElementById('edit-qty').value) || 0,
       unit: document.getElementById('edit-unit').value,
       category: document.getElementById('edit-category').value,
-      brand: document.getElementById('edit-brand').value || null,
       lastPriceUpdate: new Date().toISOString(),
       lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
     };
 
     if (currentRole === 'admin') {
+      updates.brand = document.getElementById('edit-brand').value || null;
       updates.price = parseFloat(document.getElementById('edit-price').value) || 0;
       updates.vat = parseFloat(document.getElementById('edit-vat').value) || 0;
+      const profitRaw = document.getElementById('edit-profit').value;
+      updates.targetProfit = profitRaw === '' ? null : parseFloat(profitRaw) || 0;
       const costRaw = document.getElementById('edit-cost-price').value;
       updates.costPrice = costRaw === '' ? null : Math.max(0, parseFloat(costRaw) || 0);
     }
