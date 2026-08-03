@@ -136,6 +136,7 @@
   .stand-label{font-size:8.5px; color:var(--steel); margin-top:2px; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;}
   .stand-count{font-size:9.5px; font-family:'IBM Plex Mono'; margin-top:3px; color:var(--info); font-weight:600;}
   .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
+  .stand-rotate{position:absolute; top:2px; right:18px; font-size:11px; color:var(--info); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
   .stand-box.highlight{
     border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45); z-index:40;
     animation:standPulse 1s ease-in-out 3;
@@ -508,6 +509,29 @@
 
     <!-- YERLEŞİM (KROKİ) TABI -->
     <div id="tab-yerlesim" class="tab-content">
+      <div class="form-card" style="padding-bottom:14px;">
+        <div style="display:flex; gap:8px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label>Kroki</label>
+            <select id="plan-select" onchange="switchPlan()"></select>
+          </div>
+          <button class="btn btn-primary btn-sm" id="add-plan-btn" style="width:auto; display:none;" onclick="toggleNewPlanForm()">+ Yeni Kroki</button>
+          <button class="btn btn-danger btn-sm" id="delete-plan-btn" style="width:auto; display:none;" onclick="deleteCurrentPlan()">Bu Krokiyi Sil</button>
+        </div>
+        <div id="new-plan-form" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--steel-line);">
+          <div class="form-row">
+            <div><label>Kroki Adı</label><input type="text" id="np-name" placeholder="Örn: Depo, 2. Kat Ambar"></div>
+            <div><label>Görünürlük</label>
+              <select id="np-visibility">
+                <option value="public">Herkes Görebilir</option>
+                <option value="admin">Sadece Yönetici</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-dark btn-sm" style="width:auto;" onclick="addPlan()">Krokiyi Oluştur</button>
+        </div>
+      </div>
+
       <div class="form-card">
         <h3 style="margin-top:0; font-family:'Oswald';">📍 Ürün Nerede? Ara</h3>
         <input type="text" id="layout-search" placeholder="Ürün adı veya kodu yazın..." oninput="findProductLocation()">
@@ -743,6 +767,9 @@
   let imageCache = {}; // { code: dataUrl | null } — bir kez indirilen fotoğraf tekrar indirilmez
   let pendingImageDataUrl = null; // düzenleme modalında henüz kaydedilmemiş yeni fotoğraf
   let layoutData = { stands: {} };
+  let layoutPlans = {};
+  let currentPlanId = 'magaza';
+  let planSeedChecked = false;
   let brandSettingsData = {};
   let highlightTimer = null;
   
@@ -974,9 +1001,16 @@
   });
 
   dbLayout.on('value', (snapshot) => {
-    layoutData = snapshot.val() || { stands: {} };
+    layoutData = snapshot.val() || { stands: {}, plans: {} };
     if (!layoutData.stands) layoutData.stands = {};
+    if (!layoutData.plans) layoutData.plans = {};
+    layoutPlans = layoutData.plans;
+    renderPlanSelector();
     renderLayoutGrid();
+    if (!planSeedChecked) {
+      planSeedChecked = true;
+      maybeSeedDefaultPlans();
+    }
   });
 
   dbBrandSettings.on('value', (snapshot) => {
@@ -1136,6 +1170,7 @@
       printAllBtn.style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'block';
       document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
+      document.getElementById('add-plan-btn').style.display = 'inline-block';
       document.getElementById('brand-settings-card').classList.remove('disabled-action');
       document.getElementById('recent-updates-card').classList.remove('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'block';
@@ -1145,6 +1180,8 @@
       printAllBtn.style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
+      document.getElementById('add-plan-btn').style.display = 'none';
+      document.getElementById('new-plan-form').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'none';
@@ -1154,11 +1191,14 @@
       printAllBtn.style.display = 'none';
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
+      document.getElementById('add-plan-btn').style.display = 'none';
+      document.getElementById('new-plan-form').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'none';
     }
     renderGrid();
+    renderPlanSelector();
     renderLayoutGrid();
     renderBrandSettings();
     if(currentRole === 'admin') {
@@ -1180,6 +1220,93 @@
     if (currentRole !== 'admin') return;
     const card = document.getElementById('stand-form-card');
     card.style.display = (card.style.display === 'none' || !card.style.display) ? 'block' : 'none';
+  }
+
+  // ============================================================
+  // KROKİ PLANLARI (Mağaza / Depo / özel)
+  // ============================================================
+  function maybeSeedDefaultPlans() {
+    if (Object.keys(layoutPlans).length > 0) return;
+    dbLayout.child('plans').update({
+      magaza: { name: 'Mağaza', visibility: 'public' },
+      depo:   { name: 'Depo', visibility: 'admin' }
+    });
+  }
+
+  function accessiblePlans() {
+    return Object.keys(layoutPlans)
+      .filter(id => currentRole === 'admin' || layoutPlans[id].visibility === 'public')
+      .sort((a, b) => layoutPlans[a].name.localeCompare(layoutPlans[b].name, 'tr'));
+  }
+
+  function renderPlanSelector() {
+    const sel = document.getElementById('plan-select');
+    if (!sel) return;
+    const ids = accessiblePlans();
+
+    if (!ids.includes(currentPlanId)) {
+      currentPlanId = ids[0] || null;
+    }
+
+    if (ids.length === 0) {
+      sel.innerHTML = '<option value="">Kroki yok</option>';
+    } else {
+      sel.innerHTML = ids.map(id => {
+        const p = layoutPlans[id];
+        const lockIcon = p.visibility === 'admin' ? '🔒 ' : '';
+        return `<option value="${id}" ${id === currentPlanId ? 'selected' : ''}>${lockIcon}${p.name}</option>`;
+      }).join('');
+    }
+
+    document.getElementById('delete-plan-btn').style.display = (currentRole === 'admin' && ids.length > 1) ? 'inline-block' : 'none';
+  }
+
+  function switchPlan() {
+    const sel = document.getElementById('plan-select');
+    currentPlanId = sel.value;
+    renderLayoutGrid();
+  }
+
+  function addPlan() {
+    if (currentRole !== 'admin') return;
+    const name = document.getElementById('np-name').value.trim();
+    const visibility = document.getElementById('np-visibility').value;
+    if (!name) { alert("Kroki adı girin (örn: Depo, 2. Kat Ambar)."); return; }
+
+    let id = name.toLowerCase()
+      .replace(/ç/g,'c').replace(/ğ/g,'g').replace(/ı/g,'i').replace(/ö/g,'o').replace(/ş/g,'s').replace(/ü/g,'u')
+      .replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    if (!id) id = 'kroki-' + Date.now();
+    if (layoutPlans[id]) id = id + '-' + Math.floor(Math.random() * 900 + 100);
+
+    dbLayout.child('plans').child(id).set({ name, visibility }, (err) => {
+      if (err) { alert("Eklenemedi: " + err.message); return; }
+      document.getElementById('np-name').value = '';
+      document.getElementById('new-plan-form').style.display = 'none';
+      currentPlanId = id;
+      showToast("Kroki eklendi: " + name);
+    });
+  }
+
+  function toggleNewPlanForm() {
+    if (currentRole !== 'admin') return;
+    const f = document.getElementById('new-plan-form');
+    f.style.display = (f.style.display === 'none' || !f.style.display) ? 'block' : 'none';
+  }
+
+  function deleteCurrentPlan() {
+    if (currentRole !== 'admin' || !currentPlanId) return;
+    const plan = layoutPlans[currentPlanId];
+    if (!plan) return;
+    if (accessiblePlans().length <= 1) { alert("Son kroki silinemez."); return; }
+    if (!confirm(`"${plan.name}" krokisini ve içindeki TÜM standları kalıcı olarak silmek istiyor musunuz? Bu işlem geri alınamaz.`)) return;
+
+    const updates = { ['plans/' + currentPlanId]: null };
+    Object.keys(layoutData.stands || {}).forEach(letter => {
+      const s = layoutData.stands[letter];
+      if ((s.planId || 'magaza') === currentPlanId) updates['stands/' + letter] = null;
+    });
+    dbLayout.update(updates, () => showToast("Kroki silindi."));
   }
 
   const STAND_SIZE_PRESETS = {
@@ -1207,11 +1334,11 @@
     }
 
     // Yeni standı krokide boş bir yere basamaklı şekilde yerleştir — admin sonra sürükleyip düzeltir.
-    const existingCount = Object.keys(layoutData.stands || {}).length;
+    const existingCount = Object.values(layoutData.stands || {}).filter(s => (s.planId || 'magaza') === currentPlanId).length;
     const x = Math.min(80, (existingCount * 9) % 82);
     const y = Math.min(78, Math.floor((existingCount * 9) / 82) * 22);
 
-    dbLayout.child('stands').child(letter).set({ x, y, w: size.w, h: size.h, slotCount: slots, label }, (err) => {
+    dbLayout.child('stands').child(letter).set({ x, y, w: size.w, h: size.h, slotCount: slots, label, planId: currentPlanId }, (err) => {
       if (err) { alert("Kaydedilemedi: " + err.message); return; }
       showToast("Stand eklendi: " + letter + " — krokide sürükleyerek yerine taşıyabilirsiniz.");
       document.getElementById('ns-letter').value = '';
@@ -1233,33 +1360,42 @@
 
   // Eski satır/sütun tabanlı standları (varsa) bir kereliğine x/y yüzdesine taşır.
   function migrateStandIfNeeded(letter, s) {
-    if (s.x != null && s.y != null) return s;
+    if (s.x != null && s.y != null && s.planId) return s;
     const migrated = {
       ...s,
-      x: Math.min(85, (s.col || 0) * 16),
-      y: Math.min(80, (s.row || 0) * 20),
+      x: s.x != null ? s.x : Math.min(85, (s.col || 0) * 16),
+      y: s.y != null ? s.y : Math.min(80, (s.row || 0) * 20),
       w: s.w || STAND_SIZE_PRESETS.medium.w,
-      h: s.h || STAND_SIZE_PRESETS.medium.h
+      h: s.h || STAND_SIZE_PRESETS.medium.h,
+      planId: s.planId || 'magaza'
     };
-    dbLayout.child('stands').child(letter).update({ x: migrated.x, y: migrated.y, w: migrated.w, h: migrated.h });
+    dbLayout.child('stands').child(letter).update({ x: migrated.x, y: migrated.y, w: migrated.w, h: migrated.h, planId: migrated.planId });
     return migrated;
   }
 
   function renderLayoutGrid() {
     const canvas = document.getElementById('layout-grid');
     if (!canvas) return;
-    const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
-    const letters = Object.keys(stands).sort();
+
+    if (!currentPlanId) {
+      canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--steel); font-size:13px; padding:20px;">${currentRole === 'admin' ? 'Önce "+ Yeni Kroki" ile bir kroki oluşturun.' : 'Görüntülenebilir bir kroki yok.'}</p>`;
+      return;
+    }
+
+    const allStands = (layoutData && layoutData.stands) ? layoutData.stands : {};
+    const letters = Object.keys(allStands)
+      .filter(l => (allStands[l].planId || 'magaza') === currentPlanId)
+      .sort();
 
     if (letters.length === 0) {
-      canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--steel); font-size:13px; padding:20px;">Henüz kroki oluşturulmadı. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
+      canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--steel); font-size:13px; padding:20px;">Bu krokide henüz stand yok. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
       return;
     }
 
     canvas.innerHTML = '';
     canvas.classList.toggle('view-only', currentRole !== 'admin');
     letters.forEach(letter => {
-      let s = stands[letter];
+      let s = allStands[letter];
       s = migrateStandIfNeeded(letter, s);
       const count = productsInStand(letter).length;
       const box = document.createElement('div');
@@ -1270,7 +1406,10 @@
       box.style.width = (s.w || STAND_SIZE_PRESETS.medium.w) + '%';
       box.style.height = (s.h || STAND_SIZE_PRESETS.medium.h) + '%';
       box.innerHTML = `
-        ${currentRole === 'admin' ? `<button class="stand-del" onclick="deleteStand(event, '${letter}')">✕</button>` : ''}
+        ${currentRole === 'admin' ? `
+          <button class="stand-del" onclick="deleteStand(event, '${letter}')">✕</button>
+          <button class="stand-rotate" onclick="rotateStand(event, '${letter}')" title="90° Döndür">⟲</button>
+        ` : ''}
         <span class="stand-status-dot">${count > 0 ? '🟢' : '⚪'}</span>
         <div class="stand-letter">${letter}</div>
         <div class="stand-label">${s.label || ''}</div>
@@ -1280,6 +1419,23 @@
       box.addEventListener('touchstart', (e) => startStandDrag(e, letter), { passive: false });
       box.addEventListener('click', () => { if (currentRole !== 'admin') openStandDetail(letter); });
       canvas.appendChild(box);
+    });
+  }
+
+  function rotateStand(evt, letter) {
+    if (currentRole !== 'admin') return;
+    evt.stopPropagation();
+    const s = layoutData.stands[letter];
+    if (!s) return;
+    const w = s.w || STAND_SIZE_PRESETS.medium.w;
+    const h = s.h || STAND_SIZE_PRESETS.medium.h;
+    // Genişlik/yükseklik takas edilir — dikdörtgen bir standı 90° döndürmenin görsel karşılığı budur, yazı ters dönmez.
+    const maxX = Math.max(0, 100 - h);
+    const maxY = Math.max(0, 100 - w);
+    dbLayout.child('stands').child(letter).update({
+      w: h, h: w,
+      x: Math.min(maxX, s.x || 0),
+      y: Math.min(maxY, s.y || 0)
     });
   }
 
@@ -1409,13 +1565,34 @@
   }
 
   function highlightStand(letter) {
-    const box = document.getElementById('stand-' + letter);
-    if (!box) { showToast("Bu stand krokide bulunamadı: " + letter); return; }
-    document.querySelectorAll('.stand-box.highlight').forEach(el => el.classList.remove('highlight'));
-    box.classList.add('highlight');
-    box.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    if (highlightTimer) clearTimeout(highlightTimer);
-    highlightTimer = setTimeout(() => box.classList.remove('highlight'), 4000);
+    const s = layoutData.stands ? layoutData.stands[letter] : null;
+    if (!s) { showToast("Bu stand krokide bulunamadı: " + letter); return; }
+
+    const targetPlanId = s.planId || 'magaza';
+    const plan = layoutPlans[targetPlanId];
+    if (plan && plan.visibility === 'admin' && currentRole !== 'admin') {
+      showToast("Bu konum sadece yöneticiye açık bir krokide.");
+      return;
+    }
+
+    const doHighlight = () => {
+      const box = document.getElementById('stand-' + letter);
+      if (!box) return;
+      document.querySelectorAll('.stand-box.highlight').forEach(el => el.classList.remove('highlight'));
+      box.classList.add('highlight');
+      box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (highlightTimer) clearTimeout(highlightTimer);
+      highlightTimer = setTimeout(() => box.classList.remove('highlight'), 4000);
+    };
+
+    if (currentPlanId !== targetPlanId) {
+      currentPlanId = targetPlanId;
+      renderPlanSelector();
+      renderLayoutGrid();
+      setTimeout(doHighlight, 60);
+    } else {
+      doHighlight();
+    }
   }
 
   // Stok listesindeki 📍 rozetine tıklayınca doğrudan krokiye gidip standı vurgular
