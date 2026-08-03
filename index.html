@@ -109,24 +109,35 @@
   .edit-photo-preview img{width:100%; height:100%; object-fit:cover; cursor:pointer;}
   .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
 
-  /* YERLEŞİM (KROKİ) */
-  .layout-grid{
-    display:grid; grid-template-columns:repeat(auto-fill, minmax(90px, 1fr));
-    gap:8px; background:#E4DFD3; border:1px solid var(--steel-line); border-radius:var(--radius);
-    padding:10px; min-height:120px;
+  /* YERLEŞİM (KROKİ) — serbest yerleşimli, sürükle-bırak tuval */
+  .layout-canvas{
+    position:relative; width:100%; aspect-ratio:4/3; min-height:280px;
+    background-color:#E4DFD3;
+    background-image:
+      linear-gradient(rgba(34,38,42,0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,38,42,0.12) 1px, transparent 1px);
+    background-size:10% 10%;
+    border:2px solid var(--charcoal); border-radius:var(--radius);
+    overflow:hidden; touch-action:none;
   }
   .stand-box{
-    background:var(--paper); border:2px solid var(--charcoal); border-radius:3px;
-    padding:8px 6px; text-align:center; cursor:pointer; position:relative; min-height:70px;
-    display:flex; flex-direction:column; justify-content:center; transition:box-shadow .2s, transform .2s;
+    position:absolute; background:var(--paper); border:2px solid var(--charcoal); border-radius:3px;
+    padding:6px 4px; text-align:center; cursor:grab; box-sizing:border-box;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    transition:box-shadow .15s; user-select:none; overflow:hidden;
   }
-  .stand-box:hover{box-shadow:0 2px 8px rgba(0,0,0,0.15);}
-  .stand-letter{font-family:'Oswald',sans-serif; font-size:22px; font-weight:700; line-height:1;}
-  .stand-label{font-size:9px; color:var(--steel); margin-top:3px; line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .stand-count{font-size:10px; font-family:'IBM Plex Mono'; margin-top:4px; color:var(--info); font-weight:600;}
-  .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px;}
+  .stand-box:active{cursor:grabbing;}
+  .layout-canvas.view-only .stand-box{cursor:pointer;}
+  .stand-box.dragging{box-shadow:0 8px 20px rgba(0,0,0,0.35); z-index:60; opacity:0.92;}
+  .stand-box.has-items{border-color:var(--success); background:#EAF7EC;}
+  .stand-box.empty-stand{border-style:dashed; border-color:var(--steel-line); background:#FAFAF8;}
+  .stand-status-dot{position:absolute; top:4px; left:4px; font-size:9px; line-height:1;}
+  .stand-letter{font-family:'Oswald',sans-serif; font-size:20px; font-weight:700; line-height:1;}
+  .stand-label{font-size:8.5px; color:var(--steel); margin-top:2px; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;}
+  .stand-count{font-size:9.5px; font-family:'IBM Plex Mono'; margin-top:3px; color:var(--info); font-weight:600;}
+  .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
   .stand-box.highlight{
-    border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45);
+    border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45); z-index:40;
     animation:standPulse 1s ease-in-out 3;
   }
   @keyframes standPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
@@ -505,16 +516,22 @@
 
       <div class="form-card" id="stand-form-card" style="display:none;">
         <h3 style="margin-top:0; font-family:'Oswald';">Yeni Stand Ekle</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Standın krokideki yerini satır/sütun numarasıyla belirleyin (0,0 sol üst köşedir).</p>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Eklendikten sonra standı krokinin üzerinde parmağınızla/fareyle sürükleyerek gerçek konumuna taşıyabilirsiniz.</p>
         <div class="form-row">
           <div><label>Stand Harfi</label><input type="text" id="ns-letter" maxlength="2" placeholder="Örn: A" style="text-transform:uppercase;"></div>
           <div><label>Bölme (Numara) Adedi</label><input type="number" id="ns-slots" min="1" value="10" placeholder="10"></div>
         </div>
         <div class="form-row">
-          <div><label>Satır (Krokide yukarıdan aşağı)</label><input type="number" id="ns-row" min="0" value="0"></div>
-          <div><label>Sütun (Krokide soldan sağa)</label><input type="number" id="ns-col" min="0" value="0"></div>
+          <div><label>Boyut</label>
+            <select id="ns-size">
+              <option value="small">Küçük</option>
+              <option value="medium" selected>Orta</option>
+              <option value="large">Geniş</option>
+              <option value="wide">Uzun Raf</option>
+            </select>
+          </div>
+          <div><label>Açıklama (isteğe bağlı)</label><input type="text" id="ns-label" placeholder="Örn: Vida & Civata Reyonu"></div>
         </div>
-        <div style="margin-bottom:10px;"><label>Açıklama (isteğe bağlı)</label><input type="text" id="ns-label" placeholder="Örn: Vida & Civata Reyonu"></div>
         <button class="btn btn-dark" onclick="addStand()">Standı Krokiye Ekle</button>
       </div>
 
@@ -522,8 +539,10 @@
         <h3 style="font-family:'Oswald'; margin:0; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex:1;">Mağaza Krokisi</h3>
         <button class="btn btn-primary btn-sm" id="toggle-stand-form-btn" onclick="toggleStandForm()" style="width:auto; margin-left:10px; display:none;">+ Stand Ekle</button>
       </div>
-      <p style="font-size:12px; color:var(--steel); margin-top:-4px;">Bir standa tıklayınca içindeki ürünleri bölme numarasına göre görebilirsiniz.</p>
-      <div id="layout-grid" class="layout-grid"></div>
+      <p style="font-size:12px; color:var(--steel); margin-top:-4px;">
+        Bir standa <b>tıklayınca</b> içindekileri görürsünüz. Yönetici modunda standı <b>sürükleyerek</b> krokideki gerçek yerine taşıyabilir. 🟢 dolu, ⚪ boş standı gösterir.
+      </p>
+      <div id="layout-grid" class="layout-canvas"></div>
 
       <div class="modal-overlay" id="stand-detail-modal">
         <div class="modal-content">
@@ -574,6 +593,15 @@
     <div style="text-align: center; margin-top: 5px;">
       <p style="margin: 2px 0; font-size: 9px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
     </div>
+  </div>
+</div>
+
+<!-- HESAP EKSTRESİ MODALI -->
+<div class="modal-overlay" id="history-modal" style="display:none;">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeHistory()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';" id="history-title">Hesap Dökümü</h3>
+    <div id="history-list"></div>
   </div>
 </div>
 
@@ -1154,12 +1182,19 @@
     card.style.display = (card.style.display === 'none' || !card.style.display) ? 'block' : 'none';
   }
 
+  const STAND_SIZE_PRESETS = {
+    small:  { w: 11, h: 14 },
+    medium: { w: 15, h: 18 },
+    large:  { w: 24, h: 24 },
+    wide:   { w: 32, h: 12 }
+  };
+
   function addStand() {
     if (currentRole !== 'admin') return;
     const letter = document.getElementById('ns-letter').value.trim().toUpperCase();
     const slots = parseInt(document.getElementById('ns-slots').value, 10) || 1;
-    const row = parseInt(document.getElementById('ns-row').value, 10) || 0;
-    const col = parseInt(document.getElementById('ns-col').value, 10) || 0;
+    const sizeKey = document.getElementById('ns-size').value;
+    const size = STAND_SIZE_PRESETS[sizeKey] || STAND_SIZE_PRESETS.medium;
     const label = document.getElementById('ns-label').value.trim();
 
     if (!letter || !/^[A-ZÇĞİÖŞÜ0-9]{1,2}$/.test(letter)) {
@@ -1171,9 +1206,14 @@
       return;
     }
 
-    dbLayout.child('stands').child(letter).set({ row, col, slotCount: slots, label }, (err) => {
+    // Yeni standı krokide boş bir yere basamaklı şekilde yerleştir — admin sonra sürükleyip düzeltir.
+    const existingCount = Object.keys(layoutData.stands || {}).length;
+    const x = Math.min(80, (existingCount * 9) % 82);
+    const y = Math.min(78, Math.floor((existingCount * 9) / 82) * 22);
+
+    dbLayout.child('stands').child(letter).set({ x, y, w: size.w, h: size.h, slotCount: slots, label }, (err) => {
       if (err) { alert("Kaydedilemedi: " + err.message); return; }
-      showToast("Stand eklendi: " + letter);
+      showToast("Stand eklendi: " + letter + " — krokide sürükleyerek yerine taşıyabilirsiniz.");
       document.getElementById('ns-letter').value = '';
       document.getElementById('ns-label').value = '';
       document.getElementById('stand-form-card').style.display = 'none';
@@ -1191,38 +1231,122 @@
     return Object.values(productsData).filter(p => p.location && p.location.split('-')[0] === letter);
   }
 
+  // Eski satır/sütun tabanlı standları (varsa) bir kereliğine x/y yüzdesine taşır.
+  function migrateStandIfNeeded(letter, s) {
+    if (s.x != null && s.y != null) return s;
+    const migrated = {
+      ...s,
+      x: Math.min(85, (s.col || 0) * 16),
+      y: Math.min(80, (s.row || 0) * 20),
+      w: s.w || STAND_SIZE_PRESETS.medium.w,
+      h: s.h || STAND_SIZE_PRESETS.medium.h
+    };
+    dbLayout.child('stands').child(letter).update({ x: migrated.x, y: migrated.y, w: migrated.w, h: migrated.h });
+    return migrated;
+  }
+
   function renderLayoutGrid() {
-    const grid = document.getElementById('layout-grid');
-    if (!grid) return;
+    const canvas = document.getElementById('layout-grid');
+    if (!canvas) return;
     const stands = (layoutData && layoutData.stands) ? layoutData.stands : {};
     const letters = Object.keys(stands).sort();
 
     if (letters.length === 0) {
-      grid.innerHTML = `<p style="grid-column:1/-1; text-align:center; color:var(--steel); font-size:13px; padding:20px;">Henüz kroki oluşturulmadı. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
+      canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--steel); font-size:13px; padding:20px;">Henüz kroki oluşturulmadı. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
       return;
     }
 
-    let maxRow = 0;
-    letters.forEach(l => { if ((stands[l].row || 0) > maxRow) maxRow = stands[l].row || 0; });
-
-    grid.innerHTML = '';
+    canvas.innerHTML = '';
+    canvas.classList.toggle('view-only', currentRole !== 'admin');
     letters.forEach(letter => {
-      const s = stands[letter];
+      let s = stands[letter];
+      s = migrateStandIfNeeded(letter, s);
       const count = productsInStand(letter).length;
       const box = document.createElement('div');
-      box.className = 'stand-box';
+      box.className = 'stand-box' + (count > 0 ? ' has-items' : ' empty-stand');
       box.id = 'stand-' + letter;
-      box.style.gridRow = (s.row || 0) + 1;
-      box.style.gridColumn = (s.col || 0) + 1;
-      box.onclick = () => openStandDetail(letter);
+      box.style.left = (s.x || 0) + '%';
+      box.style.top = (s.y || 0) + '%';
+      box.style.width = (s.w || STAND_SIZE_PRESETS.medium.w) + '%';
+      box.style.height = (s.h || STAND_SIZE_PRESETS.medium.h) + '%';
       box.innerHTML = `
         ${currentRole === 'admin' ? `<button class="stand-del" onclick="deleteStand(event, '${letter}')">✕</button>` : ''}
+        <span class="stand-status-dot">${count > 0 ? '🟢' : '⚪'}</span>
         <div class="stand-letter">${letter}</div>
         <div class="stand-label">${s.label || ''}</div>
         <div class="stand-count">${count} ürün · ${s.slotCount || 0} bölme</div>
       `;
-      grid.appendChild(box);
+      box.addEventListener('mousedown', (e) => startStandDrag(e, letter));
+      box.addEventListener('touchstart', (e) => startStandDrag(e, letter), { passive: false });
+      box.addEventListener('click', () => { if (currentRole !== 'admin') openStandDetail(letter); });
+      canvas.appendChild(box);
     });
+  }
+
+  // ---- Sürükle-bırak ----
+  let standDrag = null;
+
+  function startStandDrag(evt, letter) {
+    if (currentRole !== 'admin') return;
+    evt.preventDefault();
+    const canvas = document.getElementById('layout-grid');
+    const rect = canvas.getBoundingClientRect();
+    const point = evt.touches ? evt.touches[0] : evt;
+    const s = layoutData.stands[letter] || {};
+    standDrag = {
+      letter,
+      rect,
+      startX: point.clientX,
+      startY: point.clientY,
+      origX: s.x || 0,
+      origY: s.y || 0,
+      w: s.w || STAND_SIZE_PRESETS.medium.w,
+      h: s.h || STAND_SIZE_PRESETS.medium.h,
+      moved: false,
+      newX: null,
+      newY: null
+    };
+    document.getElementById('stand-' + letter).classList.add('dragging');
+    window.addEventListener('mousemove', onStandDragMove);
+    window.addEventListener('touchmove', onStandDragMove, { passive: false });
+    window.addEventListener('mouseup', endStandDrag);
+    window.addEventListener('touchend', endStandDrag);
+  }
+
+  function onStandDragMove(evt) {
+    if (!standDrag) return;
+    evt.preventDefault();
+    const point = evt.touches ? evt.touches[0] : evt;
+    const dx = ((point.clientX - standDrag.startX) / standDrag.rect.width) * 100;
+    const dy = ((point.clientY - standDrag.startY) / standDrag.rect.height) * 100;
+    if (Math.abs(dx) > 0.6 || Math.abs(dy) > 0.6) standDrag.moved = true;
+    const maxX = Math.max(0, 100 - standDrag.w);
+    const maxY = Math.max(0, 100 - standDrag.h);
+    const newX = Math.min(maxX, Math.max(0, standDrag.origX + dx));
+    const newY = Math.min(maxY, Math.max(0, standDrag.origY + dy));
+    const box = document.getElementById('stand-' + standDrag.letter);
+    if (box) { box.style.left = newX + '%'; box.style.top = newY + '%'; }
+    standDrag.newX = newX;
+    standDrag.newY = newY;
+  }
+
+  function endStandDrag() {
+    if (!standDrag) return;
+    const { letter, moved, newX, newY } = standDrag;
+    const box = document.getElementById('stand-' + letter);
+    if (box) box.classList.remove('dragging');
+
+    window.removeEventListener('mousemove', onStandDragMove);
+    window.removeEventListener('touchmove', onStandDragMove);
+    window.removeEventListener('mouseup', endStandDrag);
+    window.removeEventListener('touchend', endStandDrag);
+
+    if (moved && newX != null) {
+      dbLayout.child('stands').child(letter).update({ x: newX, y: newY });
+    } else {
+      openStandDetail(letter);
+    }
+    standDrag = null;
   }
 
   function openStandDetail(letter) {
@@ -2382,6 +2506,7 @@
             <button class="btn btn-success btn-sm" onclick="updateBalance('${key}', 1)">+ Ödeme Yap</button>
             <button class="btn btn-danger btn-sm" onclick="updateBalance('${key}', -1)">- Borç Ekle</button>
           </div>
+          <button class="btn btn-dark btn-sm" style="width:100%; margin-top:6px;" onclick="openHistory('${key}', '${w.name.replace(/'/g, "\\'")}')">📄 Ekstre / Hesap Geçmişi</button>
         </div>
       `;
     });
@@ -2397,15 +2522,106 @@
   function updateBalance(key, mult) {
     if(currentRole !== 'admin') return;
     const w = wholesalersData[key];
+    const desc = prompt(`Açıklama giriniz (örn: "Mal Alımı", "Nakit Ödeme"):`, mult > 0 ? "Ödeme" : "Borç");
+    if (desc === null) return;
     const amount = prompt(`${w.name} için ${mult > 0 ? 'yapılan ödeme' : 'eklenen borç'} tutarını giriniz (₺):`);
     if(amount === null) return;
     const parsed = parseFloat(amount);
     
     if(!isNaN(parsed) && parsed > 0) {
       dbWholesalers.child(key).child('balance').transaction(cur => (cur || 0) + (parsed * mult), (err) => {
-        if(!err) showToast("Bakiye güncellendi.");
+        if(!err) {
+          dbWholesalers.child(key).child('transactions').push({
+            desc: desc || (mult > 0 ? 'Ödeme' : 'Borç'),
+            amount: parsed,
+            type: mult > 0 ? 'odeme' : 'borc',
+            date: new Date().toLocaleString('tr-TR')
+          });
+          showToast("Bakiye güncellendi.");
+        }
       });
     }
+  }
+
+  let activeWholesalerKey = null;
+
+  function openHistory(key, name) {
+    activeWholesalerKey = key;
+    document.getElementById('history-title').textContent = name + " - Hesap Hareketleri";
+    document.getElementById('history-modal').style.display = 'flex';
+    loadHistory(key);
+  }
+
+  function closeHistory() {
+    document.getElementById('history-modal').style.display = 'none';
+    if (activeWholesalerKey) dbWholesalers.child(activeWholesalerKey).child('transactions').off('value');
+    activeWholesalerKey = null;
+  }
+
+  function loadHistory(key) {
+    const list = document.getElementById('history-list');
+    list.innerHTML = '<p style="font-size:12px; color:var(--steel);">Yükleniyor...</p>';
+    dbWholesalers.child(key).child('transactions').on('value', snap => {
+      const data = snap.val() || {};
+      const w = wholesalersData[key] || {};
+      const isAdmin = currentRole === 'admin';
+
+      let html = isAdmin ? `
+        <div style="margin-bottom:15px; background:var(--concrete); padding:10px; border-radius:4px;">
+           <label>İşlem Açıklaması</label>
+           <input type="text" id="h-desc" placeholder="Örn: Mal Alımı / Yapılan Ödeme" style="margin-bottom:8px;">
+           <div class="form-row" style="margin-bottom:8px;">
+             <div><label>Tutar (₺)</label><input type="number" id="h-amount" step="0.01" placeholder="0.00"></div>
+             <div><label>İşlem Türü</label>
+               <select id="h-type">
+                 <option value="borc">Borçlandır (+)</option>
+                 <option value="odeme">Ödeme Yapıldı (-)</option>
+               </select>
+             </div>
+           </div>
+           <button class="btn btn-primary btn-sm" onclick="addTransaction()">İşlemi Kaydet</button>
+        </div>
+      ` : '';
+
+      const balance = w.balance || 0;
+      const rows = Object.keys(data).sort().reverse().map(tId => {
+        const t = data[tId];
+        return `
+          <div class="recent-update-row">
+            <div>
+              <div>${t.desc}</div>
+              <div class="ru-time">${t.date}</div>
+            </div>
+            <div style="font-family:'IBM Plex Mono'; font-weight:bold; color:${t.type === 'borc' ? 'var(--rust)' : 'var(--success)'}">
+              ${t.type === 'borc' ? '+' : '-'}₺${formatMoney(t.amount)}
+            </div>
+          </div>
+        `;
+      }).join('') || '<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hareket kaydı yok.</p>';
+
+      list.innerHTML = html + `<div class="balance-box ${balance < 0 ? 'balance-negative' : 'balance-positive'}">Güncel Bakiye: ₺${formatMoney(balance)}</div>` + rows;
+    });
+  }
+
+  function addTransaction() {
+    if (currentRole !== 'admin' || !activeWholesalerKey) return;
+    const desc = document.getElementById('h-desc').value.trim();
+    const amount = parseFloat(document.getElementById('h-amount').value);
+    const type = document.getElementById('h-type').value;
+    if(!desc || isNaN(amount) || amount <= 0) { alert("Lütfen geçerli açıklama ve tutar girin."); return; }
+    const date = new Date().toLocaleString('tr-TR');
+    const mult = type === 'borc' ? 1 : -1;
+
+    dbWholesalers.child(activeWholesalerKey).child('balance').transaction(cur => (cur || 0) + (amount * mult), (err) => {
+      if (err) return;
+      dbWholesalers.child(activeWholesalerKey).child('transactions').push({ desc, amount, type, date }, err2 => {
+        if(!err2) {
+          showToast("İşlem eklendi.");
+          document.getElementById('h-desc').value = '';
+          document.getElementById('h-amount').value = '';
+        }
+      });
+    });
   }
 
   // Z-REPORTS
