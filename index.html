@@ -559,12 +559,13 @@
         <button class="btn btn-dark" onclick="addStand()">Standı Krokiye Ekle</button>
       </div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
         <h3 style="font-family:'Oswald'; margin:0; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex:1;">Mağaza Krokisi</h3>
+        <button class="btn btn-dark btn-sm" id="edit-mode-toggle-btn" onclick="toggleLayoutEditMode()" style="width:auto; display:none;">✏️ Düzenle Modu: Kapalı</button>
         <button class="btn btn-primary btn-sm" id="toggle-stand-form-btn" onclick="toggleStandForm()" style="width:auto; margin-left:10px; display:none;">+ Stand Ekle</button>
       </div>
-      <p style="font-size:12px; color:var(--steel); margin-top:-4px;">
-        Bir standa <b>tıklayınca</b> içindekileri görürsünüz. Yönetici modunda standı <b>sürükleyerek</b> krokideki gerçek yerine taşıyabilir. 🟢 dolu, ⚪ boş standı gösterir.
+      <p style="font-size:12px; color:var(--steel); margin-top:-4px;" id="layout-hint-text">
+        Bir standa <b>tıklayınca</b> içindekileri görürsünüz. Standları taşımak için önce "✏️ Düzenle Modu"nu açın. 🟢 dolu, ⚪ boş standı gösterir.
       </p>
       <div id="layout-grid" class="layout-canvas"></div>
 
@@ -1170,6 +1171,7 @@
       printAllBtn.style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'block';
       document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
+      document.getElementById('edit-mode-toggle-btn').style.display = 'inline-block';
       document.getElementById('add-plan-btn').style.display = 'inline-block';
       document.getElementById('brand-settings-card').classList.remove('disabled-action');
       document.getElementById('recent-updates-card').classList.remove('disabled-action');
@@ -1178,8 +1180,10 @@
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'inline-block';
+      layoutEditMode = false;
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
+      document.getElementById('edit-mode-toggle-btn').style.display = 'none';
       document.getElementById('add-plan-btn').style.display = 'none';
       document.getElementById('new-plan-form').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
@@ -1189,8 +1193,10 @@
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'none';
+      layoutEditMode = false;
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
+      document.getElementById('edit-mode-toggle-btn').style.display = 'none';
       document.getElementById('add-plan-btn').style.display = 'none';
       document.getElementById('new-plan-form').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
@@ -1393,7 +1399,7 @@
     }
 
     canvas.innerHTML = '';
-    canvas.classList.toggle('view-only', currentRole !== 'admin');
+    canvas.classList.toggle('view-only', currentRole !== 'admin' || !layoutEditMode);
     letters.forEach(letter => {
       let s = allStands[letter];
       s = migrateStandIfNeeded(letter, s);
@@ -1417,7 +1423,7 @@
       `;
       box.addEventListener('mousedown', (e) => startStandDrag(e, letter));
       box.addEventListener('touchstart', (e) => startStandDrag(e, letter), { passive: false });
-      box.addEventListener('click', () => { if (currentRole !== 'admin') openStandDetail(letter); });
+      box.addEventListener('click', () => { if (currentRole !== 'admin' || !layoutEditMode) openStandDetail(letter); });
       canvas.appendChild(box);
     });
   }
@@ -1441,9 +1447,29 @@
 
   // ---- Sürükle-bırak ----
   let standDrag = null;
+  let layoutEditMode = false;
+
+  function toggleLayoutEditMode() {
+    if (currentRole !== 'admin') return;
+    layoutEditMode = !layoutEditMode;
+    const btn = document.getElementById('edit-mode-toggle-btn');
+    const hint = document.getElementById('layout-hint-text');
+    if (layoutEditMode) {
+      btn.textContent = '🔓 Düzenle Modu: Açık';
+      btn.classList.add('btn-primary');
+      btn.classList.remove('btn-dark');
+      hint.innerHTML = '<b>Düzenleme modu açık:</b> Standları sürükleyerek taşıyabilir, ⟲ ile döndürebilirsiniz. Bitirince tekrar kapatmayı unutmayın.';
+    } else {
+      btn.textContent = '✏️ Düzenle Modu: Kapalı';
+      btn.classList.remove('btn-primary');
+      btn.classList.add('btn-dark');
+      hint.innerHTML = 'Bir standa <b>tıklayınca</b> içindekileri görürsünüz. Standları taşımak için önce "✏️ Düzenle Modu"nu açın. 🟢 dolu, ⚪ boş standı gösterir.';
+    }
+    renderLayoutGrid();
+  }
 
   function startStandDrag(evt, letter) {
-    if (currentRole !== 'admin') return;
+    if (currentRole !== 'admin' || !layoutEditMode) return;
     evt.preventDefault();
     const canvas = document.getElementById('layout-grid');
     const rect = canvas.getBoundingClientRect();
