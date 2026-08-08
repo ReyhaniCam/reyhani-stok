@@ -137,6 +137,11 @@
   .stand-count{font-size:9.5px; font-family:'IBM Plex Mono'; margin-top:3px; color:var(--info); font-weight:600;}
   .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
   .stand-rotate{position:absolute; top:2px; right:18px; font-size:11px; color:var(--info); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
+  .stand-resize-handle{
+    position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; z-index:6;
+    background:linear-gradient(135deg, transparent 0 50%, var(--safety) 50% 60%, transparent 60% 70%, var(--safety) 70% 80%, transparent 80% 100%);
+    border-bottom-right-radius:3px;
+  }
   .stand-box.highlight{
     border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45); z-index:40;
     animation:standPulse 1s ease-in-out 3;
@@ -346,6 +351,19 @@
           <input type="text" id="f-code" placeholder="Otomatik kod verilsin">
         </div>
         <button class="btn btn-primary" id="add-btn" onclick="addProduct()">Ürünü Canlı Sisteme Kaydet</button>
+      </div>
+
+      <div class="form-card disabled-action" id="bulk-import-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">📥 Excel'den Toplu Ürün Aktar</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Yüzlerce/binlerce ürünü tek tek girmek yerine, hazır Excel şablonunu doldurup tek seferde yükleyin.</p>
+        <button class="btn btn-dark btn-sm" style="width:auto;" onclick="downloadImportTemplate()">⬇️ Boş Şablonu İndir</button>
+        <div style="margin-top:14px;">
+          <label>Doldurulmuş Excel Dosyasını Seçin (.xlsx)</label>
+          <input type="file" accept=".xlsx,.xls,.csv" id="bulk-import-file">
+        </div>
+        <div id="bulk-import-preview"></div>
+        <div id="bulk-import-status" style="font-size:12px; margin-top:8px;"></div>
+        <button class="btn btn-success" id="bulk-import-start-btn" onclick="startBulkImport()" style="display:none; margin-top:10px;">✅ İçe Aktarımı Başlat</button>
       </div>
 
       <div class="form-card disabled-action" id="brand-settings-card">
@@ -1174,6 +1192,7 @@
       document.getElementById('edit-mode-toggle-btn').style.display = 'inline-block';
       document.getElementById('add-plan-btn').style.display = 'inline-block';
       document.getElementById('brand-settings-card').classList.remove('disabled-action');
+      document.getElementById('bulk-import-card').classList.remove('disabled-action');
       document.getElementById('recent-updates-card').classList.remove('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'block';
     } else if(currentRole === 'staff') {
@@ -1188,6 +1207,7 @@
       document.getElementById('new-plan-form').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
+      document.getElementById('bulk-import-card').classList.add('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'none';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
@@ -1201,6 +1221,7 @@
       document.getElementById('new-plan-form').style.display = 'none';
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
+      document.getElementById('bulk-import-card').classList.add('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'none';
     }
     renderGrid();
@@ -1420,11 +1441,20 @@
         <div class="stand-letter">${letter}</div>
         <div class="stand-label">${s.label || ''}</div>
         <div class="stand-count">${count} ürün · ${s.slotCount || 0} bölme</div>
+        ${(currentRole === 'admin' && layoutEditMode) ? `<div class="stand-resize-handle" title="Sürükleyerek boyutlandır"></div>` : ''}
       `;
       box.addEventListener('mousedown', (e) => startStandDrag(e, letter));
       box.addEventListener('touchstart', (e) => startStandDrag(e, letter), { passive: false });
       box.addEventListener('click', () => { if (currentRole !== 'admin' || !layoutEditMode) openStandDetail(letter); });
       canvas.appendChild(box);
+
+      if (currentRole === 'admin' && layoutEditMode) {
+        const handle = box.querySelector('.stand-resize-handle');
+        if (handle) {
+          handle.addEventListener('mousedown', (e) => startStandResize(e, letter));
+          handle.addEventListener('touchstart', (e) => startStandResize(e, letter), { passive: false });
+        }
+      }
     });
   }
 
@@ -1447,6 +1477,7 @@
 
   // ---- Sürükle-bırak ----
   let standDrag = null;
+  let standResize = null;
   let layoutEditMode = false;
 
   function toggleLayoutEditMode() {
@@ -1458,7 +1489,7 @@
       btn.textContent = '🔓 Düzenle Modu: Açık';
       btn.classList.add('btn-primary');
       btn.classList.remove('btn-dark');
-      hint.innerHTML = '<b>Düzenleme modu açık:</b> Standları sürükleyerek taşıyabilir, ⟲ ile döndürebilirsiniz. Bitirince tekrar kapatmayı unutmayın.';
+      hint.innerHTML = '<b>Düzenleme modu açık:</b> Standları sürükleyerek taşıyabilir, sağ-alt köşesindeki sarı koldan tutup <b>boyutlandırabilir</b>, ⟲ ile döndürebilirsiniz. Bitirince tekrar kapatmayı unutmayın.';
     } else {
       btn.textContent = '✏️ Düzenle Modu: Kapalı';
       btn.classList.remove('btn-primary');
@@ -1529,6 +1560,72 @@
       openStandDetail(letter);
     }
     standDrag = null;
+  }
+
+  function startStandResize(evt, letter) {
+    if (currentRole !== 'admin' || !layoutEditMode) return;
+    evt.preventDefault();
+    evt.stopPropagation();
+    const canvas = document.getElementById('layout-grid');
+    const rect = canvas.getBoundingClientRect();
+    const point = evt.touches ? evt.touches[0] : evt;
+    const s = layoutData.stands[letter] || {};
+    standResize = {
+      letter,
+      rect,
+      startX: point.clientX,
+      startY: point.clientY,
+      origW: s.w || STAND_SIZE_PRESETS.medium.w,
+      origH: s.h || STAND_SIZE_PRESETS.medium.h,
+      x: s.x || 0,
+      y: s.y || 0
+    };
+    const box = document.getElementById('stand-' + letter);
+    if (box) box.classList.add('dragging');
+    window.addEventListener('mousemove', onStandResizeMove);
+    window.addEventListener('touchmove', onStandResizeMove, { passive: false });
+    window.addEventListener('mouseup', endStandResize);
+    window.addEventListener('touchend', endStandResize);
+  }
+
+  function onStandResizeMove(evt) {
+    if (!standResize) return;
+    evt.preventDefault();
+    const point = evt.touches ? evt.touches[0] : evt;
+    const dxPercent = ((point.clientX - standResize.startX) / standResize.rect.width) * 100;
+    const dyPercent = ((point.clientY - standResize.startY) / standResize.rect.height) * 100;
+    const MIN_SIZE = 6;
+    const maxW = 100 - standResize.x;
+    const maxH = 100 - standResize.y;
+    const newW = Math.min(maxW, Math.max(MIN_SIZE, standResize.origW + dxPercent));
+    const newH = Math.min(maxH, Math.max(MIN_SIZE, standResize.origH + dyPercent));
+    const box = document.getElementById('stand-' + standResize.letter);
+    if (box) {
+      box.style.width = newW + '%';
+      box.style.height = newH + '%';
+    }
+    standResize.newW = newW;
+    standResize.newH = newH;
+  }
+
+  function endStandResize() {
+    if (!standResize) return;
+    const { letter, newW, newH } = standResize;
+    const box = document.getElementById('stand-' + letter);
+    if (box) box.classList.remove('dragging');
+
+    window.removeEventListener('mousemove', onStandResizeMove);
+    window.removeEventListener('touchmove', onStandResizeMove);
+    window.removeEventListener('mouseup', endStandResize);
+    window.removeEventListener('touchend', endStandResize);
+
+    if (newW != null) {
+      dbLayout.child('stands').child(letter).update({
+        w: Math.round(newW * 10) / 10,
+        h: Math.round(newH * 10) / 10
+      });
+    }
+    standResize = null;
   }
 
   function openStandDetail(letter) {
@@ -2339,6 +2436,147 @@
     document.getElementById('sum-count').textContent = count;
     document.getElementById('sum-units').textContent = units.toFixed(1);
     document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
+  }
+
+  // ============================================================
+  // EXCEL'DEN TOPLU ÜRÜN AKTARIMI
+  // ============================================================
+  let pendingImportRows = null;
+
+  function downloadImportTemplate() {
+    const headers = ["Ürün Adı", "Miktar", "Birim Fiyat", "Ölçü Birimi", "Kategori", "Marka", "Geliş Fiyatı", "KDV Oranı", "Hedef Kar", "Barkod (boş bırakılabilir)"];
+    const example1 = ["Akfix Silikon 280ml", 24, 65.5, "Adet", "Silikon & Mastik", "BMS", 40, 20, 25, ""];
+    const example2 = ["8mm Çelik Vida (100'lü)", 50, 32, "Adet", "Vida & Civata", "Kale", 18, 20, 30, ""];
+    const ws = XLSX.utils.aoa_to_sheet([headers, example1, example2]);
+    ws['!cols'] = headers.map(() => ({ wch: 18 }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sablon");
+    XLSX.writeFile(wb, "Urun_Aktarim_Sablonu.xlsx");
+  }
+
+  document.getElementById('bulk-import-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('bulk-import-status');
+    const startBtn = document.getElementById('bulk-import-start-btn');
+    statusEl.textContent = "Dosya okunuyor...";
+    startBtn.style.display = 'none';
+    pendingImportRows = null;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        if (rows.length === 0) {
+          statusEl.innerHTML = `<span style="color:var(--rust);">Dosyada okunacak satır bulunamadı.</span>`;
+          return;
+        }
+        pendingImportRows = rows;
+        statusEl.innerHTML = `<b>${rows.length}</b> satır okundu. Aşağıdaki önizlemeyi kontrol edip butona basın.`;
+        startBtn.style.display = 'inline-block';
+        renderImportPreview(rows);
+      } catch (err) {
+        statusEl.innerHTML = `<span style="color:var(--rust);">Dosya okunamadı: ${err.message}</span>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  function renderImportPreview(rows) {
+    const box = document.getElementById('bulk-import-preview');
+    const preview = rows.slice(0, 5);
+    let html = `<div style="overflow-x:auto; margin-top:10px;"><table style="width:100%; font-size:11px; border-collapse:collapse; min-width:400px;">
+      <tr style="background:var(--concrete); text-align:left;"><th style="padding:5px;">Ürün Adı</th><th style="padding:5px;">Miktar</th><th style="padding:5px;">Fiyat</th><th style="padding:5px;">Kategori</th></tr>`;
+    preview.forEach(r => {
+      html += `<tr style="border-top:1px solid var(--steel-line);"><td style="padding:5px;">${r['Ürün Adı'] || '<span style=\'color:var(--rust);\'>BOŞ</span>'}</td><td style="padding:5px;">${r['Miktar'] || 0}</td><td style="padding:5px;">${r['Birim Fiyat'] || 0}</td><td style="padding:5px;">${r['Kategori'] || '-'}</td></tr>`;
+    });
+    html += `</table></div>`;
+    if (rows.length > 5) html += `<p style="font-size:10px; color:var(--steel); margin-top:4px;">...ve ${rows.length - 5} satır daha</p>`;
+    box.innerHTML = html;
+  }
+
+  function generateUniqueImportCode(usedCodes) {
+    let code;
+    do {
+      code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
+    } while (productsData[code] || usedCodes.has(code));
+    usedCodes.add(code);
+    return code;
+  }
+
+  function startBulkImport() {
+    if (currentRole !== 'admin' || !pendingImportRows) return;
+    if (!confirm(`${pendingImportRows.length} satır işlenip canlı sisteme eklenecek. Onaylıyor musunuz?`)) return;
+
+    const statusEl = document.getElementById('bulk-import-status');
+    const startBtn = document.getElementById('bulk-import-start-btn');
+    const updates = {};
+    const usedCodes = new Set();
+    const errorRows = [];
+    let successCount = 0;
+
+    pendingImportRows.forEach((row, idx) => {
+      const name = String(row['Ürün Adı'] || '').trim();
+      if (!name) { errorRows.push(`Satır ${idx + 2}: Ürün adı boş, atlandı`); return; }
+
+      let code = String(row['Barkod (boş bırakılabilir)'] || row['Barkod'] || '').trim().toUpperCase();
+      if (!code) {
+        code = generateUniqueImportCode(usedCodes);
+      } else if (productsData[code] || usedCodes.has(code)) {
+        errorRows.push(`Satır ${idx + 2}: "${code}" barkodu zaten kullanımda, atlandı`);
+        return;
+      } else {
+        usedCodes.add(code);
+      }
+
+      const costRaw = row['Geliş Fiyatı'];
+      const profitRaw = row['Hedef Kar'];
+
+      updates[code] = {
+        name,
+        qty: parseFloat(row['Miktar']) || 0,
+        price: parseFloat(row['Birim Fiyat']) || 0,
+        unit: String(row['Ölçü Birimi'] || 'Adet').trim() || 'Adet',
+        category: String(row['Kategori'] || 'Diğer').trim() || 'Diğer',
+        brand: String(row['Marka'] || '').trim() || null,
+        costPrice: (costRaw !== '' && costRaw != null) ? (Math.max(0, parseFloat(costRaw)) || 0) : null,
+        vat: parseFloat(row['KDV Oranı']) || 0,
+        targetProfit: (profitRaw !== '' && profitRaw != null) ? (parseFloat(profitRaw) || 0) : null,
+        code,
+        lastPriceUpdate: new Date().toISOString(),
+        lastUpdatedBy: 'Yönetici (Toplu Aktarım)'
+      };
+      successCount++;
+    });
+
+    if (Object.keys(updates).length === 0) {
+      statusEl.innerHTML = `<span style="color:var(--rust);">Aktarılacak geçerli satır bulunamadı.</span><br>${errorRows.join('<br>')}`;
+      return;
+    }
+
+    statusEl.textContent = "Yükleniyor, lütfen bekleyin... (bu birkaç saniye sürebilir)";
+    startBtn.disabled = true;
+
+    db.update(updates, (err) => {
+      startBtn.disabled = false;
+      if (err) {
+        statusEl.innerHTML = `<span style="color:var(--rust);">Yükleme hatası: ${err.message}</span>`;
+        return;
+      }
+      let resultHtml = `<span style="color:var(--success); font-weight:bold;">✅ ${successCount} ürün başarıyla eklendi!</span>`;
+      if (errorRows.length > 0) {
+        resultHtml += `<div style="margin-top:6px; color:var(--rust); font-size:11px;">${errorRows.length} satır atlandı:<br>${errorRows.slice(0, 15).join('<br>')}</div>`;
+      }
+      statusEl.innerHTML = resultHtml;
+      pendingImportRows = null;
+      document.getElementById('bulk-import-preview').innerHTML = '';
+      document.getElementById('bulk-import-file').value = '';
+      startBtn.style.display = 'none';
+      showToast(successCount + " ürün içe aktarıldı!");
+    });
   }
 
   function addProduct() {
