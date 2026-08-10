@@ -2670,6 +2670,12 @@
     // 2) Kendi hafızamızda yoksa dış veritabanına sor (günlük sınırlı, ücretsiz)
     try {
       const resp = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+
+      if (resp.status === 429) {
+        statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkın (100) dolmuş.</span> Barkod numarası dolduruldu — ürün adını elle girip kaydet, <b>kendi hafızamıza kaydedilecek ve bir dahaki sefere hiç sorgu harcamadan tanınacak.</b> Dış sorgu hakkı ertesi gün yeniden açılıyor.`;
+        return;
+      }
+
       const data = await resp.json();
       if (data && data.items && data.items.length > 0) {
         const item = data.items[0];
@@ -2682,7 +2688,7 @@
         statusEl.innerHTML = `<span style="color:var(--steel);">Ne kendi hafızamızda ne dış veritabanında bulunamadı. Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
       }
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı (bağlantı sorunu ya da günlük sorgu hakkı bitmiş olabilir). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı (bağlantı sorunu). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
     }
   }
 
