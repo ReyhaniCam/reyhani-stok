@@ -503,11 +503,39 @@
         <div class="form-row" style="grid-template-columns: 2fr 1fr 1fr;">
           <div>
             <label>Malzeme Ara (Mevcut Ürün) veya Yeni Ad Yazın</label>
-            <input list="fis-product-list" id="fis-product" placeholder="Ürün kodu/adı yazın veya yeni malzeme adı girin...">
+            <input list="fis-product-list" id="fis-product" placeholder="Ürün kodu/adı yazın veya yeni malzeme adı girin..." oninput="checkFisProductMatch()">
             <datalist id="fis-product-list"></datalist>
           </div>
           <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any"></div>
           <div><label>Birim Alış Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div id="fis-new-fields" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-bottom:10px;">
+          <p style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;">ℹ️ Bu malzeme sistemde bulunamadı, YENİ ÜRÜN olarak stoğa eklenecek. Lütfen aşağıdaki bilgileri de girin:</p>
+          <div class="form-row" style="grid-template-columns: 1fr 1fr 1fr;">
+            <div><label>Satış Fiyatı (₺)</label><input type="number" id="fis-sale-price" step="0.01" placeholder="0.00"></div>
+            <div><label>Ölçü Birimi</label>
+              <select id="fis-unit">
+                <option value="Adet">Adet</option>
+                <option value="Kilogram">Kilogram</option>
+                <option value="Metre">Metre</option>
+              </select>
+            </div>
+            <div><label>Ürün Sınıfı</label>
+              <select id="fis-category">
+                <option value="Banyo">Banyo</option>
+                <option value="Bahçe">Bahçe</option>
+                <option value="Mutfak">Mutfak</option>
+                <option value="Boya">Boya</option>
+                <option value="Toz Grubu">Toz Grubu</option>
+                <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
+                <option value="Cam & Aksesuar">Cam & Aksesuar</option>
+                <option value="Silikon & Mastik">Silikon & Mastik</option>
+                <option value="Vida & Civata">Vida & Civata</option>
+                <option value="El Aletleri">El Aletleri</option>
+                <option value="Diğer" selected>Diğer</option>
+              </select>
+            </div>
+          </div>
         </div>
         <button class="btn btn-primary" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
       </div>
@@ -2540,6 +2568,14 @@
 
   // ================== MALZEME FİŞİ (TOPTANCI MAL GİRİŞİ) ==================
 
+  function checkFisProductMatch() {
+    const inputVal = document.getElementById('fis-product').value.trim();
+    const possibleCode = inputVal.split(' - ')[0].trim();
+    const exists = !!productsData[possibleCode];
+    const newFields = document.getElementById('fis-new-fields');
+    if(newFields) newFields.style.display = (inputVal && !exists) ? 'block' : 'none';
+  }
+
   function addToGoodsReceipt() {
     if(currentRole !== 'admin' && currentRole !== 'staff') return;
     const inputVal = document.getElementById('fis-product').value.trim();
@@ -2561,7 +2597,11 @@
       item = { code: p.code, name: p.name, unit: p.unit || 'Adet', qty: qty, cost: cost, isNew: false };
     } else {
       const cost = (costEntered !== null && !isNaN(costEntered)) ? costEntered : 0;
-      item = { code: null, name: inputVal, unit: 'Adet', qty: qty, cost: cost, isNew: true };
+      const salePriceRaw = document.getElementById('fis-sale-price').value;
+      const salePrice = salePriceRaw === '' ? 0 : (parseFloat(salePriceRaw) || 0);
+      const unit = document.getElementById('fis-unit').value || 'Adet';
+      const category = document.getElementById('fis-category').value || 'Diğer';
+      item = { code: null, name: inputVal, unit: unit, category: category, price: salePrice, qty: qty, cost: cost, isNew: true };
     }
     item.total = item.qty * item.cost;
 
@@ -2570,6 +2610,10 @@
     document.getElementById('fis-product').value = '';
     document.getElementById('fis-qty').value = '1';
     document.getElementById('fis-cost').value = '';
+    document.getElementById('fis-sale-price').value = '';
+    document.getElementById('fis-unit').value = 'Adet';
+    document.getElementById('fis-category').value = 'Diğer';
+    document.getElementById('fis-new-fields').style.display = 'none';
     renderGoodsReceiptCart();
     showToast(item.isNew ? "Sistemde bulunmayan yeni malzeme fişe eklendi." : "Malzeme fişe eklendi.");
   }
@@ -2590,8 +2634,9 @@
       tbody.innerHTML += `
         <tr style="border-bottom:1px dashed var(--steel-line);">
           <td style="padding:10px 0; line-height:1.3;">
-            <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN)</span>' : ''}<br>
+            <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}<br>
             <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code || 'Kod otomatik atanacak'}</small>
+            ${item.isNew && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}</small>` : ''}
           </td>
           <td>₺${formatMoney(item.cost)}</td>
           <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
@@ -2641,8 +2686,8 @@
           usedCodes.add(code);
 
           await db.child(code).set({
-            name: item.name, qty: 0, price: 0, unit: item.unit,
-            category: 'Diğer', brand: null, costPrice: item.cost || 0, vat: 0,
+            name: item.name, qty: 0, price: item.price || 0, unit: item.unit,
+            category: item.category || 'Diğer', brand: null, costPrice: item.cost || 0, vat: 0,
             targetProfit: null, code, lastPriceUpdate: new Date().toISOString(),
             lastUpdatedBy: 'Malzeme Fişi (' + wholesaler.name + ')'
           });
