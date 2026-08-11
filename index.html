@@ -163,6 +163,10 @@
   }
   .cost-calc-box.active{display:block;}
   .cost-calc-box b{color:var(--charcoal); font-family:'IBM Plex Mono';}
+  .duplicate-warning-box{
+    margin-top:8px; padding:10px; background:#FFF6E9; border:1px solid #E8C27A;
+    border-radius:3px; font-size:11px; color:var(--charcoal); line-height:1.5; display:none;
+  }
   .recent-update-row{
     display:flex; justify-content:space-between; align-items:center; padding:8px 0;
     border-top:1px solid var(--steel-line); font-size:12px;
@@ -301,7 +305,9 @@
         </div>
 
         <div class="form-row">
-          <div><label>Ürün Adı</label><input type="text" id="f-name" placeholder="Örn: Akfix Silikon 280ml"></div>
+          <div><label>Ürün Adı</label><input type="text" id="f-name" placeholder="Örn: Akfix Silikon 280ml" oninput="checkNameDuplicate()">
+            <div class="duplicate-warning-box" id="f-name-duplicate-warning"></div>
+          </div>
           <div><label>Miktar</label><input type="number" id="f-qty" placeholder="0" step="any"></div>
         </div>
         <div class="form-row">
@@ -493,6 +499,17 @@
       <div class="form-card">
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Malzeme Fişi (Toptancıdan Mal Girişi)</h3>
         <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Toptancıdan gelen malzemeleri buraya işleyin: hangi toptancıdan hangi malzeme, ne kadar geldiğini kaydedin. Onayladığınızda ilgili ürünlerin stoğu otomatik artırılır ve fiş arşivlenir.</p>
+
+        <div style="background:#F7F5F0; border:1px dashed var(--steel-line); border-radius:4px; padding:12px; margin-bottom:16px;">
+          <label style="margin-bottom:4px;">📦 Malzemenin Barkodunu Okutarak Bul / Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bazı ürünler barkodlu geliyorsa kullanın, opsiyonel)</span></label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="text" id="fis-barcode-lookup" placeholder="Barkod numarasını yazın..." style="flex:1; min-width:140px;">
+            <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="lookupFisBarcode()">🔎 Bul</button>
+            <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Kamerayla Okut</button>
+          </div>
+          <div id="fis-barcode-lookup-status" style="font-size:11px; margin-top:8px; line-height:1.5;"></div>
+          <input type="hidden" id="fis-barcode-pending-code">
+        </div>
         <div class="form-row">
           <div>
             <label>Toptancı / Firma</label>
@@ -505,6 +522,7 @@
             <label>Malzeme Ara (Mevcut Ürün) veya Yeni Ad Yazın</label>
             <input list="fis-product-list" id="fis-product" placeholder="Ürün kodu/adı yazın veya yeni malzeme adı girin..." oninput="checkFisProductMatch()">
             <datalist id="fis-product-list"></datalist>
+            <div class="duplicate-warning-box" id="fis-duplicate-warning"></div>
           </div>
           <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any"></div>
           <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit()"></div>
@@ -889,6 +907,15 @@
     <h3 style="margin-top:0; font-family:'Oswald';">Barkodu Kameraya Gösterin</h3>
     <div id="barcode-lookup-reader"></div>
     <p style="font-size:11px; color:var(--steel); margin-top:8px;">Ürünün üzerindeki çizgili barkodu (karekod değil) kameraya net ve yakın şekilde gösterin.</p>
+  </div>
+</div>
+
+<div class="modal-overlay" id="fis-barcode-modal">
+  <div class="modal-content" style="max-width:420px; text-align:center;">
+    <button class="modal-close" onclick="closeFisBarcodeScanner()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">Malzeme Barkodunu Kameraya Gösterin</h3>
+    <div id="fis-barcode-reader"></div>
+    <p style="font-size:11px; color:var(--steel); margin-top:8px;">Malzemenin üzerindeki çizgili barkodu (karekod değil) kameraya net ve yakın şekilde gösterin.</p>
   </div>
 </div>
 
@@ -2446,6 +2473,86 @@
     });
   }
 
+  // ================== BENZER ÜRÜN / MÜKERRER KAYIT TESPİTİ ==================
+
+  function normalizeTr(str) {
+    return (str || '')
+      .toLocaleLowerCase('tr-TR')
+      .replace(/[^a-z0-9ğüşıöç\s]/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function levenshteinDistance(a, b) {
+    const m = a.length, n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+    const dp = new Array(n + 1);
+    for (let j = 0; j <= n; j++) dp[j] = j;
+    for (let i = 1; i <= m; i++) {
+      let prev = dp[0];
+      dp[0] = i;
+      for (let j = 1; j <= n; j++) {
+        const temp = dp[j];
+        dp[j] = a[i-1] === b[j-1] ? prev : 1 + Math.min(prev, dp[j], dp[j-1]);
+        prev = temp;
+      }
+    }
+    return dp[n];
+  }
+
+  function similarityRatio(a, b) {
+    const maxLen = Math.max(a.length, b.length);
+    if (maxLen === 0) return 1;
+    return 1 - (levenshteinDistance(a, b) / maxLen);
+  }
+
+  // Sistemde girilen isme benzeyen ürünleri bulur (mükerrer kayıt uyarısı için)
+  function findSimilarProducts(inputName, limit) {
+    limit = limit || 4;
+    const norm = normalizeTr(inputName);
+    if (!norm || norm.length < 3) return [];
+    const inputTokens = norm.split(' ').filter(Boolean);
+
+    const scored = Object.values(productsData).map(p => {
+      const pn = normalizeTr(p.name || '');
+      if (!pn) return { product: p, score: 0 };
+      let score = similarityRatio(norm, pn);
+      if (pn.includes(norm) || norm.includes(pn)) score = Math.max(score, 0.85);
+      const pnTokens = pn.split(' ').filter(Boolean);
+      if (inputTokens.length > 0 && pnTokens.length > 0) {
+        const overlap = inputTokens.filter(t => t.length > 1 && pnTokens.includes(t)).length;
+        score = Math.max(score, (overlap / inputTokens.length) * 0.9);
+      }
+      return { product: p, score };
+    });
+
+    return scored.filter(s => s.score >= 0.55 && s.score < 0.999).sort((a, b) => b.score - a.score).slice(0, limit);
+  }
+
+  function checkNameDuplicate() {
+    const nameInput = document.getElementById('f-name');
+    const warnBox = document.getElementById('f-name-duplicate-warning');
+    if (!nameInput || !warnBox) return;
+    const val = nameInput.value.trim();
+
+    if (!val) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+
+    const matches = findSimilarProducts(val);
+    if (matches.length === 0) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+
+    warnBox.style.display = 'block';
+    warnBox.innerHTML = `
+      <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu ürünü mü arıyordunuz? Sistemde benzer isimli ürün(ler) var, mükerrer kayıt oluşturmamak için kontrol edin:</div>
+      ${matches.map(m => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
+          <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
+          <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="openEditModal('${m.product.code}')">Bu Ürünü Düzenle</button>
+        </div>
+      `).join('')}
+    `;
+  }
+
   function renderFisWholesalerOptions() {
     const sel = document.getElementById('fis-wholesaler');
     if (!sel) return;
@@ -2605,6 +2712,32 @@
     const exists = !!productsData[possibleCode];
     const newFields = document.getElementById('fis-new-fields');
     if(newFields) newFields.style.display = (inputVal && !exists) ? 'block' : 'none';
+
+    const warnBox = document.getElementById('fis-duplicate-warning');
+    if(!warnBox) return;
+
+    if(!inputVal || exists) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+
+    const matches = findSimilarProducts(inputVal);
+    if(matches.length === 0) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+
+    warnBox.style.display = 'block';
+    warnBox.innerHTML = `
+      <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu malzemeyi mi arıyordunuz? Sistemde benzer isimli ürün(ler) var, mükerrer kayıt açmamak için kontrol edin:</div>
+      ${matches.map(m => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
+          <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
+          <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="selectFisSuggestion('${m.product.code}')">Bunu Seç</button>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  function selectFisSuggestion(code) {
+    const p = productsData[code];
+    if(!p) return;
+    document.getElementById('fis-product').value = `${p.code} - ${p.name}`;
+    checkFisProductMatch();
   }
 
   function addToGoodsReceipt() {
@@ -2634,7 +2767,8 @@
       const category = document.getElementById('fis-category').value || 'Diğer';
       const vat = parseFloat(document.getElementById('fis-vat').value) || 0;
       const profit = parseFloat(document.getElementById('fis-profit').value) || 0;
-      item = { code: null, name: inputVal, unit: unit, category: category, price: salePrice, vat: vat, targetProfit: profit || null, qty: qty, cost: cost, isNew: true };
+      const pendingBarcode = document.getElementById('fis-barcode-pending-code').value.trim();
+      item = { code: pendingBarcode || null, name: inputVal, unit: unit, category: category, price: salePrice, vat: vat, targetProfit: profit || null, qty: qty, cost: cost, isNew: true };
     }
     item.total = item.qty * item.cost;
 
@@ -2651,6 +2785,11 @@
     document.getElementById('fis-suggested-price').value = '';
     document.getElementById('fis-suggested-price').dataset.value = '';
     document.getElementById('fis-new-fields').style.display = 'none';
+    document.getElementById('fis-duplicate-warning').innerHTML = '';
+    document.getElementById('fis-duplicate-warning').style.display = 'none';
+    document.getElementById('fis-barcode-lookup').value = '';
+    document.getElementById('fis-barcode-lookup-status').innerHTML = '';
+    document.getElementById('fis-barcode-pending-code').value = '';
     renderGoodsReceiptCart();
     showToast(item.isNew ? "Sistemde bulunmayan yeni malzeme fişe eklendi." : "Malzeme fişe eklendi.");
   }
@@ -2672,7 +2811,7 @@
         <tr style="border-bottom:1px dashed var(--steel-line);">
           <td style="padding:10px 0; line-height:1.3;">
             <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}<br>
-            <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code || 'Kod otomatik atanacak'}</small>
+            <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? (item.isNew ? 'Barkod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
             ${item.isNew && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
           </td>
           <td>₺${formatMoney(item.cost)}</td>
@@ -2716,10 +2855,18 @@
     try {
       for(const item of goodsReceiptCart) {
         if(item.isNew) {
-          let code;
-          do {
-            code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
-          } while (productsData[code] || usedCodes.has(code));
+          let code = item.code; // barkod okutulmuşsa gerçek barkod numarası burada gelir
+
+          if(code) {
+            if(productsData[code] || usedCodes.has(code)) {
+              alert(`HATA: '${code}' barkodu zaten sistemde kayıtlı bir üründe kullanılıyor! Lütfen "${item.name}" kalemini fişten çıkarıp barkodu tekrar arayın.`);
+              return;
+            }
+          } else {
+            do {
+              code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
+            } while (productsData[code] || usedCodes.has(code));
+          }
           usedCodes.add(code);
 
           await db.child(code).set({
@@ -2728,6 +2875,10 @@
             targetProfit: item.targetProfit || null, code, lastPriceUpdate: new Date().toISOString(),
             lastUpdatedBy: 'Malzeme Fişi (' + wholesaler.name + ')'
           });
+          // Gerçek bir üretici barkoduysa (bizim RYH- kodumuz değilse) kendi hafızamıza da kaydet
+          if(!code.startsWith('RYH-')) {
+            dbBarcodeCache.child(code).set({ name: item.name, source: 'manuel', savedAt: new Date().toISOString() });
+          }
           productsData[code] = { code, name: item.name, qty: 0, unit: item.unit };
           finalItems.push(Object.assign({}, item, { code }));
         } else {
@@ -3122,6 +3273,112 @@
     }
   }
 
+  // ================== MALZEME FİŞİ BARKOD OKUTMA ==================
+
+  let fisBarcodeScanner = null;
+
+  function openFisBarcodeScanner() {
+    document.getElementById('fis-barcode-modal').style.display = 'flex';
+    if (fisBarcodeScanner) return;
+    fisBarcodeScanner = new Html5Qrcode("fis-barcode-reader");
+    fisBarcodeScanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 260, height: 150 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128
+        ]
+      },
+      (decodedText) => {
+        document.getElementById('fis-barcode-lookup').value = decodedText;
+        closeFisBarcodeScanner();
+        lookupFisBarcode();
+      },
+      () => {}
+    ).catch((err) => {
+      document.getElementById('fis-barcode-lookup-status').innerHTML =
+        `<span style="color:var(--rust);">Kamera açılamadı: ${err}</span>`;
+    });
+  }
+
+  function closeFisBarcodeScanner() {
+    document.getElementById('fis-barcode-modal').style.display = 'none';
+    if (fisBarcodeScanner) {
+      fisBarcodeScanner.stop().then(() => fisBarcodeScanner.clear()).catch(() => {});
+      fisBarcodeScanner = null;
+    }
+  }
+
+  async function lookupFisBarcode() {
+    const code = document.getElementById('fis-barcode-lookup').value.trim();
+    const statusEl = document.getElementById('fis-barcode-lookup-status');
+    if (!code) { statusEl.innerHTML = '<span style="color:var(--rust);">Önce bir barkod numarası girin ya da okutun.</span>'; return; }
+
+    statusEl.textContent = "Aranıyor...";
+    document.getElementById('fis-barcode-pending-code').value = '';
+
+    // 1) Bu barkod zaten sistemde kayıtlı bir ürünün kodu mu? (üretici barkodu = ürün kodu olabilir)
+    if (productsData[code]) {
+      const p = productsData[code];
+      document.getElementById('fis-product').value = `${p.code} - ${p.name}`;
+      checkFisProductMatch();
+      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Bu barkod sistemde kayıtlı: "${p.name}" (stok: ${p.qty ?? 0}).</span> Malzeme alanına otomatik seçildi, miktar/fiyat girip fişe ekleyin.`;
+      return;
+    }
+
+    // 2) Kendi hafızamıza (dbBarcodeCache) bak — dış API'ye gitmeden isim bulunabilir mi?
+    try {
+      const cacheSnap = await dbBarcodeCache.child(code).once('value');
+      const cached = cacheSnap.val();
+      if (cached && cached.name) {
+        document.getElementById('fis-product').value = cached.name;
+        checkFisProductMatch();
+        document.getElementById('fis-barcode-pending-code').value = code;
+        statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Kendi hafızamızdan tanındı: "${cached.name}"</span> (dış sorgu hakkı harcanmadı). Sistemde henüz kayıtlı değil — YENİ ÜRÜN bilgilerini doldurup fişe ekleyin, barkod (${code}) ürün kodu olarak kullanılacak.`;
+        return;
+      }
+    } catch (e) { /* sessizce dış API'ye geç */ }
+
+    // 3) Dış veritabanına sor (günlük sınırlı, ücretsiz)
+    try {
+      const resp = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+
+      if (resp.status === 429) {
+        document.getElementById('fis-barcode-pending-code').value = code;
+        statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkı dolmuş.</span> Malzeme adını elle girin — barkod (${code}) yine de ürün kodu olarak kaydedilecek.`;
+        return;
+      }
+      if (!resp.ok) {
+        document.getElementById('fis-barcode-pending-code').value = code;
+        statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Malzeme adını elle girin, barkod (${code}) yine de kaydedilecek.`;
+        return;
+      }
+
+      const data = await resp.json();
+      if (data && data.items && data.items.length > 0) {
+        const item = data.items[0];
+        document.getElementById('fis-barcode-pending-code').value = code;
+        if (item.title) {
+          document.getElementById('fis-product').value = item.title;
+          checkFisProductMatch();
+          dbBarcodeCache.child(code).set({ name: item.title, source: 'upcitemdb', savedAt: new Date().toISOString() });
+        }
+        statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${item.title || '-'}"${item.brand ? ' — ' + item.brand : ''}.</span> YENİ ÜRÜN bilgilerini kontrol edip fişe ekleyin. Barkod (${code}) ürün kodu olarak kullanılacak.`;
+      } else {
+        document.getElementById('fis-barcode-pending-code').value = code;
+        statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod hiçbir yerde bulunamadı. Malzeme adını elle girip fişe ekleyin — barkod (${code}) yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
+      }
+    } catch (err) {
+      document.getElementById('fis-barcode-pending-code').value = code;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b>. Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
+    }
+  }
+
   async function lookupBarcode() {
     const code = document.getElementById('f-barcode-lookup').value.trim();
     const statusEl = document.getElementById('f-barcode-lookup-status');
@@ -3219,6 +3476,8 @@
                document.getElementById('f-cost-price').value = '';
                document.getElementById('f-cost-calc').innerHTML = '';
                document.getElementById('f-cost-calc').classList.remove('active');
+               document.getElementById('f-name-duplicate-warning').innerHTML = '';
+               document.getElementById('f-name-duplicate-warning').style.display = 'none';
              } else {
                alert("Kaydedilemedi: " + error.message);
              }
