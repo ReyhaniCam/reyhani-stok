@@ -2686,7 +2686,7 @@
     dbGoodsReceipts.child(dateStr).child(receiptId).set(receiptData, (err) => {
       if(!err) {
         if(addDebt && grandTotal > 0) {
-          dbWholesalers.child(wKey).child('balance').transaction(cur => (cur || 0) + grandTotal, (err2) => {
+          dbWholesalers.child(wKey).child('balance').transaction(cur => (cur || 0) - grandTotal, (err2) => {
             if(!err2) {
               dbWholesalers.child(wKey).child('transactions').push({
                 desc: 'Malzeme Fişi: ' + (fisNo || receiptId),
@@ -3575,7 +3575,7 @@
     const type = document.getElementById('h-type').value;
     if(!desc || isNaN(amount) || amount <= 0) { alert("Lütfen geçerli açıklama ve tutar girin."); return; }
     const date = new Date().toLocaleString('tr-TR');
-    const mult = type === 'borc' ? 1 : -1;
+    const mult = type === 'borc' ? -1 : 1;
 
     dbWholesalers.child(activeWholesalerKey).child('balance').transaction(cur => (cur || 0) + (amount * mult), (err) => {
       if (err) return;
