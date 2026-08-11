@@ -84,12 +84,13 @@
   .grid{display:grid;grid-template-columns:1fr;gap:12px;}
   @media(min-width:600px){.grid{grid-template-columns:1fr 1fr;}}
 
-  .tag{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:14px;position:relative;}
+  .tag{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:14px;position:relative;overflow-wrap:anywhere;}
   .tag.low{border-color:var(--rust);}
   .tag.highlight{border:2px solid var(--safety);box-shadow:0 0 10px rgba(245,183,0,0.5);}
-  .tag-header{display:flex;justify-content:space-between;align-items:flex-start;}
-  .tag-title{font-weight:600;font-size:15px;}
-  .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);}
+  .tag-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .tag-header > div:first-child{min-width:0;flex:1;}
+  .tag-title{font-weight:600;font-size:15px;overflow-wrap:anywhere;}
+  .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);word-break:break-all;overflow-wrap:anywhere;line-height:1.5;}
   
   .qr-box-mini{display:flex;justify-content:center;margin:10px 0;padding:6px;background:#fff;border:1px dashed var(--steel-line);width:80px;height:80px;margin-left:auto;margin-right:auto;}
   .qr-box-mini img{width:100%!important;height:100%!important;}
@@ -827,6 +828,13 @@
     <div class="form-row">
       <div><label>Ürün Adı</label><input type="text" id="edit-name"></div>
       <div><label>Miktar</label><input type="number" id="edit-qty" step="any"></div>
+    </div>
+    <div class="form-row" id="edit-code-section" style="display:none;">
+      <div>
+        <label>Barkod / Ürün Kodu <span style="text-transform:none; color:var(--steel); font-size:9px;">— otomatik atanmış kodu gerçek barkodla değiştirebilirsiniz</span></label>
+        <input type="text" id="edit-code-visible" placeholder="Örn: 8690123456789">
+        <div id="edit-code-status" style="font-size:10px; color:var(--rust); margin-top:4px;"></div>
+      </div>
     </div>
     <div class="form-row">
       <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--rust); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01"></div>
@@ -3053,7 +3061,8 @@
             <div class="tag-header">
               <div>
                 <div class="tag-title">${p.name}</div>
-                <div class="tag-code">${p.code} • ${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
+                <div class="tag-code">${p.code}</div>
+                <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
               </div>
               <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
             </div>
@@ -3525,6 +3534,9 @@
     if (!p) return;
     
     document.getElementById('edit-code').value = p.code;
+    document.getElementById('edit-code-visible').value = p.code;
+    document.getElementById('edit-code-status').innerHTML = '';
+    document.getElementById('edit-code-section').style.display = currentRole === 'admin' ? 'block' : 'none';
     document.getElementById('edit-name').value = p.name || '';
     document.getElementById('edit-qty').value = p.qty || 0;
     document.getElementById('edit-price').value = p.price || 0;
@@ -3609,11 +3621,31 @@
     }
   }
 
-  function saveEditProduct() {
-    const code = document.getElementById('edit-code').value;
-    if (!code) return;
-    const p = productsData[code];
+  async function saveEditProduct() {
+    const oldCode = document.getElementById('edit-code').value;
+    if (!oldCode) return;
+    const p = productsData[oldCode];
     if (!p) return;
+
+    const statusEl = document.getElementById('edit-code-status');
+    if (statusEl) statusEl.innerHTML = '';
+
+    let newCode = oldCode;
+    if (currentRole === 'admin') {
+      const visibleCodeInput = document.getElementById('edit-code-visible');
+      const enteredCode = visibleCodeInput.value.trim().toUpperCase();
+      if (!enteredCode) {
+        if (statusEl) statusEl.innerHTML = 'Barkod/kod boş olamaz.';
+        return;
+      }
+      newCode = enteredCode;
+    }
+    const codeChanged = currentRole === 'admin' && newCode !== oldCode;
+
+    if (codeChanged && productsData[newCode]) {
+      if (statusEl) statusEl.innerHTML = `HATA: '${newCode}' kodu zaten başka bir üründe kullanılıyor!`;
+      return;
+    }
 
     const updates = {
       name: document.getElementById('edit-name').value.trim(),
@@ -3639,11 +3671,39 @@
     if (stand && slot) updates.location = `${stand}-${slot}`;
     else updates.location = null;
 
-    db.child(code).update(updates, (err) => {
+    if (codeChanged) {
+      // Kod/barkod değiştiriliyor: verileri yeni anahtara taşı, eskisini sil
+      const fullData = Object.assign({}, p, updates, { code: newCode });
+      try {
+        await db.child(newCode).set(fullData);
+        await db.child(oldCode).remove();
+
+        try {
+          const imgSnap = await dbProductImages.child(oldCode).once('value');
+          if (imgSnap.exists()) {
+            await dbProductImages.child(newCode).set(imgSnap.val());
+            await dbProductImages.child(oldCode).remove();
+          }
+        } catch (e) { /* fotoğraf yoksa sorun değil */ }
+
+        if (!newCode.startsWith('RYH-')) {
+          dbBarcodeCache.child(newCode).set({ name: updates.name, source: 'manuel', savedAt: new Date().toISOString() });
+        }
+
+        showToast("Ürün güncellendi ve kod/barkod değiştirildi!");
+        closeEditModal();
+        if (pendingImageDataUrl) { refreshCardPhoto(newCode); pendingImageDataUrl = null; }
+      } catch (err) {
+        if (statusEl) statusEl.innerHTML = "Kod değiştirilemedi: " + (err.message || err);
+      }
+      return;
+    }
+
+    db.child(oldCode).update(updates, (err) => {
       if (!err) {
         showToast("Ürün güncellendi!");
         closeEditModal();
-        if (pendingImageDataUrl) { refreshCardPhoto(code); pendingImageDataUrl = null; }
+        if (pendingImageDataUrl) { refreshCardPhoto(oldCode); pendingImageDataUrl = null; }
       }
     });
   }
