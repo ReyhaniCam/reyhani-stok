@@ -2676,6 +2676,13 @@
         return;
       }
 
+      if (!resp.ok) {
+        const rawText = await resp.text().catch(() => '(okunamadı)');
+        statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Barkod numarası dolduruldu, ürün adını elle girin.
+          <details style="margin-top:6px; font-size:10px; color:var(--steel);"><summary style="cursor:pointer;">Teknik detay (ekran görüntüsü alıp gönderebilirsin)</summary>${String(rawText).slice(0,300)}</details>`;
+        return;
+      }
+
       const data = await resp.json();
       if (data && data.items && data.items.length > 0) {
         const item = data.items[0];
@@ -2685,10 +2692,10 @@
         }
         statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${item.title || '-'}"${item.brand ? ' — ' + item.brand : ''}.</span> Kontrol edip fiyat/miktar/kategori girin. (Bu barkod artık kendi hafızamıza da kaydedildi.)`;
       } else {
-        statusEl.innerHTML = `<span style="color:var(--steel);">Ne kendi hafızamızda ne dış veritabanında bulunamadı. Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
+        statusEl.innerHTML = `<span style="color:var(--steel);">Ne kendi hafızamızda ne dış veritabanında bulunamadı (kod: ${data && data.code ? data.code : 'bilinmiyor'}). Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
       }
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı (bağlantı sorunu). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b>. Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
     }
   }
 
