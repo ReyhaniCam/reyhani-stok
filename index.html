@@ -286,6 +286,7 @@
         <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
         <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
+        <button class="btn btn-dark btn-sm" id="download-all-png-btn" onclick="downloadAllLabelsPNG()" style="display:none;">🖼️ Toplu PNG İndir</button>
       </div>
       <div id="grid" class="grid"></div>
     </div>
@@ -1423,6 +1424,7 @@
       statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
       printAllBtn.style.display = 'inline-block';
+      document.getElementById('download-all-png-btn').style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'block';
       document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
       document.getElementById('edit-mode-toggle-btn').style.display = 'inline-block';
@@ -1435,6 +1437,7 @@
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'inline-block';
+      document.getElementById('download-all-png-btn').style.display = 'inline-block';
       layoutEditMode = false;
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
@@ -1449,6 +1452,7 @@
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'none';
+      document.getElementById('download-all-png-btn').style.display = 'none';
       layoutEditMode = false;
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
@@ -3065,6 +3069,7 @@
                 <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
               </div>
               <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
+              <button class="sm-btn" onclick="downloadLabelPNG('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖼️ PNG İndir</button>
             </div>
 
             <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
@@ -3714,6 +3719,117 @@
       db.child(code).remove();
       dbProductImages.child(code).remove();
     }
+  }
+
+  // ============================================================
+  // ETİKETİ PNG OLARAK İNDİR
+  // ------------------------------------------------------------
+  // Bazı termal yazıcı sürücüleri (Argox vb.), tarayıcının yazdır
+  // penceresinden gelen sayfa boyutunu doğru yorumlamayıp karekodu
+  // kırpabiliyor/basmayabiliyor. Bu yol, o sürücü/sayfa boyutu
+  // zincirini tamamen atlar: 50mm x 30mm'lik etiketi doğrudan,
+  // 203 DPI termal yazıcılara uygun boyutta (400x240px) bir PNG
+  // resmi olarak üretip indirir. Bu PNG, Argox'un kendi etiket
+  // yazılımına (ArgoBar vb.) resim olarak içe aktarılıp basılabilir
+  // — böylece tarayıcı/Windows sayfa boyutu sorunu devre dışı kalır.
+  // ============================================================
+  function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+    const words = String(text).split(' ');
+    let line = '';
+    let lines = [];
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      if (ctx.measureText(testLine).width > maxWidth && n > 0) {
+        lines.push(line.trim());
+        line = words[n] + ' ';
+      } else {
+        line = testLine;
+      }
+    }
+    lines.push(line.trim());
+    lines = lines.slice(0, maxLines);
+    lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
+  }
+
+  function renderLabelToCanvas(p, callback) {
+    const currentBaseUrl = window.location.href.split('?')[0];
+    const tempDiv = document.createElement('div');
+    tempDiv.style.position = 'absolute';
+    tempDiv.style.left = '-9999px';
+    document.body.appendChild(tempDiv);
+    new QRCode(tempDiv, { text: `${currentBaseUrl}?item=${p.code}`, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M });
+
+    setTimeout(() => {
+      const qrSource = tempDiv.querySelector('canvas') || tempDiv.querySelector('img');
+
+      // 50mm x 30mm etiket, 203 DPI (~8 dot/mm) için 400x240px
+      const W = 400, H = 240;
+      const canvas = document.createElement('canvas');
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, W - 2, H - 2);
+
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 16px Arial, sans-serif';
+      wrapCanvasText(ctx, p.name || '', W / 2, 20, W - 20, 18, 2);
+
+      const qrSize = 130;
+      const qrX = (W - qrSize) / 2;
+      const qrY = 42;
+      if (qrSource) ctx.drawImage(qrSource, qrX, qrY, qrSize, qrSize);
+
+      ctx.textAlign = 'left';
+      ctx.font = '13px "Courier New", monospace';
+      ctx.fillText(p.code || '', 10, H - 12);
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 14px "Courier New", monospace';
+      ctx.fillText('₺' + formatMoney(p.price || 0), W - 10, H - 12);
+
+      document.body.removeChild(tempDiv);
+      callback(canvas);
+    }, 80);
+  }
+
+  function downloadLabelPNG(code) {
+    const p = productsData[code];
+    if (!p) return;
+    renderLabelToCanvas(p, (canvas) => {
+      const link = document.createElement('a');
+      link.download = `Etiket_${p.code}.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('Etiket PNG olarak indirildi: ' + p.code);
+    });
+  }
+
+  function downloadAllLabelsPNG() {
+    if (currentRole !== 'admin' && currentRole !== 'staff') return;
+    const search = document.getElementById('search').value.toLowerCase();
+    const toDownload = Object.values(productsData).filter(p => {
+      const pName = p.name ? p.name.toLowerCase() : '';
+      const pCat = p.category ? p.category.toLowerCase() : '';
+      const pCode = p.code ? p.code.toLowerCase() : '';
+      return (pName.includes(search) || pCat.includes(search) || pCode.includes(search));
+    });
+    if (toDownload.length === 0) { alert("İndirilecek ürün bulunamadı!"); return; }
+    if (!confirm(`${toDownload.length} adet PNG etiket tek tek indirilecek (tarayıcı birden fazla indirme izni isteyebilir). Devam edilsin mi?`)) return;
+
+    let i = 0;
+    function next() {
+      if (i >= toDownload.length) { showToast(`${toDownload.length} etiket indirildi.`); return; }
+      downloadLabelPNG(toDownload[i].code);
+      i++;
+      setTimeout(next, 350);
+    }
+    next();
   }
 
   function printQR(code) {
