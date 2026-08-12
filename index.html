@@ -224,14 +224,24 @@
   @media print {
     body * { visibility: hidden; }
     
-    /* Etiket Modu */
+    /* Etiket Modu (Normal A4/Etiket Kağıdı) */
     body.printing-label #print-area, body.printing-label #print-area * { visibility: visible; }
     body.printing-label #print-area { display: flex !important; flex-wrap: wrap; gap: 4mm; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
-    .sticker-label { width: 20mm; height: 40mm; border: 1px dashed #000; padding: 1.5mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
-    .sticker-title { font-size: 7px; font-weight: bold; font-family: sans-serif; max-height: 16px; overflow: hidden; line-height: 1.1; }
-    .sticker-qr { width: 16mm; height: 16mm; display: flex; justify-content: center; }
+    .sticker-label { width: 50mm; height: 30mm; border: 1px dashed #000; padding: 2mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
+    .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
+    .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; }
     .sticker-qr img { width: 100% !important; height: 100% !important; }
-    .sticker-footer { font-size: 6.5px; font-family: monospace; font-weight: bold; width: 100%; display: flex; flex-direction: column; gap: 1mm; align-items: center; }
+    .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
+
+    /* Barkod Yazıcı Etiketi Modu (Termal Etiket Yazıcı, Tekli Rulo — Ör. 20x40mm) */
+    body.printing-barcode-label #print-area, body.printing-barcode-label #print-area * { visibility: visible; }
+    body.printing-barcode-label #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
+    .barcode-printer-label { width: 20mm; height: 40mm; padding: 1mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; page-break-after: always; text-align: center; }
+    .barcode-printer-label:last-child { page-break-after: auto; }
+    .barcode-printer-label .bl-qr { width: 15mm; height: 15mm; display: flex; justify-content: center; }
+    .barcode-printer-label .bl-qr img { width: 100% !important; height: 100% !important; }
+    .barcode-printer-label .bl-name { font-size: 6.5px; font-weight: bold; font-family: sans-serif; line-height: 1.1; max-height: 14px; overflow: hidden; margin-top: 1mm; }
+    .barcode-printer-label .bl-code { font-size: 6px; font-family: monospace; font-weight: bold; margin-top: 0.7mm; word-break: break-all; }
 
     /* Termal Fiş Modu (Boyut ve Sayfa Taşma Koruması) */
     body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area * { visibility: visible; }
@@ -286,7 +296,6 @@
         <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
         <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
-        <button class="btn btn-dark btn-sm" id="download-all-png-btn" onclick="downloadAllLabelsPNG()" style="display:none;">🖼️ Toplu PNG İndir</button>
       </div>
       <div id="grid" class="grid"></div>
     </div>
@@ -1424,7 +1433,6 @@
       statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
       printAllBtn.style.display = 'inline-block';
-      document.getElementById('download-all-png-btn').style.display = 'inline-block';
       document.getElementById('manager-task-section').style.display = 'block';
       document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
       document.getElementById('edit-mode-toggle-btn').style.display = 'inline-block';
@@ -1437,7 +1445,6 @@
       statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'inline-block';
-      document.getElementById('download-all-png-btn').style.display = 'inline-block';
       layoutEditMode = false;
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
@@ -1452,7 +1459,6 @@
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
       addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
       printAllBtn.style.display = 'none';
-      document.getElementById('download-all-png-btn').style.display = 'none';
       layoutEditMode = false;
       document.getElementById('manager-task-section').style.display = 'none';
       document.getElementById('toggle-stand-form-btn').style.display = 'none';
@@ -3068,8 +3074,10 @@
                 <div class="tag-code">${p.code}</div>
                 <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
               </div>
-              <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
-              <button class="sm-btn" onclick="downloadLabelPNG('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖼️ PNG İndir</button>
+              <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
+                <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
+                <button class="sm-btn" onclick="printBarcodeLabel('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🏷️ Barkod Yazıcı</button>
+              </div>
             </div>
 
             <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
@@ -3721,116 +3729,6 @@
     }
   }
 
-  // ============================================================
-  // ETİKETİ PNG OLARAK İNDİR
-  // ------------------------------------------------------------
-  // Bazı termal yazıcı sürücüleri (Argox vb.), tarayıcının yazdır
-  // penceresinden gelen sayfa boyutunu doğru yorumlamayıp karekodu
-  // kırpabiliyor/basmayabiliyor. Bu yol, o sürücü/sayfa boyutu
-  // zincirini tamamen atlar: 20mm x 40mm'lik (dikey) etiketi doğrudan,
-  // 203 DPI termal yazıcılara uygun boyutta (160x320px) bir PNG
-  // resmi olarak üretip indirir. Bu PNG, Argox'un kendi etiket
-  // yazılımına (ArgoBar vb.) resim olarak içe aktarılıp basılabilir
-  // — böylece tarayıcı/Windows sayfa boyutu sorunu devre dışı kalır.
-  // ============================================================
-  function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
-    const words = String(text).split(' ');
-    let line = '';
-    let lines = [];
-    for (let n = 0; n < words.length; n++) {
-      const testLine = line + words[n] + ' ';
-      if (ctx.measureText(testLine).width > maxWidth && n > 0) {
-        lines.push(line.trim());
-        line = words[n] + ' ';
-      } else {
-        line = testLine;
-      }
-    }
-    lines.push(line.trim());
-    lines = lines.slice(0, maxLines);
-    lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
-  }
-
-  function renderLabelToCanvas(p, callback) {
-    const currentBaseUrl = window.location.href.split('?')[0];
-    const tempDiv = document.createElement('div');
-    tempDiv.style.position = 'absolute';
-    tempDiv.style.left = '-9999px';
-    document.body.appendChild(tempDiv);
-    new QRCode(tempDiv, { text: `${currentBaseUrl}?item=${p.code}`, width: 300, height: 300, correctLevel: QRCode.CorrectLevel.M });
-
-    setTimeout(() => {
-      const qrSource = tempDiv.querySelector('canvas') || tempDiv.querySelector('img');
-
-      // 20mm x 40mm dikey etiket, 203 DPI (~8 dot/mm) için 160x320px
-      const W = 160, H = 320;
-      const canvas = document.createElement('canvas');
-      canvas.width = W; canvas.height = H;
-      const ctx = canvas.getContext('2d');
-
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, W, H);
-      ctx.strokeStyle = '#000000';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(1, 1, W - 2, H - 2);
-
-      ctx.fillStyle = '#000000';
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 13px Arial, sans-serif';
-      wrapCanvasText(ctx, p.name || '', W / 2, 18, W - 14, 15, 3);
-
-      const qrSize = 130;
-      const qrX = (W - qrSize) / 2;
-      const qrY = 72;
-      if (qrSource) ctx.drawImage(qrSource, qrX, qrY, qrSize, qrSize);
-
-      ctx.textAlign = 'center';
-      ctx.font = '11px "Courier New", monospace';
-      ctx.fillText(p.code || '', W / 2, qrY + qrSize + 20);
-      ctx.font = 'bold 15px "Courier New", monospace';
-      ctx.fillText('₺' + formatMoney(p.price || 0), W / 2, qrY + qrSize + 42);
-
-      document.body.removeChild(tempDiv);
-      callback(canvas);
-    }, 80);
-  }
-
-  function downloadLabelPNG(code) {
-    const p = productsData[code];
-    if (!p) return;
-    renderLabelToCanvas(p, (canvas) => {
-      const link = document.createElement('a');
-      link.download = `Etiket_${p.code}.png`;
-      link.href = canvas.toDataURL('image/png');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('Etiket PNG olarak indirildi: ' + p.code);
-    });
-  }
-
-  function downloadAllLabelsPNG() {
-    if (currentRole !== 'admin' && currentRole !== 'staff') return;
-    const search = document.getElementById('search').value.toLowerCase();
-    const toDownload = Object.values(productsData).filter(p => {
-      const pName = p.name ? p.name.toLowerCase() : '';
-      const pCat = p.category ? p.category.toLowerCase() : '';
-      const pCode = p.code ? p.code.toLowerCase() : '';
-      return (pName.includes(search) || pCat.includes(search) || pCode.includes(search));
-    });
-    if (toDownload.length === 0) { alert("İndirilecek ürün bulunamadı!"); return; }
-    if (!confirm(`${toDownload.length} adet PNG etiket tek tek indirilecek (tarayıcı birden fazla indirme izni isteyebilir). Devam edilsin mi?`)) return;
-
-    let i = 0;
-    function next() {
-      if (i >= toDownload.length) { showToast(`${toDownload.length} etiket indirildi.`); return; }
-      downloadLabelPNG(toDownload[i].code);
-      i++;
-      setTimeout(next, 350);
-    }
-    next();
-  }
-
   function printQR(code) {
     const p = productsData[code];
     if (!p) return;
@@ -3855,6 +3753,46 @@
       window.print();
       document.body.className = '';
     }, 300);
+  }
+
+  function printBarcodeLabel(code) {
+    const p = productsData[code];
+    if (!p) return;
+
+    const qtyStr = prompt("Kaç adet etiket basılsın? (Barkod yazıcınızdan 20x40mm etiket olarak çıkacak)", "5");
+    if (qtyStr === null) return;
+    const qty = Math.max(1, Math.min(100, parseInt(qtyStr) || 5));
+
+    const printArea = document.getElementById('print-area');
+    printArea.innerHTML = '';
+    const currentBaseUrl = window.location.href.split('?')[0];
+
+    for (let i = 0; i < qty; i++) {
+      const div = document.createElement('div');
+      div.className = 'barcode-printer-label';
+      div.innerHTML = `
+        <div class="bl-qr" id="bl-qr-${code}-${i}"></div>
+        <div class="bl-name">${p.name}</div>
+        <div class="bl-code">${p.code}</div>
+      `;
+      printArea.appendChild(div);
+      new QRCode(div.querySelector('.bl-qr'), { text: `${currentBaseUrl}?item=${p.code}`, width: 100, height: 100 });
+    }
+
+    // Bu yazdırma için sayfa boyutunu barkod yazıcınıza uygun 20x40mm yapıyoruz
+    let pageStyle = document.getElementById('dynamic-barcode-page-size');
+    if (!pageStyle) {
+      pageStyle = document.createElement('style');
+      pageStyle.id = 'dynamic-barcode-page-size';
+      document.head.appendChild(pageStyle);
+    }
+    pageStyle.textContent = '@page { size: 20mm 40mm; margin: 0; }';
+
+    document.body.className = 'printing-barcode-label';
+    setTimeout(() => {
+      window.print();
+      document.body.className = '';
+    }, 400);
   }
 
   function printAllLabels() {
