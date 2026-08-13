@@ -229,19 +229,20 @@
     body.printing-label #print-area { display: flex !important; flex-wrap: wrap; gap: 4mm; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
     .sticker-label { width: 50mm; height: 30mm; border: 1px dashed #000; padding: 2mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
     .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
-    .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; }
-    .sticker-qr img { width: 100% !important; height: 100% !important; }
+    .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+    .sticker-qr img, .sticker-qr canvas { width: 100% !important; height: 100% !important; max-width: 100%; max-height: 100%; }
     .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
 
-    /* Barkod Yazıcı Etiketi Modu (Termal Etiket Yazıcı, Tekli Rulo — Ör. 20x40mm) */
+    /* Barkod Yazıcı Etiketi Modu (Termal Etiket Yazıcı — 5'li Yatay Şerit, Ör. 5x20mm = 100x40mm) */
     body.printing-barcode-label #print-area, body.printing-barcode-label #print-area * { visibility: visible; }
-    body.printing-barcode-label #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
-    .barcode-printer-label { width: 20mm; height: 40mm; padding: 1mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; page-break-after: always; text-align: center; }
-    .barcode-printer-label:last-child { page-break-after: auto; }
-    .barcode-printer-label .bl-qr { width: 15mm; height: 15mm; display: flex; justify-content: center; }
-    .barcode-printer-label .bl-qr img { width: 100% !important; height: 100% !important; }
-    .barcode-printer-label .bl-name { font-size: 6.5px; font-weight: bold; font-family: sans-serif; line-height: 1.1; max-height: 14px; overflow: hidden; margin-top: 1mm; }
-    .barcode-printer-label .bl-code { font-size: 6px; font-family: monospace; font-weight: bold; margin-top: 0.7mm; word-break: break-all; }
+    body.printing-barcode-label #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100mm; background: #fff; overflow: hidden; }
+    .barcode-strip-page { width: 100mm; height: 40mm; max-width: 100mm; max-height: 40mm; box-sizing: border-box; display: flex; flex-direction: row; page-break-after: always; page-break-inside: avoid; overflow: hidden; }
+    .barcode-strip-page:last-child { page-break-after: auto; }
+    .barcode-strip-page .bl-cell { width: 20mm; height: 40mm; max-width: 20mm; max-height: 40mm; flex-shrink: 0; padding: 0.5mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+    .barcode-strip-page .bl-cell .bl-qr { width: 16mm; height: 16mm; max-width: 16mm; max-height: 16mm; flex-shrink: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+    .barcode-strip-page .bl-cell .bl-qr img, .barcode-strip-page .bl-cell .bl-qr canvas { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important; image-rendering: pixelated; }
+    .barcode-strip-page .bl-cell .bl-name { font-size: 6px; font-weight: bold; font-family: sans-serif; line-height: 1.05; max-height: 12px; overflow: hidden; margin-top: 0.8mm; }
+    .barcode-strip-page .bl-cell .bl-code { font-size: 5.5px; font-family: monospace; font-weight: bold; margin-top: 0.5mm; word-break: break-all; }
 
     /* Termal Fiş Modu (Boyut ve Sayfa Taşma Koruması) */
     body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area * { visibility: visible; }
@@ -3759,34 +3760,53 @@
     const p = productsData[code];
     if (!p) return;
 
-    const qtyStr = prompt("Kaç adet etiket basılsın? (Barkod yazıcınızdan 20x40mm etiket olarak çıkacak)", "5");
+    const qtyStr = prompt("Kaç adet etiket basılsın? (Yazıcınız her seferinde 5'li yatay şerit halinde bastığı için toplam 5'in katına yuvarlanır)", "5");
     if (qtyStr === null) return;
-    const qty = Math.max(1, Math.min(100, parseInt(qtyStr) || 5));
+    const requestedQty = Math.max(1, Math.min(100, parseInt(qtyStr) || 5));
+    const rows = Math.ceil(requestedQty / 5);
+    const totalToPrint = rows * 5;
 
     const printArea = document.getElementById('print-area');
     printArea.innerHTML = '';
     const currentBaseUrl = window.location.href.split('?')[0];
+    const shortName = p.name.length > 20 ? p.name.slice(0, 18) + '…' : p.name;
 
-    for (let i = 0; i < qty; i++) {
-      const div = document.createElement('div');
-      div.className = 'barcode-printer-label';
-      div.innerHTML = `
-        <div class="bl-qr" id="bl-qr-${code}-${i}"></div>
-        <div class="bl-name">${p.name}</div>
-        <div class="bl-code">${p.code}</div>
-      `;
-      printArea.appendChild(div);
-      new QRCode(div.querySelector('.bl-qr'), { text: `${currentBaseUrl}?item=${p.code}`, width: 100, height: 100 });
+    const qrTargets = [];
+    for (let r = 0; r < rows; r++) {
+      const rowDiv = document.createElement('div');
+      rowDiv.className = 'barcode-strip-page';
+      for (let c = 0; c < 5; c++) {
+        const cellId = `bl-qr-${code}-${r}-${c}`;
+        const cell = document.createElement('div');
+        cell.className = 'bl-cell';
+        cell.innerHTML = `
+          <div class="bl-qr" id="${cellId}"></div>
+          <div class="bl-name">${shortName}</div>
+          <div class="bl-code">${p.code}</div>
+        `;
+        rowDiv.appendChild(cell);
+        qrTargets.push(cellId);
+      }
+      printArea.appendChild(rowDiv);
     }
 
-    // Bu yazdırma için sayfa boyutunu barkod yazıcınıza uygun 20x40mm yapıyoruz
+    qrTargets.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) new QRCode(el, { text: `${currentBaseUrl}?item=${p.code}`, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M });
+    });
+
+    if (totalToPrint !== requestedQty) {
+      showToast(`Yazıcınız 5'li şerit bastığı için toplam ${totalToPrint} adet (${rows} şerit) basılacak.`);
+    }
+
+    // Bu yazdırma için sayfa boyutunu yazıcınızın 5'li şeridine uygun 100x40mm yapıyoruz
     let pageStyle = document.getElementById('dynamic-barcode-page-size');
     if (!pageStyle) {
       pageStyle = document.createElement('style');
       pageStyle.id = 'dynamic-barcode-page-size';
       document.head.appendChild(pageStyle);
     }
-    pageStyle.textContent = '@page { size: 20mm 40mm; margin: 0; }';
+    pageStyle.textContent = '@page { size: 100mm 40mm; margin: 0; }';
 
     document.body.className = 'printing-barcode-label';
     setTimeout(() => {
