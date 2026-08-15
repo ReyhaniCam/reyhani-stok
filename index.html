@@ -2844,7 +2844,10 @@
           <td>₺${formatMoney(item.cost)}</td>
           <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
           <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
-          <td><button class="btn btn-dark btn-sm" onclick="removeFromGoodsReceipt(${index})">Çıkar</button></td>
+          <td style="display:flex; gap:4px; flex-wrap:wrap;">
+            <button class="btn btn-info btn-sm" style="width:auto;" onclick="editFisItem(${index})">✏️ Düzenle</button>
+            <button class="btn btn-dark btn-sm" style="width:auto;" onclick="removeFromGoodsReceipt(${index})">Çıkar</button>
+          </td>
         </tr>
       `;
     });
@@ -2855,6 +2858,35 @@
   function removeFromGoodsReceipt(index) {
     goodsReceiptCart.splice(index, 1);
     renderGoodsReceiptCart();
+  }
+
+  function editFisItem(index) {
+    const item = goodsReceiptCart[index];
+    if (!item) return;
+
+    // Kalemi listeden çıkar; kullanıcı formu düzenleyip tekrar ekleyecek
+    goodsReceiptCart.splice(index, 1);
+    renderGoodsReceiptCart();
+
+    document.getElementById('fis-product').value = item.isNew ? item.name : `${item.code} - ${item.name}`;
+    document.getElementById('fis-qty').value = item.qty;
+    document.getElementById('fis-cost').value = item.cost;
+
+    checkFisProductMatch();
+
+    if (item.isNew) {
+      document.getElementById('fis-price').value = item.price || '';
+      document.getElementById('fis-unit').value = item.unit || 'Adet';
+      document.getElementById('fis-category').value = item.category || 'Diğer';
+      document.getElementById('fis-vat').value = item.vat || '';
+      document.getElementById('fis-profit').value = item.targetProfit || '';
+      updateFisProfit();
+      document.getElementById('fis-barcode-pending-code').value = item.code || '';
+    }
+
+    document.getElementById('fis-product').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('fis-product').focus();
+    showToast("Malzeme düzenlemeniz için forma geri yüklendi. Değişiklik yapıp tekrar 'Fişe Malzeme Ekle' butonuna basın.");
   }
 
   async function completeGoodsReceipt() {
