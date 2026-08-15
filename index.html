@@ -223,6 +223,14 @@
 
   @media print {
     body * { visibility: hidden; }
+
+    /* KÖK NEDEN DÜZELTMESİ: .app (tüm sayfa arayüzü — stok listesi, sekmeler vb.) 
+       sadece görünmez yapılırsa bile satır akışında yer kaplamaya devam eder ve 
+       yazıcıya onlarca fazladan "boş sayfa" olarak yansır. display:none ile 
+       tamamen akıştan çıkarıyoruz. */
+    body.printing-label .app,
+    body.printing-barcode-label .app,
+    body.printing-receipt .app { display: none !important; }
     
     /* Etiket Modu (Normal A4/Etiket Kağıdı) */
     body.printing-label #print-area, body.printing-label #print-area * { visibility: visible; }
