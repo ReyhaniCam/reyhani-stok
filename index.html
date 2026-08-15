@@ -549,6 +549,13 @@
         </div>
         <div id="fis-new-fields" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-bottom:10px;">
           <p style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;">ℹ️ Bu malzeme sistemde bulunamadı, YENİ ÜRÜN olarak stoğa eklenecek. Lütfen aşağıdaki bilgileri de girin:</p>
+          <div style="margin-bottom:10px;">
+            <label>Barkod Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bu ürünün üzerindeki barkodu okutun veya elle girin — boş bırakılırsa sistem otomatik kod atar)</span></label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="fis-new-barcode" placeholder="Barkod numarası..." style="flex:1;" oninput="document.getElementById('fis-barcode-pending-code').value = this.value.trim();">
+              <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Okut</button>
+            </div>
+          </div>
           <div class="form-row" style="grid-template-columns: 1fr 1fr;">
             <div><label>Ölçü Birimi</label>
               <select id="fis-unit">
@@ -2738,7 +2745,15 @@
     const possibleCode = inputVal.split(' - ')[0].trim();
     const exists = !!productsData[possibleCode];
     const newFields = document.getElementById('fis-new-fields');
-    if(newFields) newFields.style.display = (inputVal && !exists) ? 'block' : 'none';
+    if(newFields) {
+      const shouldShow = inputVal && !exists;
+      newFields.style.display = shouldShow ? 'block' : 'none';
+      if(shouldShow) {
+        const nb = document.getElementById('fis-new-barcode');
+        const pending = document.getElementById('fis-barcode-pending-code').value;
+        if(nb && !nb.value && pending) nb.value = pending;
+      }
+    }
 
     const warnBox = document.getElementById('fis-duplicate-warning');
     if(!warnBox) return;
@@ -2817,6 +2832,7 @@
     document.getElementById('fis-barcode-lookup').value = '';
     document.getElementById('fis-barcode-lookup-status').innerHTML = '';
     document.getElementById('fis-barcode-pending-code').value = '';
+    document.getElementById('fis-new-barcode').value = '';
     renderGoodsReceiptCart();
     showToast(item.isNew ? "Sistemde bulunmayan yeni malzeme fişe eklendi." : "Malzeme fişe eklendi.");
   }
@@ -2881,7 +2897,7 @@
       document.getElementById('fis-vat').value = item.vat || '';
       document.getElementById('fis-profit').value = item.targetProfit || '';
       updateFisProfit();
-      document.getElementById('fis-barcode-pending-code').value = item.code || '';
+      setFisPendingBarcode(item.code || '');
     }
 
     document.getElementById('fis-product').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -3377,13 +3393,20 @@
     }
   }
 
+  function setFisPendingBarcode(code) {
+    const hidden = document.getElementById('fis-barcode-pending-code');
+    const visible = document.getElementById('fis-new-barcode');
+    if (hidden) hidden.value = code || '';
+    if (visible) visible.value = code || '';
+  }
+
   async function lookupFisBarcode() {
     const code = document.getElementById('fis-barcode-lookup').value.trim();
     const statusEl = document.getElementById('fis-barcode-lookup-status');
     if (!code) { statusEl.innerHTML = '<span style="color:var(--rust);">Önce bir barkod numarası girin ya da okutun.</span>'; return; }
 
     statusEl.textContent = "Aranıyor...";
-    document.getElementById('fis-barcode-pending-code').value = '';
+    setFisPendingBarcode('');
 
     // 1) Bu barkod zaten sistemde kayıtlı bir ürünün kodu mu? (üretici barkodu = ürün kodu olabilir)
     if (productsData[code]) {
@@ -3401,7 +3424,7 @@
       if (cached && cached.name) {
         document.getElementById('fis-product').value = cached.name;
         checkFisProductMatch();
-        document.getElementById('fis-barcode-pending-code').value = code;
+        setFisPendingBarcode(code);
         statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Kendi hafızamızdan tanındı: "${cached.name}"</span> (dış sorgu hakkı harcanmadı). Sistemde henüz kayıtlı değil — YENİ ÜRÜN bilgilerini doldurup fişe ekleyin, barkod (${code}) ürün kodu olarak kullanılacak.`;
         return;
       }
@@ -3412,12 +3435,14 @@
       const resp = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
 
       if (resp.status === 429) {
-        document.getElementById('fis-barcode-pending-code').value = code;
+        setFisPendingBarcode(code);
+        checkFisProductMatch();
         statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkı dolmuş.</span> Malzeme adını elle girin — barkod (${code}) yine de ürün kodu olarak kaydedilecek.`;
         return;
       }
       if (!resp.ok) {
-        document.getElementById('fis-barcode-pending-code').value = code;
+        setFisPendingBarcode(code);
+        checkFisProductMatch();
         statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Malzeme adını elle girin, barkod (${code}) yine de kaydedilecek.`;
         return;
       }
@@ -3425,19 +3450,23 @@
       const data = await resp.json();
       if (data && data.items && data.items.length > 0) {
         const item = data.items[0];
-        document.getElementById('fis-barcode-pending-code').value = code;
+        setFisPendingBarcode(code);
         if (item.title) {
           document.getElementById('fis-product').value = item.title;
           checkFisProductMatch();
           dbBarcodeCache.child(code).set({ name: item.title, source: 'upcitemdb', savedAt: new Date().toISOString() });
+        } else {
+          checkFisProductMatch();
         }
         statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${item.title || '-'}"${item.brand ? ' — ' + item.brand : ''}.</span> YENİ ÜRÜN bilgilerini kontrol edip fişe ekleyin. Barkod (${code}) ürün kodu olarak kullanılacak.`;
       } else {
-        document.getElementById('fis-barcode-pending-code').value = code;
+        setFisPendingBarcode(code);
+        checkFisProductMatch();
         statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod hiçbir yerde bulunamadı. Malzeme adını elle girip fişe ekleyin — barkod (${code}) yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
       }
     } catch (err) {
-      document.getElementById('fis-barcode-pending-code').value = code;
+      setFisPendingBarcode(code);
+      checkFisProductMatch();
       statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b>. Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
     }
   }
