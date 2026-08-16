@@ -393,12 +393,13 @@
 
       <div class="form-card disabled-action" id="bulk-import-card">
         <h3 style="margin-top:0;font-family:'Oswald';">📥 Excel'den Toplu Ürün Aktar</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Yüzlerce/binlerce ürünü tek tek girmek yerine, hazır Excel şablonunu doldurup tek seferde yükleyin.</p>
-        <button class="btn btn-dark btn-sm" style="width:auto;" onclick="downloadImportTemplate()">⬇️ Boş Şablonu İndir</button>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Aktif Pos veya başka bir sistemden aldığınız Excel/CSV dosyasını <b>olduğu gibi</b> yükleyebilirsiniz — sütun isimleri farklı olsa bile, dosyanızın hangi sütununun bizim hangi alanımıza karşılık geldiğini aşağıda kendiniz eşleştirirsiniz. Dilerseniz hazır şablonu da kullanabilirsiniz.</p>
+        <button class="btn btn-dark btn-sm" style="width:auto;" onclick="downloadImportTemplate()">⬇️ Boş Şablonu İndir (opsiyonel)</button>
         <div style="margin-top:14px;">
-          <label>Doldurulmuş Excel Dosyasını Seçin (.xlsx)</label>
+          <label>Excel/CSV Dosyanızı Seçin (Aktif Pos dahil, herhangi bir format)</label>
           <input type="file" accept=".xlsx,.xls,.csv" id="bulk-import-file">
         </div>
+        <div id="import-mapping-section" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-top:12px;"></div>
         <div id="bulk-import-preview"></div>
         <div id="bulk-import-status" style="font-size:12px; margin-top:8px;"></div>
         <button class="btn btn-success" id="bulk-import-start-btn" onclick="startBulkImport()" style="display:none; margin-top:10px;">✅ İçe Aktarımı Başlat</button>
@@ -3217,9 +3218,70 @@
   }
 
   // ============================================================
-  // EXCEL'DEN TOPLU ÜRÜN AKTARIMI
+  // EXCEL'DEN TOPLU ÜRÜN AKTARIMI (Aktif Pos vb. HERHANGİ BİR FORMAT)
   // ============================================================
   let pendingImportRows = null;
+  let importHeaders = [];
+
+  const IMPORT_FIELD_DEFS = [
+    { key: 'name', label: 'Ürün Adı', required: true, guesses: ['ürün adı','urun adi','stok adı','stok adi','açıklama','aciklama','ürün','urun','mal adı','mal adi','isim','ad','stok tanımı','stok tanimi','name'] },
+    { key: 'barcode', label: 'Barkod / Stok Kodu', required: false, guesses: ['barkod','barcode','stok kodu','kod'] },
+    { key: 'qty', label: 'Miktar / Stok Adedi', required: false, guesses: ['miktar','stok miktarı','stok miktari','mevcut stok','mevcut','adet','qty','stok adedi','kalan'] },
+    { key: 'price', label: 'Satış Fiyatı', required: false, guesses: ['satış fiyatı','satis fiyati','satış fiyat','satis fiyat','perakende','birim fiyat','fiyat','price'] },
+    { key: 'cost', label: 'Alış / Geliş Fiyatı', required: false, guesses: ['alış fiyatı','alis fiyati','geliş fiyatı','gelis fiyati','maliyet','alım fiyatı','alim fiyati','cost'] },
+    { key: 'category', label: 'Kategori / Grup', required: false, guesses: ['kategori','grup','stok grubu','sınıf','sinif','category'] },
+    { key: 'brand', label: 'Marka', required: false, guesses: ['marka','brand'] },
+    { key: 'unit', label: 'Ölçü Birimi', required: false, guesses: ['birim','ölçü birimi','olcu birimi','ölçü','olcu','unit'] },
+    { key: 'vat', label: 'KDV Oranı', required: false, guesses: ['kdv','kdv oranı','kdv orani','vat','tax'] },
+    { key: 'profit', label: 'Hedef Kâr (%)', required: false, guesses: ['kar','kâr','hedef kar','hedef kâr','kar oranı','kar orani','profit'] }
+  ];
+
+  function normalizeHeaderTr(h) {
+    return String(h || '').toLocaleLowerCase('tr-TR').replace(/[^a-z0-9ğüşıöç\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function guessColumnForField(headers, guesses) {
+    const normHeaders = headers.map(h => ({ raw: h, norm: normalizeHeaderTr(h) }));
+    for (const g of guesses) {
+      const hit = normHeaders.find(h => h.norm === g || h.norm.includes(g));
+      if (hit) return hit.raw;
+    }
+    return '';
+  }
+
+  function renderImportMapping(headers) {
+    importHeaders = headers;
+    const box = document.getElementById('import-mapping-section');
+    if (!box) return;
+
+    let html = `<p style="font-size:11px; color:var(--info); font-weight:600; margin:0 0 10px;">🔗 Sütunları Eşleştirin — dosyanızdaki hangi sütun bizim hangi alanımıza karşılık geliyor? Sistem otomatik tahmin etti, yanlışsa aşağıdan kendiniz değiştirebilirsiniz:</p>`;
+    html += `<div class="form-row" style="grid-template-columns: 1fr 1fr;">`;
+    IMPORT_FIELD_DEFS.forEach(f => {
+      const guess = guessColumnForField(headers, f.guesses);
+      html += `
+        <div>
+          <label>${f.label}${f.required ? ' *' : ''}</label>
+          <select id="map-${f.key}" onchange="onImportMappingChange()">
+            <option value="">— Kullanma —</option>
+            ${headers.map(h => `<option value="${h}" ${h === guess ? 'selected' : ''}>${h}</option>`).join('')}
+          </select>
+        </div>
+      `;
+    });
+    html += `</div>`;
+    box.innerHTML = html;
+    box.style.display = 'block';
+  }
+
+  function onImportMappingChange() {
+    if (pendingImportRows) renderImportPreview(pendingImportRows);
+  }
+
+  function getMappedValue(row, fieldKey) {
+    const sel = document.getElementById(`map-${fieldKey}`);
+    if (!sel || !sel.value) return '';
+    return row[sel.value];
+  }
 
   function downloadImportTemplate() {
     const headers = ["Ürün Adı", "Miktar", "Birim Fiyat", "Ölçü Birimi", "Kategori", "Marka", "Geliş Fiyatı", "KDV Oranı", "Hedef Kar", "Barkod (boş bırakılabilir)"];
@@ -3240,6 +3302,8 @@
     statusEl.textContent = "Dosya okunuyor...";
     startBtn.style.display = 'none';
     pendingImportRows = null;
+    document.getElementById('import-mapping-section').style.display = 'none';
+    document.getElementById('import-mapping-section').innerHTML = '';
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -3253,7 +3317,9 @@
           return;
         }
         pendingImportRows = rows;
-        statusEl.innerHTML = `<b>${rows.length}</b> satır okundu. Aşağıdaki önizlemeyi kontrol edip butona basın.`;
+        const headers = Object.keys(rows[0]);
+        renderImportMapping(headers);
+        statusEl.innerHTML = `<b>${rows.length}</b> satır okundu. Yukarıdaki sütun eşleştirmesini kontrol edip önizlemeye bakın, sonra butona basın.`;
         startBtn.style.display = 'inline-block';
         renderImportPreview(rows);
       } catch (err) {
@@ -3267,9 +3333,14 @@
     const box = document.getElementById('bulk-import-preview');
     const preview = rows.slice(0, 5);
     let html = `<div style="overflow-x:auto; margin-top:10px;"><table style="width:100%; font-size:11px; border-collapse:collapse; min-width:400px;">
-      <tr style="background:var(--concrete); text-align:left;"><th style="padding:5px;">Ürün Adı</th><th style="padding:5px;">Miktar</th><th style="padding:5px;">Fiyat</th><th style="padding:5px;">Kategori</th></tr>`;
+      <tr style="background:var(--concrete); text-align:left;"><th style="padding:5px;">Ürün Adı</th><th style="padding:5px;">Barkod</th><th style="padding:5px;">Miktar</th><th style="padding:5px;">Fiyat</th><th style="padding:5px;">Kategori</th></tr>`;
     preview.forEach(r => {
-      html += `<tr style="border-top:1px solid var(--steel-line);"><td style="padding:5px;">${r['Ürün Adı'] || '<span style=\'color:var(--rust);\'>BOŞ</span>'}</td><td style="padding:5px;">${r['Miktar'] || 0}</td><td style="padding:5px;">${r['Birim Fiyat'] || 0}</td><td style="padding:5px;">${r['Kategori'] || '-'}</td></tr>`;
+      const name = getMappedValue(r, 'name') || '<span style="color:var(--rust);">BOŞ</span>';
+      const barcode = getMappedValue(r, 'barcode') || '-';
+      const qty = getMappedValue(r, 'qty') || 0;
+      const price = getMappedValue(r, 'price') || 0;
+      const category = getMappedValue(r, 'category') || '-';
+      html += `<tr style="border-top:1px solid var(--steel-line);"><td style="padding:5px;">${name}</td><td style="padding:5px; font-family:'IBM Plex Mono';">${barcode}</td><td style="padding:5px;">${qty}</td><td style="padding:5px;">${price}</td><td style="padding:5px;">${category}</td></tr>`;
     });
     html += `</table></div>`;
     if (rows.length > 5) html += `<p style="font-size:10px; color:var(--steel); margin-top:4px;">...ve ${rows.length - 5} satır daha</p>`;
@@ -3287,6 +3358,13 @@
 
   function startBulkImport() {
     if (currentRole !== 'admin' || !pendingImportRows) return;
+
+    const nameSel = document.getElementById('map-name');
+    if (!nameSel || !nameSel.value) {
+      alert('Lütfen en azından "Ürün Adı" alanı için dosyanızdaki hangi sütunun kullanılacağını seçin.');
+      return;
+    }
+
     if (!confirm(`${pendingImportRows.length} satır işlenip canlı sisteme eklenecek. Onaylıyor musunuz?`)) return;
 
     const statusEl = document.getElementById('bulk-import-status');
@@ -3297,31 +3375,31 @@
     let successCount = 0;
 
     pendingImportRows.forEach((row, idx) => {
-      const name = String(row['Ürün Adı'] || '').trim();
+      const name = String(getMappedValue(row, 'name') || '').trim();
       if (!name) { errorRows.push(`Satır ${idx + 2}: Ürün adı boş, atlandı`); return; }
 
-      let code = String(row['Barkod (boş bırakılabilir)'] || row['Barkod'] || '').trim().toUpperCase();
+      let code = String(getMappedValue(row, 'barcode') || '').trim().toUpperCase();
       if (!code) {
         code = generateUniqueImportCode(usedCodes);
       } else if (productsData[code] || usedCodes.has(code)) {
-        errorRows.push(`Satır ${idx + 2}: "${code}" barkodu zaten kullanımda, atlandı`);
+        errorRows.push(`Satır ${idx + 2}: "${code}" barkodu/kodu zaten kullanımda, atlandı`);
         return;
       } else {
         usedCodes.add(code);
       }
 
-      const costRaw = row['Geliş Fiyatı'];
-      const profitRaw = row['Hedef Kar'];
+      const costRaw = getMappedValue(row, 'cost');
+      const profitRaw = getMappedValue(row, 'profit');
 
       updates[code] = {
         name,
-        qty: parseFloat(row['Miktar']) || 0,
-        price: parseFloat(row['Birim Fiyat']) || 0,
-        unit: String(row['Ölçü Birimi'] || 'Adet').trim() || 'Adet',
-        category: String(row['Kategori'] || 'Diğer').trim() || 'Diğer',
-        brand: String(row['Marka'] || '').trim() || null,
+        qty: parseFloat(getMappedValue(row, 'qty')) || 0,
+        price: parseFloat(getMappedValue(row, 'price')) || 0,
+        unit: String(getMappedValue(row, 'unit') || 'Adet').trim() || 'Adet',
+        category: String(getMappedValue(row, 'category') || 'Diğer').trim() || 'Diğer',
+        brand: String(getMappedValue(row, 'brand') || '').trim() || null,
         costPrice: (costRaw !== '' && costRaw != null) ? (Math.max(0, parseFloat(costRaw)) || 0) : null,
-        vat: parseFloat(row['KDV Oranı']) || 0,
+        vat: parseFloat(getMappedValue(row, 'vat')) || 0,
         targetProfit: (profitRaw !== '' && profitRaw != null) ? (parseFloat(profitRaw) || 0) : null,
         code,
         lastPriceUpdate: new Date().toISOString(),
@@ -3352,6 +3430,8 @@
       pendingImportRows = null;
       document.getElementById('bulk-import-preview').innerHTML = '';
       document.getElementById('bulk-import-file').value = '';
+      document.getElementById('import-mapping-section').style.display = 'none';
+      document.getElementById('import-mapping-section').innerHTML = '';
       startBtn.style.display = 'none';
       showToast(successCount + " ürün içe aktarıldı!");
     });
