@@ -594,6 +594,10 @@
           <div class="form-row" style="grid-template-columns: 1fr; margin-bottom:0; margin-top:10px;">
             <div><label>Satış Fiyatı (₺)</label><input type="number" id="fis-price" step="0.01" placeholder="0.00"></div>
           </div>
+          <div style="display:flex; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
+            <input type="checkbox" id="fis-create-now" checked style="width:auto; margin-top:2px;">
+            <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünü fişe eklerken <b>hemen stok listesine düşür</b> <span style="color:var(--steel); font-weight:normal;">— böylece fişi yarıda bırakıp silseniz bile ürün tanımı (isim, fiyat, barkod vb.) kaybolmaz, sadece o fişten gelecek stok miktarı işlenmemiş olur.</span></label>
+          </div>
         </div>
         <button class="btn btn-primary" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
       </div>
@@ -2782,7 +2786,40 @@
     checkFisProductMatch();
   }
 
-  function addToGoodsReceipt() {
+  // Yeni ürünü Firebase'e kalıcı olarak yazar (kod çakışmasını kontrol eder), atanan kodu döndürür.
+  // extraUsedCodes: aynı fiş içinde henüz kaydedilmemiş, çakışma kontrolüne dahil edilecek kod seti (opsiyonel)
+  async function createNewProductRecord(item, sourceLabel, extraUsedCodes) {
+    let code = item.code; // barkod okutulmuşsa/girilmişse gerçek barkod numarası burada gelir
+
+    if (code) {
+      if (productsData[code] || (extraUsedCodes && extraUsedCodes.has(code))) {
+        throw new Error(`'${code}' kodu/barkodu zaten sistemde kayıtlı bir üründe kullanılıyor!`);
+      }
+    } else {
+      do {
+        code = "RYH-" + Math.floor(100000 + Math.random() * 900000);
+      } while (productsData[code] || (extraUsedCodes && extraUsedCodes.has(code)));
+    }
+
+    await db.child(code).set({
+      name: item.name, qty: 0, price: item.price || 0, unit: item.unit,
+      category: item.category || 'Diğer', brand: null, costPrice: item.cost || 0, vat: item.vat || 0,
+      targetProfit: item.targetProfit || null, code, lastPriceUpdate: new Date().toISOString(),
+      lastUpdatedBy: sourceLabel
+    });
+
+    // Gerçek bir üretici barkoduysa (bizim RYH- kodumuz değilse) kendi hafızamıza da kaydet
+    if (!code.startsWith('RYH-')) {
+      dbBarcodeCache.child(code).set({ name: item.name, source: 'manuel', savedAt: new Date().toISOString() });
+    }
+    productsData[code] = {
+      code, name: item.name, qty: 0, unit: item.unit, price: item.price || 0,
+      category: item.category || 'Diğer', costPrice: item.cost || 0, vat: item.vat || 0, targetProfit: item.targetProfit || null
+    };
+    return code;
+  }
+
+  async function addToGoodsReceipt() {
     if(currentRole !== 'admin' && currentRole !== 'staff') return;
     const inputVal = document.getElementById('fis-product').value.trim();
     const qty = parseFloat(document.getElementById('fis-qty').value);
@@ -2811,6 +2848,21 @@
       const profit = parseFloat(document.getElementById('fis-profit').value) || 0;
       const pendingBarcode = document.getElementById('fis-barcode-pending-code').value.trim();
       item = { code: pendingBarcode || null, name: inputVal, unit: unit, category: category, price: salePrice, vat: vat, targetProfit: profit || null, qty: qty, cost: cost, isNew: true };
+
+      const createNow = document.getElementById('fis-create-now').checked;
+      if (createNow) {
+        const wKeyNow = document.getElementById('fis-wholesaler').value;
+        const wholesalerNameNow = (wKeyNow && wholesalersData[wKeyNow]) ? wholesalersData[wKeyNow].name : 'Malzeme Fişi';
+        try {
+          const assignedCode = await createNewProductRecord(item, 'Malzeme Fişi (' + wholesalerNameNow + ')');
+          item.code = assignedCode;
+          item.isNew = false;      // artık sistemde kayıtlı, fişten çıkarılsa/silinse bile ürün tanımı kalır
+          item.justCreated = true; // sadece bu oturumda "az önce oluşturuldu" etiketi göstermek için
+        } catch (err) {
+          alert("Ürün stoğa hemen eklenemedi: " + (err.message || err));
+          return;
+        }
+      }
     }
     item.total = item.qty * item.cost;
 
@@ -2853,9 +2905,9 @@
       tbody.innerHTML += `
         <tr style="border-bottom:1px dashed var(--steel-line);">
           <td style="padding:10px 0; line-height:1.3;">
-            <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}<br>
-            <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? (item.isNew ? 'Barkod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
-            ${item.isNew && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
+            <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}<br>
+            <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
+            ${(item.isNew || item.justCreated) && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
           </td>
           <td>₺${formatMoney(item.cost)}</td>
           <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
