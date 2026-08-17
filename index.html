@@ -407,6 +407,19 @@
         <div id="import-conflict-section" style="display:none;"></div>
       </div>
 
+      <div class="form-card disabled-action" id="barcode-fix-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">🏷️ Var Olan Ürünlere Toplu Barkod Ata</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Daha önce barkodsuz aktardığınız (koda otomatik <span style="font-family:'IBM Plex Mono';">RYH-xxxxxx</span> atanmış) ürünleriniz varsa, barkod bilgisi içeren Excel dosyanızı (aynı Aktif Pos dosyanız olabilir) buraya tekrar yükleyin. Sistem, dosyanızdaki ürün isimlerini sistemde kayıtlı ürünlerle eşleştirip otomatik kodları gerçek barkodla değiştirir.</p>
+        <div style="margin-top:14px;">
+          <label>Barkod İçeren Excel/CSV Dosyanızı Seçin</label>
+          <input type="file" accept=".xlsx,.xls,.csv" id="barcode-fix-file">
+        </div>
+        <div id="barcode-fix-mapping" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-top:12px;"></div>
+        <div id="barcode-fix-status" style="font-size:12px; margin-top:8px;"></div>
+        <button class="btn btn-success" id="barcode-fix-analyze-btn" onclick="analyzeBarcodeFix()" style="display:none; margin-top:10px;">🔍 Eşleşmeleri Bul</button>
+        <div id="barcode-fix-review" style="display:none;"></div>
+      </div>
+
       <div class="form-card disabled-action" id="brand-settings-card">
         <h3 style="margin-top:0;font-family:'Oswald';">Marka İskonto / KDV Ayarları</h3>
         <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Her marka için kendi iskonto ve KDV yüzdenizi girip kaydedin. Bu oranlar markanın yanında saklanır, hesaplamaları buradan yönetebilirsiniz.</p>
@@ -1465,6 +1478,7 @@
       document.getElementById('add-plan-btn').style.display = 'inline-block';
       document.getElementById('brand-settings-card').classList.remove('disabled-action');
       document.getElementById('bulk-import-card').classList.remove('disabled-action');
+      document.getElementById('barcode-fix-card').classList.remove('disabled-action');
       document.getElementById('recent-updates-card').classList.remove('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'block';
     } else if(currentRole === 'staff') {
@@ -1480,6 +1494,7 @@
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
       document.getElementById('bulk-import-card').classList.add('disabled-action');
+      document.getElementById('barcode-fix-card').classList.add('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'none';
     } else {
       statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
@@ -1494,6 +1509,7 @@
       document.getElementById('stand-form-card').style.display = 'none';
       document.getElementById('brand-settings-card').classList.add('disabled-action');
       document.getElementById('bulk-import-card').classList.add('disabled-action');
+      document.getElementById('barcode-fix-card').classList.add('disabled-action');
       document.getElementById('recent-updates-card').style.display = 'none';
     }
     renderGrid();
@@ -3260,7 +3276,7 @@
 
   const IMPORT_FIELD_DEFS = [
     { key: 'name', label: 'Ürün Adı', required: true, guesses: ['ürün adı','urun adi','stok adı','stok adi','açıklama','aciklama','ürün','urun','mal adı','mal adi','isim','ad','stok tanımı','stok tanimi','name'] },
-    { key: 'barcode', label: 'Barkod / Stok Kodu', required: false, guesses: ['barkod','barcode','stok kodu','kod'] },
+    { key: 'barcode', label: 'Barkod / Stok Kodu', required: false, guesses: ['barkod','barcode','stok kodu','kod','ean','barkod no','barkod numarası','barkod numarasi','ürün kodu','urun kodu'] },
     { key: 'qty', label: 'Miktar / Stok Adedi', required: false, guesses: ['miktar','stok miktarı','stok miktari','mevcut stok','mevcut','adet','qty','stok adedi','kalan'] },
     { key: 'price', label: 'Satış Fiyatı', required: false, guesses: ['satış fiyatı','satis fiyati','satış fiyat','satis fiyat','perakende','birim fiyat','fiyat','price'] },
     { key: 'cost', label: 'Alış / Geliş Fiyatı', required: false, guesses: ['alış fiyatı','alis fiyati','geliş fiyatı','gelis fiyati','maliyet','alım fiyatı','alim fiyati','cost'] },
@@ -3304,11 +3320,18 @@
       `;
     });
     html += `</div>`;
+    html += `<div id="import-barcode-warning" style="display:none; margin-top:10px; padding:8px; background:#FFF6E9; border:1px solid #E8C27A; border-radius:3px; font-size:11px; color:var(--charcoal);">⚠️ <b>Barkod sütunu seçilmedi!</b> Dosyanızdaki gerçek barkodlar kaydedilmeyecek, tüm ürünlere sistem tarafından rastgele kod atanacak. Barkodlarınız varsa yukarıdan "Barkod / Stok Kodu" alanı için doğru sütunu seçin.</div>`;
     box.innerHTML = html;
     box.style.display = 'block';
+    onImportMappingChange();
   }
 
   function onImportMappingChange() {
+    const barcodeSel = document.getElementById('map-barcode');
+    const warnEl = document.getElementById('import-barcode-warning');
+    if (warnEl) {
+      warnEl.style.display = (barcodeSel && !barcodeSel.value) ? 'block' : 'none';
+    }
     if (pendingImportRows) renderImportPreview(pendingImportRows);
   }
 
@@ -3609,6 +3632,187 @@
         });
       });
     });
+  }
+
+  // ============================================================
+  // VAR OLAN ÜRÜNLERE TOPLU BARKOD ATAMA (barkodsuz aktarılmış ürünleri düzeltmek için)
+  // ============================================================
+  let pendingBarcodeFixRows = null;
+  let barcodeFixPlans = null;
+
+  document.getElementById('barcode-fix-file').addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const statusEl = document.getElementById('barcode-fix-status');
+    const analyzeBtn = document.getElementById('barcode-fix-analyze-btn');
+    statusEl.textContent = "Dosya okunuyor...";
+    analyzeBtn.style.display = 'none';
+    pendingBarcodeFixRows = null;
+    barcodeFixPlans = null;
+    document.getElementById('barcode-fix-review').style.display = 'none';
+    document.getElementById('barcode-fix-review').innerHTML = '';
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const wb = XLSX.read(data, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+        if (rows.length === 0) {
+          statusEl.innerHTML = `<span style="color:var(--rust);">Dosyada okunacak satır bulunamadı.</span>`;
+          return;
+        }
+        pendingBarcodeFixRows = rows;
+        const headers = Object.keys(rows[0]);
+        renderBarcodeFixMapping(headers);
+        statusEl.innerHTML = `<b>${rows.length}</b> satır okundu. Sütun eşleştirmesini kontrol edip "Eşleşmeleri Bul" butonuna basın.`;
+        analyzeBtn.style.display = 'inline-block';
+      } catch (err) {
+        statusEl.innerHTML = `<span style="color:var(--rust);">Dosya okunamadı: ${err.message}</span>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+
+  function renderBarcodeFixMapping(headers) {
+    const box = document.getElementById('barcode-fix-mapping');
+    if (!box) return;
+    const nameGuess = guessColumnForField(headers, IMPORT_FIELD_DEFS.find(f => f.key === 'name').guesses);
+    const barcodeGuess = guessColumnForField(headers, IMPORT_FIELD_DEFS.find(f => f.key === 'barcode').guesses);
+    box.innerHTML = `
+      <p style="font-size:11px; color:var(--info); font-weight:600; margin:0 0 8px;">🔗 Sütunları Eşleştirin:</p>
+      <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+        <div>
+          <label>Ürün Adı Sütunu *</label>
+          <select id="bf-map-name">
+            <option value="">— Seçin —</option>
+            ${headers.map(h => `<option value="${h}" ${h === nameGuess ? 'selected' : ''}>${h}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label>Barkod Sütunu *</label>
+          <select id="bf-map-barcode">
+            <option value="">— Seçin —</option>
+            ${headers.map(h => `<option value="${h}" ${h === barcodeGuess ? 'selected' : ''}>${h}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    `;
+    box.style.display = 'block';
+  }
+
+  function analyzeBarcodeFix() {
+    if (currentRole !== 'admin' || !pendingBarcodeFixRows) return;
+    const nameCol = document.getElementById('bf-map-name').value;
+    const barcodeCol = document.getElementById('bf-map-barcode').value;
+    if (!nameCol || !barcodeCol) { alert('Lütfen hem Ürün Adı hem de Barkod sütununu seçin.'); return; }
+
+    barcodeFixPlans = [];
+    const usedNewBarcodes = new Set();
+
+    pendingBarcodeFixRows.forEach((row) => {
+      const name = String(row[nameCol] || '').trim();
+      const barcode = String(row[barcodeCol] || '').trim().toUpperCase();
+      if (!name || !barcode) return;
+      if (productsData[barcode]) return; // bu barkod zaten sistemde kayıtlı (belki de zaten doğru)
+      if (usedNewBarcodes.has(barcode)) return;
+
+      // Önce tam isim eşleşmesi (sadece otomatik RYH- kodlu ürünler arasında), sonra en yüksek benzerlik
+      const normTarget = normalizeTr(name);
+      let matchProduct = Object.values(productsData).find(p => p.code.startsWith('RYH-') && normalizeTr(p.name) === normTarget);
+
+      if (!matchProduct) {
+        const similar = findSimilarProducts(name, 1);
+        if (similar.length > 0 && similar[0].score >= 0.8 && similar[0].product.code.startsWith('RYH-')) {
+          matchProduct = similar[0].product;
+        }
+      }
+
+      if (matchProduct) {
+        usedNewBarcodes.add(barcode);
+        barcodeFixPlans.push({ name, barcode, oldCode: matchProduct.code, matchProduct, include: true });
+      }
+    });
+
+    renderBarcodeFixReview();
+  }
+
+  function renderBarcodeFixReview() {
+    const box = document.getElementById('barcode-fix-review');
+    if (!box || !barcodeFixPlans) return;
+
+    if (barcodeFixPlans.length === 0) {
+      box.innerHTML = `<p style="font-size:12px; color:var(--steel); margin-top:12px;">Eşleşme bulunamadı. Ürün adlarının dosyanızla sistemdekiyle örtüştüğünden ve barkodların sistemde henüz kayıtlı olmadığından emin olun.</p>`;
+      box.style.display = 'block';
+      return;
+    }
+
+    let html = `<div style="background:#F7F5F0; border:1px solid var(--steel-line); border-radius:4px; padding:12px; margin-top:12px;">`;
+    html += `<p style="font-size:12px; font-weight:600; margin-bottom:8px;">🔗 ${barcodeFixPlans.length} ürün için eşleşme bulundu. Onaylamak istemediklerinizin işaretini kaldırın:</p>`;
+    html += `<div style="max-height:280px; overflow-y:auto;">`;
+    barcodeFixPlans.forEach((p, i) => {
+      html += `
+        <div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line); font-size:11px;">
+          <input type="checkbox" checked style="width:auto;" onchange="barcodeFixPlans[${i}].include=this.checked">
+          <span style="flex:1;">${p.matchProduct.name} <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.oldCode})</span> → <b>${p.barcode}</b></span>
+        </div>
+      `;
+    });
+    html += `</div>`;
+    html += `<button class="btn btn-success" style="margin-top:12px;" onclick="applyBarcodeFix()">✅ Seçilenlere Barkod Ata</button>`;
+    html += `</div>`;
+    box.innerHTML = html;
+    box.style.display = 'block';
+  }
+
+  async function applyBarcodeFix() {
+    if (currentRole !== 'admin' || !barcodeFixPlans) return;
+    const toApply = barcodeFixPlans.filter(p => p.include);
+    if (toApply.length === 0) { alert('Hiçbir satır seçili değil.'); return; }
+    if (!confirm(`${toApply.length} ürüne barkod atanacak (kodları değişecek). Onaylıyor musunuz?`)) return;
+
+    const statusEl = document.getElementById('barcode-fix-status');
+    statusEl.textContent = "Uygulanıyor, lütfen bekleyin... (bu birkaç saniye sürebilir)";
+
+    let success = 0, failed = 0;
+    for (const p of toApply) {
+      try {
+        if (productsData[p.barcode]) { failed++; continue; } // eş zamanlı çakışma güvenliği
+
+        const fullData = Object.assign({}, productsData[p.oldCode], { code: p.barcode });
+        await db.child(p.barcode).set(fullData);
+        await db.child(p.oldCode).remove();
+
+        try {
+          const imgSnap = await dbProductImages.child(p.oldCode).once('value');
+          if (imgSnap.exists()) {
+            await dbProductImages.child(p.barcode).set(imgSnap.val());
+            await dbProductImages.child(p.oldCode).remove();
+          }
+        } catch (e) { /* fotoğraf yoksa sorun değil */ }
+
+        dbBarcodeCache.child(p.barcode).set({ name: p.name, source: 'toplu-eslesme', savedAt: new Date().toISOString() });
+        productsData[p.barcode] = fullData;
+        delete productsData[p.oldCode];
+        success++;
+      } catch (err) {
+        failed++;
+      }
+    }
+
+    statusEl.innerHTML = `<span style="color:var(--success); font-weight:bold;">✅ ${success} ürüne barkod atandı.</span>${failed ? `<br><span style="color:var(--rust);">${failed} üründe hata oluştu.</span>` : ''}`;
+    showToast(`${success} ürüne barkod atandı!`);
+
+    pendingBarcodeFixRows = null;
+    barcodeFixPlans = null;
+    document.getElementById('barcode-fix-file').value = '';
+    document.getElementById('barcode-fix-mapping').style.display = 'none';
+    document.getElementById('barcode-fix-mapping').innerHTML = '';
+    document.getElementById('barcode-fix-review').style.display = 'none';
+    document.getElementById('barcode-fix-review').innerHTML = '';
+    document.getElementById('barcode-fix-analyze-btn').style.display = 'none';
+    renderGrid();
   }
 
   // ============================================================
