@@ -393,8 +393,8 @@
 
       <div class="form-card disabled-action" id="bulk-import-card">
         <h3 style="margin-top:0;font-family:'Oswald';">📥 Excel'den Toplu Ürün Aktar</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Aktif Pos veya başka bir sistemden aldığınız Excel/CSV dosyasını <b>olduğu gibi</b> yükleyebilirsiniz — sütun isimleri farklı olsa bile, dosyanızın hangi sütununun bizim hangi alanımıza karşılık geldiğini aşağıda kendiniz eşleştirirsiniz. Dilerseniz hazır şablonu da kullanabilirsiniz.</p>
-        <button class="btn btn-dark btn-sm" style="width:auto;" onclick="downloadImportTemplate()">⬇️ Boş Şablonu İndir (opsiyonel)</button>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Aktif Pos veya başka bir sistemden aldığınız Excel/CSV dosyasını <b>olduğu gibi</b> yükleyebilirsiniz — sütun isimleri farklı olsa bile, dosyanızın hangi sütununun bizim hangi alanımıza karşılık geldiğini aşağıda kendiniz eşleştirirsiniz. Sistem, sistemde zaten kayıtlı ürünlerle <b>barkod ve isim benzerliğine göre çakışma kontrolü</b> yapar; mükerrer kayıt oluşturmadan önce size sorar.</p>
+        <button class="btn btn-dark btn-sm" style="width:auto;" onclick="downloadImportTemplate()">⬇️ Boş Şablonu İndir (opsiyonel, Barkod sütunu dahildir)</button>
         <div style="margin-top:14px;">
           <label>Excel/CSV Dosyanızı Seçin (Aktif Pos dahil, herhangi bir format)</label>
           <input type="file" accept=".xlsx,.xls,.csv" id="bulk-import-file">
@@ -402,7 +402,8 @@
         <div id="import-mapping-section" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-top:12px;"></div>
         <div id="bulk-import-preview"></div>
         <div id="bulk-import-status" style="font-size:12px; margin-top:8px;"></div>
-        <button class="btn btn-success" id="bulk-import-start-btn" onclick="startBulkImport()" style="display:none; margin-top:10px;">✅ İçe Aktarımı Başlat</button>
+        <button class="btn btn-success" id="bulk-import-start-btn" onclick="analyzeImportConflicts()" style="display:none; margin-top:10px;">🔍 Çakışmaları Kontrol Et ve Devam Et</button>
+        <div id="import-conflict-section" style="display:none;"></div>
       </div>
 
       <div class="form-card disabled-action" id="brand-settings-card">
@@ -3302,8 +3303,11 @@
     statusEl.textContent = "Dosya okunuyor...";
     startBtn.style.display = 'none';
     pendingImportRows = null;
+    importRowPlans = null;
     document.getElementById('import-mapping-section').style.display = 'none';
     document.getElementById('import-mapping-section').innerHTML = '';
+    document.getElementById('import-conflict-section').style.display = 'none';
+    document.getElementById('import-conflict-section').innerHTML = '';
 
     const reader = new FileReader();
     reader.onload = (evt) => {
@@ -3356,7 +3360,9 @@
     return code;
   }
 
-  function startBulkImport() {
+  let importRowPlans = null;
+
+  function analyzeImportConflicts() {
     if (currentRole !== 'admin' || !pendingImportRows) return;
 
     const nameSel = document.getElementById('map-name');
@@ -3365,75 +3371,209 @@
       return;
     }
 
-    if (!confirm(`${pendingImportRows.length} satır işlenip canlı sisteme eklenecek. Onaylıyor musunuz?`)) return;
-
-    const statusEl = document.getElementById('bulk-import-status');
-    const startBtn = document.getElementById('bulk-import-start-btn');
-    const updates = {};
-    const usedCodes = new Set();
-    const errorRows = [];
-    let successCount = 0;
+    importRowPlans = [];
+    const seenBarcodesInFile = new Set();
 
     pendingImportRows.forEach((row, idx) => {
       const name = String(getMappedValue(row, 'name') || '').trim();
-      if (!name) { errorRows.push(`Satır ${idx + 2}: Ürün adı boş, atlandı`); return; }
+      const barcode = String(getMappedValue(row, 'barcode') || '').trim().toUpperCase();
 
-      let code = String(getMappedValue(row, 'barcode') || '').trim().toUpperCase();
-      if (!code) {
-        code = generateUniqueImportCode(usedCodes);
-      } else if (productsData[code] || usedCodes.has(code)) {
-        errorRows.push(`Satır ${idx + 2}: "${code}" barkodu/kodu zaten kullanımda, atlandı`);
+      if (!name) {
+        importRowPlans.push({ idx, row, name, barcode, status: 'invalid', note: 'Ürün adı boş' });
         return;
-      } else {
-        usedCodes.add(code);
       }
 
-      const costRaw = getMappedValue(row, 'cost');
-      const profitRaw = getMappedValue(row, 'profit');
+      if (barcode) {
+        if (productsData[barcode]) {
+          importRowPlans.push({ idx, row, name, barcode, status: 'barcode_conflict', matchCode: barcode, matchProduct: productsData[barcode], action: 'merge' });
+          return;
+        }
+        if (seenBarcodesInFile.has(barcode)) {
+          importRowPlans.push({ idx, row, name, barcode, status: 'invalid', note: `Dosya içinde "${barcode}" barkodu tekrar ediyor` });
+          return;
+        }
+        seenBarcodesInFile.add(barcode);
+      }
 
-      updates[code] = {
-        name,
-        qty: parseFloat(getMappedValue(row, 'qty')) || 0,
-        price: parseFloat(getMappedValue(row, 'price')) || 0,
-        unit: String(getMappedValue(row, 'unit') || 'Adet').trim() || 'Adet',
-        category: String(getMappedValue(row, 'category') || 'Diğer').trim() || 'Diğer',
-        brand: String(getMappedValue(row, 'brand') || '').trim() || null,
-        costPrice: (costRaw !== '' && costRaw != null) ? (Math.max(0, parseFloat(costRaw)) || 0) : null,
-        vat: parseFloat(getMappedValue(row, 'vat')) || 0,
-        targetProfit: (profitRaw !== '' && profitRaw != null) ? (parseFloat(profitRaw) || 0) : null,
-        code,
-        lastPriceUpdate: new Date().toISOString(),
-        lastUpdatedBy: 'Yönetici (Toplu Aktarım)'
-      };
-      successCount++;
+      // Barkod yok veya eşleşmedi — isim benzerliğine bak (mükerrer olabilir)
+      const matches = findSimilarProducts(name, 1);
+      if (matches.length > 0 && matches[0].score >= 0.75) {
+        importRowPlans.push({ idx, row, name, barcode, status: 'name_conflict', matchCode: matches[0].product.code, matchProduct: matches[0].product, matchScore: matches[0].score, action: 'new' });
+        return;
+      }
+
+      importRowPlans.push({ idx, row, name, barcode, status: 'new' });
     });
 
-    if (Object.keys(updates).length === 0) {
-      statusEl.innerHTML = `<span style="color:var(--rust);">Aktarılacak geçerli satır bulunamadı.</span><br>${errorRows.join('<br>')}`;
-      return;
+    renderImportConflictReview();
+  }
+
+  function applyGlobalBarcodeAction() {
+    const val = document.getElementById('global-barcode-conflict-action').value;
+    importRowPlans.filter(p => p.status === 'barcode_conflict').forEach(p => p.action = val);
+  }
+
+  function renderImportConflictReview() {
+    const box = document.getElementById('import-conflict-section');
+    if (!box || !importRowPlans) return;
+
+    const invalidRows = importRowPlans.filter(p => p.status === 'invalid');
+    const newRows = importRowPlans.filter(p => p.status === 'new');
+    const barcodeConflicts = importRowPlans.filter(p => p.status === 'barcode_conflict');
+    const nameConflicts = importRowPlans.filter(p => p.status === 'name_conflict');
+
+    let html = `<div style="background:#F7F5F0; border:1px solid var(--steel-line); border-radius:4px; padding:12px; margin-top:12px;">`;
+    html += `<h4 style="margin:0 0 8px; font-family:'Oswald';">📋 Ön Kontrol Sonucu</h4>`;
+    html += `<p style="font-size:12px; margin:2px 0;">✅ <b>${newRows.length}</b> satır tamamen yeni ürün olarak eklenecek.</p>`;
+    if (invalidRows.length) html += `<p style="font-size:12px; margin:2px 0; color:var(--rust);">⛔ <b>${invalidRows.length}</b> satır atlanacak (isim boş veya dosya içinde tekrar eden barkod).</p>`;
+
+    if (barcodeConflicts.length) {
+      html += `<div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
+        <p style="font-size:12px; font-weight:600; color:var(--rust); margin-bottom:6px;">⚠️ ${barcodeConflicts.length} satırın barkodu, sistemde zaten kayıtlı bir ürünle birebir aynı. Bu satırlarda ne yapılsın?</p>
+        <select id="global-barcode-conflict-action" onchange="applyGlobalBarcodeAction()">
+          <option value="merge">Stok miktarlarını topla (mevcut stok + gelen miktar)</option>
+          <option value="overwrite">Var olan ürünün bilgilerini güncelle, miktarı yeni değerle DEĞİŞTİR</option>
+          <option value="skip">Bu satırları atla, dokunma</option>
+        </select>
+        <div style="max-height:150px; overflow-y:auto; margin-top:8px; font-size:11px;">
+          ${barcodeConflicts.map(p => `<div style="padding:3px 0; border-top:1px dashed var(--steel-line);">${p.name} <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.barcode})</span> → sistemde kayıtlı: <b>${p.matchProduct.name}</b> (mevcut stok: ${p.matchProduct.qty ?? 0})</div>`).join('')}
+        </div>
+      </div>`;
     }
 
-    statusEl.textContent = "Yükleniyor, lütfen bekleyin... (bu birkaç saniye sürebilir)";
-    startBtn.disabled = true;
+    if (nameConflicts.length) {
+      html += `<div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
+        <p style="font-size:12px; font-weight:600; color:var(--info); margin-bottom:6px;">🔎 ${nameConflicts.length} satırın barkodu yok/eşleşmedi ama ismi sistemdeki bir ürüne çok benziyor. Mükerrer olabilir, her biri için ayrı karar verin:</p>
+        <div style="max-height:240px; overflow-y:auto; margin-top:6px;">
+          ${nameConflicts.map(p => `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:11px; flex-wrap:wrap;">
+              <span>"${p.name}" ≈ sistemde <b>${p.matchProduct.name}</b> <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.matchProduct.code}, stok: ${p.matchProduct.qty ?? 0})</span></span>
+              <select style="width:auto; flex-shrink:0;" onchange="importRowPlans[${p.idx}].action=this.value">
+                <option value="new" selected>Farklı ürün, yeni olarak ekle</option>
+                <option value="merge">Aynı ürün, stoğu bu ürüne ekle</option>
+                <option value="skip">Bu satırı atla</option>
+              </select>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+    }
 
-    db.update(updates, (err) => {
-      startBtn.disabled = false;
-      if (err) {
-        statusEl.innerHTML = `<span style="color:var(--rust);">Yükleme hatası: ${err.message}</span>`;
+    html += `<button class="btn btn-success" style="margin-top:14px;" onclick="finalizeBulkImport()">✅ Onayla ve İçe Aktar</button>`;
+    html += `</div>`;
+    box.innerHTML = html;
+    box.style.display = 'block';
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function finalizeBulkImport() {
+    if (currentRole !== 'admin' || !importRowPlans) return;
+    if (!confirm(`Seçtiğiniz ayarlara göre içe aktarım başlatılacak. Onaylıyor musunuz?`)) return;
+
+    const statusEl = document.getElementById('bulk-import-status');
+    const updates = {};
+    const qtyIncrements = [];
+    const usedCodes = new Set();
+    const errorRows = [];
+    let newCount = 0, mergedCount = 0, overwrittenCount = 0, skippedCount = 0;
+
+    importRowPlans.forEach(p => {
+      if (p.status === 'invalid') { errorRows.push(`Satır ${p.idx + 2}: ${p.note}, atlandı`); skippedCount++; return; }
+
+      const row = p.row;
+      const costRaw = getMappedValue(row, 'cost');
+      const profitRaw = getMappedValue(row, 'profit');
+      const importedQty = parseFloat(getMappedValue(row, 'qty')) || 0;
+      const importedPrice = parseFloat(getMappedValue(row, 'price')) || 0;
+      const importedUnit = String(getMappedValue(row, 'unit') || 'Adet').trim() || 'Adet';
+      const importedCategory = String(getMappedValue(row, 'category') || 'Diğer').trim() || 'Diğer';
+      const importedBrand = String(getMappedValue(row, 'brand') || '').trim() || null;
+      const importedCost = (costRaw !== '' && costRaw != null) ? (Math.max(0, parseFloat(costRaw)) || 0) : null;
+      const importedVat = parseFloat(getMappedValue(row, 'vat')) || 0;
+      const importedProfit = (profitRaw !== '' && profitRaw != null) ? (parseFloat(profitRaw) || 0) : null;
+
+      if (p.status === 'new') {
+        let code = p.barcode;
+        if (!code) {
+          code = generateUniqueImportCode(usedCodes);
+        } else if (productsData[code] || usedCodes.has(code)) {
+          errorRows.push(`Satır ${p.idx + 2}: "${code}" kodu çakıştı, atlandı`);
+          skippedCount++;
+          return;
+        } else {
+          usedCodes.add(code);
+        }
+        updates[code] = {
+          name: p.name, qty: importedQty, price: importedPrice, unit: importedUnit,
+          category: importedCategory, brand: importedBrand, costPrice: importedCost,
+          vat: importedVat, targetProfit: importedProfit, code,
+          lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici (Toplu Aktarım)'
+        };
+        newCount++;
         return;
       }
-      let resultHtml = `<span style="color:var(--success); font-weight:bold;">✅ ${successCount} ürün başarıyla eklendi!</span>`;
-      if (errorRows.length > 0) {
-        resultHtml += `<div style="margin-top:6px; color:var(--rust); font-size:11px;">${errorRows.length} satır atlandı:<br>${errorRows.slice(0, 15).join('<br>')}</div>`;
+
+      // barcode_conflict veya name_conflict
+      const action = p.action;
+      const matchCode = p.matchCode;
+
+      if (action === 'skip') { skippedCount++; return; }
+
+      if (action === 'overwrite') {
+        updates[matchCode] = {
+          name: p.name, qty: importedQty, price: importedPrice, unit: importedUnit,
+          category: importedCategory, brand: importedBrand, costPrice: importedCost,
+          vat: importedVat, targetProfit: importedProfit, code: matchCode,
+          lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici (Toplu Aktarım - Güncellendi)'
+        };
+        overwrittenCount++;
+        return;
+      }
+
+      // merge (varsayılan): mevcut ürünün stoğuna ekle, diğer bilgilerine dokunma
+      qtyIncrements.push({ code: matchCode, qty: importedQty });
+      mergedCount++;
+    });
+
+    statusEl.textContent = "Yükleniyor, lütfen bekleyin... (bu birkaç saniye sürebilir)";
+
+    const finishUp = () => {
+      let resultHtml = `<span style="color:var(--success); font-weight:bold;">✅ Tamamlandı: ${newCount} yeni ürün eklendi, ${mergedCount} ürünün stoğu toplandı, ${overwrittenCount} ürün güncellendi.</span>`;
+      if (skippedCount > 0 || errorRows.length > 0) {
+        resultHtml += `<div style="margin-top:6px; color:var(--rust); font-size:11px;">${skippedCount} satır atlandı.${errorRows.length ? '<br>' + errorRows.slice(0, 15).join('<br>') : ''}</div>`;
       }
       statusEl.innerHTML = resultHtml;
       pendingImportRows = null;
+      importRowPlans = null;
       document.getElementById('bulk-import-preview').innerHTML = '';
       document.getElementById('bulk-import-file').value = '';
       document.getElementById('import-mapping-section').style.display = 'none';
       document.getElementById('import-mapping-section').innerHTML = '';
-      startBtn.style.display = 'none';
-      showToast(successCount + " ürün içe aktarıldı!");
+      document.getElementById('import-conflict-section').style.display = 'none';
+      document.getElementById('import-conflict-section').innerHTML = '';
+      document.getElementById('bulk-import-start-btn').style.display = 'none';
+      showToast(`İçe aktarım tamamlandı: ${newCount} yeni, ${mergedCount} birleştirildi, ${overwrittenCount} güncellendi.`);
+    };
+
+    db.update(updates, (err) => {
+      if (err) {
+        statusEl.innerHTML = `<span style="color:var(--rust);">Yükleme hatası: ${err.message}</span>`;
+        return;
+      }
+      if (qtyIncrements.length === 0) { finishUp(); return; }
+
+      let remaining = qtyIncrements.length;
+      let hadError = false;
+      qtyIncrements.forEach(inc => {
+        db.child(inc.code).child('qty').transaction((cur) => Number(cur || 0) + Number(inc.qty), (err2) => {
+          if (err2) hadError = true;
+          remaining--;
+          if (remaining === 0) {
+            if (hadError) statusEl.innerHTML = `<span style="color:var(--rust);">Bazı stok toplama işlemlerinde hata oluştu, lütfen kontrol edin.</span>`;
+            finishUp();
+          }
+        });
+      });
     });
   }
 
