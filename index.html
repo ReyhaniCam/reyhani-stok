@@ -307,6 +307,7 @@
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
       </div>
       <div id="grid" class="grid"></div>
+      <div id="grid-load-more-wrap" style="text-align:center; margin-top:16px;"></div>
     </div>
 
     <!-- ÜRÜN EKLE TABI -->
@@ -1015,6 +1016,9 @@
   let cart = [];
   let goodsReceiptCart = [];
   let globalPastReceipts = {};
+  let gridCurrentPage = 1;
+  let lastGridSearch = null;
+  const GRID_PAGE_SIZE = 60;
   const actionCooldowns = {};
 
   // Şifreler artık düz metin olarak DEĞİL, SHA-256 özeti (hash) olarak tutuluyor.
@@ -3141,13 +3145,17 @@
   function renderGrid() {
     const grid = document.getElementById('grid');
     const search = document.getElementById('search').value.toLowerCase();
-    grid.innerHTML = '';
-    
+
+    // Arama değişince sayfayı başa sar
+    if (search !== lastGridSearch) {
+      gridCurrentPage = 1;
+      lastGridSearch = search;
+    }
+
     let count = 0, units = 0, value = 0;
     const canEdit = (currentRole === 'admin' || currentRole === 'staff');
     const isAdmin = (currentRole === 'admin');
-    const currentBaseUrl = window.location.href.split('?')[0];
-    const matchedCodes = [];
+    const matchedProducts = [];
 
     Object.values(productsData).forEach(p => {
       const pName = p.name ? p.name.toLowerCase() : '';
@@ -3155,61 +3163,87 @@
       const pCode = p.code ? p.code.toLowerCase() : '';
       const pLoc = p.location ? p.location.toLowerCase() : '';
       const pBrand = p.brand ? p.brand.toLowerCase() : '';
-      
+
       if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
         count++;
         units += parseFloat(p.qty || 0);
-        
-        // ENVANTER DEĞERİ (MALİYET) HESAPLAMA
+
+        // ENVANTER DEĞERİ (MALİYET) HESAPLAMA — tüm eşleşen ürünler üzerinden (sayfalamadan bağımsız)
         const itemCost = p.costPrice != null ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
         value += parseFloat(p.qty || 0) * itemCost;
-        
-        matchedCodes.push(p.code);
-        const isLow = p.qty <= 5;
-        
-        let editActions = '';
-        if (canEdit) {
-          editActions = `
-            <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--steel-line); padding-top:8px;">
-              <button class="sm-btn" onclick="openEditModal('${p.code}')">✏️ Düzenle</button>
-              ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--rust);">🗑️ Sil</button>` : ''}
-            </div>
-          `;
-        }
 
-        grid.innerHTML += `
-          <div class="tag ${isLow ? 'low' : ''}" id="card-${p.code}">
-            <div class="tag-header">
-              <div>
-                <div class="tag-title">${p.name}</div>
-                <div class="tag-code">${p.code}</div>
-                <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
-              </div>
-              <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
-                <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
-                <button class="sm-btn" onclick="printBarcodeLabel('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🏷️ Barkod Yazıcı</button>
-              </div>
-            </div>
+        matchedProducts.push(p);
+      }
+    });
 
-            <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
-            <button class="qr-toggle-link" onclick="toggleQR('${p.code}')">🔳 Karekodu Görüntüle</button>
-            <div class="qr-box-mini hidden" id="grid-qr-${p.code}"></div>
+    // Büyük stok listelerinde tarayıcının donmaması için sayfalama: sadece o anki sayfa kadarını çiz
+    const visibleCount = Math.min(matchedProducts.length, gridCurrentPage * GRID_PAGE_SIZE);
+    const pageProducts = matchedProducts.slice(0, visibleCount);
+    const matchedCodes = [];
 
-            <div class="price-info-box">
-               <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
-               <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
-            </div>
+    // PERFORMANS KRİTİK: grid.innerHTML += ile döngüde büyütmek yerine (O(n²), yüzlerce
+    // üründe tarayıcıyı kilitler/çökertir), tüm HTML'i bir dizide biriktirip TEK SEFERDE yazıyoruz.
+    const htmlParts = [];
 
-            <div class="qty-control">
-              <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
-              <div class="qty-val">${p.qty} <span style="font-size:10px;font-family:'Inter';color:var(--steel);">${p.unit || 'Adet'}</span></div>
-              <button class="qty-btn" onclick="updateQty('${p.code}', 1)" ${!canEdit ? 'disabled' : ''}>+</button>
-            </div>
-            ${editActions}
+    pageProducts.forEach(p => {
+      matchedCodes.push(p.code);
+      const isLow = p.qty <= 5;
+
+      let editActions = '';
+      if (canEdit) {
+        editActions = `
+          <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--steel-line); padding-top:8px;">
+            <button class="sm-btn" onclick="openEditModal('${p.code}')">✏️ Düzenle</button>
+            ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--rust);">🗑️ Sil</button>` : ''}
           </div>
         `;
       }
+
+      htmlParts.push(`
+        <div class="tag ${isLow ? 'low' : ''}" id="card-${p.code}">
+          <div class="tag-header">
+            <div>
+              <div class="tag-title">${p.name}</div>
+              <div class="tag-code">${p.code}</div>
+              <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
+              <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
+              <button class="sm-btn" onclick="printBarcodeLabel('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🏷️ Barkod Yazıcı</button>
+            </div>
+          </div>
+
+          <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
+          <button class="qr-toggle-link" onclick="toggleQR('${p.code}')">🔳 Karekodu Görüntüle</button>
+          <div class="qr-box-mini hidden" id="grid-qr-${p.code}"></div>
+
+          <div class="price-info-box">
+             <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
+             <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
+          </div>
+
+          <div class="qty-control">
+            <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
+            <div class="qty-val">${p.qty} <span style="font-size:10px;font-family:'Inter';color:var(--steel);">${p.unit || 'Adet'}</span></div>
+            <button class="qty-btn" onclick="updateQty('${p.code}', 1)" ${!canEdit ? 'disabled' : ''}>+</button>
+          </div>
+          ${editActions}
+        </div>
+      `);
     });
+
+    grid.innerHTML = htmlParts.join('');
+
+    // "Daha Fazla Göster" butonu — kalan ürün varsa göster
+    const moreWrap = document.getElementById('grid-load-more-wrap');
+    if (moreWrap) {
+      const remaining = matchedProducts.length - visibleCount;
+      if (remaining > 0) {
+        moreWrap.innerHTML = `<button class="btn btn-dark" style="width:auto; padding:10px 24px;" onclick="gridCurrentPage++; renderGrid();">⬇️ Daha Fazla Göster (${remaining} ürün daha)</button>`;
+      } else {
+        moreWrap.innerHTML = '';
+      }
+    }
 
     matchedCodes.forEach(code => loadProductImageIntoCard(code));
 
