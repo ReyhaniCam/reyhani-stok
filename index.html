@@ -110,7 +110,6 @@
   .edit-photo-preview img{width:100%; height:100%; object-fit:cover; cursor:pointer;}
   .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
 
-  /* YERLEŞİM (KROKİ) — serbest yerleşimli, sürükle-bırak tuval */
   .layout-canvas{
     position:relative; width:100%; aspect-ratio:4/3; min-height:280px;
     background-color:#E4DFD3;
@@ -2509,23 +2508,35 @@
   function findSimilarProducts(inputName, limit) {
     limit = limit || 4;
     const norm = normalizeTr(inputName);
-    if (!norm || norm.length < 3) return [];
+    // En az 4 karakter olmalı ve sadece tek kelime olmamalı
+    if (!norm || norm.length < 4) return [];
+    
     const inputTokens = norm.split(' ').filter(Boolean);
+    // Sadece 1 kelimelik ve 4 karakterden kısa isimleri filtrele
+    if (inputTokens.length === 1 && inputTokens[0].length < 4) return [];
 
     const scored = Object.values(productsData).map(p => {
       const pn = normalizeTr(p.name || '');
       if (!pn) return { product: p, score: 0 };
+      
+      // Sistemdeki ürün adı çok kısaysa (tek harf gibi) eşleştirme yapma
+      if (pn.length < 3) return { product: p, score: 0 };
+      
       let score = similarityRatio(norm, pn);
       if (pn.includes(norm) || norm.includes(pn)) score = Math.max(score, 0.85);
+      
       const pnTokens = pn.split(' ').filter(Boolean);
       if (inputTokens.length > 0 && pnTokens.length > 0) {
-        const overlap = inputTokens.filter(t => t.length > 1 && pnTokens.includes(t)).length;
-        score = Math.max(score, (overlap / inputTokens.length) * 0.9);
+        const overlap = inputTokens.filter(t => t.length > 2 && pnTokens.includes(t)).length;
+        if (inputTokens.length > 0) {
+          score = Math.max(score, (overlap / inputTokens.length) * 0.9);
+        }
       }
       return { product: p, score };
     });
 
-    return scored.filter(s => s.score >= 0.55 && s.score < 0.999).sort((a, b) => b.score - a.score).slice(0, limit);
+    // Eşik değerini 0.70'e yükselt (daha sıkı eşleşme)
+    return scored.filter(s => s.score >= 0.70 && s.score < 0.999).sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
   function checkNameDuplicate() {
@@ -3371,7 +3382,7 @@
       }
 
       const matches = findSimilarProducts(name, 1);
-      if (matches.length > 0 && matches[0].score >= 0.85) {
+      if (matches.length > 0 && matches[0].score >= 0.80) {
         importRowPlans.push({ idx, row, name, barcode, status: 'name_conflict', matchCode: matches[0].product.code, matchProduct: matches[0].product, matchScore: matches[0].score, action: 'new' });
         return;
       }
