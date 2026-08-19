@@ -1167,25 +1167,7 @@
           </div>
         </div>
       </div>
-      // Siparişi/Borcu yazdır butonuna basıldığında çalışacak fonksiyon
-function cariYazdir(musteriAdi, borc, taahhutTarihi, urunListesi) {
-    // 1. Ekranda seçili olan verileri paketle
-    const yazdirilacakVeri = {
-        isletmeAdi: musteriAdi,
-        adres: "Müşteri Adresi / İstanbul", // Varsa input'tan çekebilirsiniz
-        telefon: "05XX XXX XX XX",
-        borcTutari: borc,
-        taahhut: taahhutTarihi,
-        tarih: new Date().toLocaleDateString('tr-TR'),
-        kalemler: urunListesi // Örn: [{tarih: '19.08.2026', belgeno: 'F001', aciklama: '4mm Isıcam', borc: '5000'}]
-    };
 
-    // 2. Veriyi tarayıcı hafızasına geçici olarak yaz
-    localStorage.setItem("aktifCariHesap", JSON.stringify(yazdirilacakVeri));
-
-    // 3. Fatura sayfasını aç
-    window.open("fatura.html", "_blank");
-}
       <!-- BORÇ SEPETİ -->
       <div id="borc-cart-container" class="form-card" style="display:none; padding:12px;">
         <h3>🧾 Müşteri Sepeti / Borç Kalemleri</h3>
