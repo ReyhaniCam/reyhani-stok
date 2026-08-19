@@ -3,256 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cari Hesap Tablosu - Reyhani Cam</title>
+    <title>Reyhani Cam - Müşteri Fişi</title>
     <style>
-        * {
-            box-sizing: border-box;
-            font-family: Arial, Helvetica, sans-serif;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            background-color: #f5f5f5;
-            margin: 0;
-            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 15mm;
+            background: #fff;
+            color: #000;
         }
-        .a4-sayfa {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 20mm;
+        .container {
+            max-width: 700px;
             margin: 0 auto;
-            background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            position: relative;
+            border: 2px solid #000;
+            padding: 10mm;
+            border-radius: 4px;
         }
         .baslik {
             text-align: center;
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 30px;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+        .baslik h1 {
+            font-size: 22px;
             letter-spacing: 1px;
+            margin: 0;
         }
-        .isletme-bilgileri {
-            margin-bottom: 25px;
-            font-size: 14px;
-            line-height: 2;
+        .baslik p {
+            font-size: 12px;
+            color: #555;
+            margin: 4px 0 0 0;
         }
-        .bilgi-satiri {
+        .bilgi-alani {
             display: flex;
-            align-items: baseline;
-            margin-bottom: 5px;
-        }
-        .bilgi-etiket {
-            width: 110px;
-            font-weight: bold;
-        }
-        .bilgi-cizgi {
-            flex-grow: 1;
-            border-bottom: 1.5px solid #000;
-            padding-left: 10px;
-            min-height: 1.2em;
-        }
-        .aciklamalar-alani {
-            margin-bottom: 30px;
+            justify-content: space-between;
+            flex-wrap: wrap;
             font-size: 13px;
-            line-height: 1.4;
+            margin-bottom: 12px;
+            padding: 8px 0;
+            border-bottom: 1px solid #ddd;
         }
-        .aciklamalar-alani strong {
-            font-size: 14px;
-            display: block;
-            margin-bottom: 6px;
+        .bilgi-alani div {
+            margin: 4px 0;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 40px;
             font-size: 13px;
+            margin: 12px 0;
         }
         th, td {
-            border: 1px solid #777;
-            padding: 8px;
+            border: 1px solid #aaa;
+            padding: 6px 8px;
             text-align: left;
         }
         th {
-            background-color: #d9d9d9;
+            background: #f0f0f0;
             font-weight: bold;
-            text-align: center;
         }
-        .text-center { text-align: center; }
-        .text-right { text-align: right; }
-
-        .imza-alani {
-            margin-top: 50px;
-            margin-bottom: 40px;
-            font-size: 14px;
+        td:last-child, th:last-child {
+            text-align: right;
+        }
+        .toplam-alani {
+            text-align: right;
+            font-size: 16px;
             font-weight: bold;
-            display: flex;
-            align-items: center;
+            border-top: 2px solid #000;
+            padding-top: 8px;
+            margin-top: 6px;
         }
-        .imza-cizgi {
-            width: 350px;
-            border-bottom: 1.5px solid #000;
-            margin-left: 15px;
-        }
-        .dipnot {
+        .cari-bilgi {
             font-size: 12px;
-            margin-top: 50px;
+            margin-top: 16px;
+            border-top: 1px dashed #999;
+            padding-top: 10px;
         }
-        .yazdir-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 12px 24px;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 15px;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        .cari-bilgi table {
+            font-size: 11px;
         }
-        .yazdir-btn:hover {
-            background: #218838;
+        .cari-bilgi table th {
+            background: #fafafa;
+        }
+        .footer {
+            text-align: center;
+            font-size: 10px;
+            color: #777;
+            margin-top: 18px;
+            border-top: 1px solid #ddd;
+            padding-top: 8px;
         }
         @media print {
-            body {
-                background: none;
-                padding: 0;
-            }
-            .a4-sayfa {
-                box-shadow: none;
-                margin: 0;
-                width: 100%;
-                min-height: auto;
-                padding: 15mm;
-            }
-            .yazdir-btn {
-                display: none !important;
-            }
+            body { padding: 0; }
+            .container { border: none; padding: 5mm; }
+            .no-print { display: none; }
         }
     </style>
 </head>
 <body>
-
-    <button class="yazdir-btn" onclick="window.print()">🖨️ Sayfayı Yazdır</button>
-
-    <div class="a4-sayfa">
-        <div class="baslik">CARİ HESAP TABLOSU</div>
-
-        <div class="isletme-bilgileri">
-            <div class="bilgi-satiri">
-                <span class="bilgi-etiket">İşletme Adı :</span>
-                <span class="bilgi-cizgi" id="isletmeAdi"></span>
-            </div>
-            <div class="bilgi-satiri">
-                <span class="bilgi-etiket">Adres :</span>
-                <span class="bilgi-cizgi" id="isletmeAdres"></span>
-            </div>
-            <div class="bilgi-satiri">
-                <span class="bilgi-etiket">Telefon :</span>
-                <span class="bilgi-cizgi" id="isletmeTel"></span>
-            </div>
+    <div class="container" id="faturaContainer">
+        <div class="baslik">
+            <h1>REYHANİ CAM HIRDAVAT</h1>
+            <p>Satış Fişi / Borç Dekontu</p>
         </div>
 
-        <div class="aciklamalar-alani">
-            <strong>Açıklamalar:</strong>
-            <p>Bu cari hesap tablosu, işletme ile muhatapları arasında gerçekleşen ticari işlemlerin borç ve alacak durumlarını göstermektedir. Tabloda yer alan tüm tutarlar TL cinsindendir. İşlemler Türk Ticaret Kanunu kapsamında değerlendirilir.</p>
+        <div class="bilgi-alani">
+            <div><strong>Müşteri:</strong> <span id="musteriIsmi"></span><br>
+                <span id="musteriTelefon" style="font-size:12px;color:#555;"></span>
+            </div>
+            <div>
+                <strong>Tarih:</strong> <span id="islemTarihi"></span><br>
+                <strong>Vade:</strong> <span id="vadeSuresi"></span> (son ödeme: <span id="vadeTarihi"></span>)
+            </div>
         </div>
 
         <table>
             <thead>
                 <tr>
-                    <th style="width: 15%;">Tarih</th>
-                    <th style="width: 20%;">Fatura No / Belge</th>
-                    <th style="width: 35%;">Açıklama</th>
-                    <th style="width: 15%;">Borç (TL)</th>
-                    <th style="width: 15%;">Alacak (TL)</th>
+                    <th>Ürün Adı</th>
+                    <th>Miktar</th>
+                    <th>B. Fiyat (₺)</th>
+                    <th>Toplam (₺)</th>
                 </tr>
             </thead>
-            <tbody id="cariTabloGövde">
-                <!-- Veriler Javascript ile buraya doldurulacak -->
+            <tbody id="urunListesi">
+                <!-- Dinamik olarak doldurulacak -->
             </tbody>
         </table>
 
-        <div class="imza-alani">
-            İşletme Yetkilisi İmzası: <div class="imza-cizgi"></div>
+        <div class="toplam-alani">
+            GENEL TOPLAM: <span id="genelToplam"></span> ₺
         </div>
 
-        <div class="dipnot">
-            Not: Bu tablo, taraflar arasında yapılacak anlaşmalar ve muhasebe kayıtları için belge niteliğindedir.
+        <!-- Cari Hesap Tablosu (borç/alacak) -->
+        <div class="cari-bilgi">
+            <p style="font-weight:bold; font-size:13px;">📋 Cari Hesap Özeti</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Belge No</th>
+                        <th>Açıklama</th>
+                        <th>Borç (₺)</th>
+                        <th>Alacak (₺)</th>
+                    </tr>
+                </thead>
+                <tbody id="cariHesapTablosu">
+                    <!-- Tek satır eklenecek -->
+                </tbody>
+            </table>
+            <div style="text-align:right; font-size:12px; margin-top:4px;">
+                <strong>Kalan Borç:</strong> <span id="kalanBorc" style="color:#b22222;"></span> ₺
+            </div>
+        </div>
+
+        <div class="footer">
+            Bu belge, Reyhani Cam Hırdavat tarafından düzenlenmiştir.<br>
+            Ödeme son tarihine uymanız rica olunur.
         </div>
     </div>
 
     <script>
-        window.onload = function() {
-            // Tarayıcı hafızasından kayıtlı veriyi çek
-            const kayitliVeri = localStorage.getItem("aktifCariHesap") || localStorage.getItem("guncelSiparis");
-            const tabloGövde = document.getElementById("cariTabloGövde");
-
-            if (kayitliVeri) {
-                const veri = JSON.parse(kayitliVeri);
-
-                // Üst bilgileri yerleştir
-                if (document.getElementById("isletmeAdi")) document.getElementById("isletmeAdi").innerText = veri.isletmeAdi || veri.musteriAdi || "";
-                if (document.getElementById("isletmeAdres")) document.getElementById("isletmeAdres").innerText = veri.adres || "İstanbul";
-                if (document.getElementById("isletmeTel")) document.getElementById("isletmeTel").innerText = veri.telefon || "";
-
-                // Tabloyu oluştur
-                if (tabloGövde) {
-                    tabloGövde.innerHTML = "";
-                    const kalemler = veri.kalemler || veri.urunler || [];
-
-                    if (kalemler.length > 0) {
-                        kalemler.forEach(item => {
-                            const tarih = item.tarih || veri.tarih || new Date().toLocaleDateString('tr-TR');
-                            const belgeno = item.belgeno || item.faturaNo || 'F001';
-                            const aciklama = item.aciklama || item.urunAdi || 'Ürün / Veresiye Satışı';
-                            const borc = item.borc || item.toplam || (item.miktar ? (item.miktar * item.birimFiyat) : '');
-                            const alacak = item.alacak || '';
-
-                            tabloGövde.innerHTML += `
-                                <tr>
-                                    <td class="text-center">${tarih}</td>
-                                    <td>${belgeno}</td>
-                                    <td>${aciklama}</td>
-                                    <td class="text-right">${borc ? parseFloat(borc).toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' TL' : ''}</td>
-                                    <td class="text-right">${alacak ? parseFloat(alacak).toLocaleString('tr-TR', {minimumFractionDigits: 2}) + ' TL' : ''}</td>
-                                </tr>
-                            `;
-                        });
-                    } else if (veri.borcTutari) {
-                        tabloGövde.innerHTML = `
-                            <tr>
-                                <td class="text-center">${veri.tarih || new Date().toLocaleDateString('tr-TR')}</td>
-                                <td>F001</td>
-                                <td>Borç Kaydı (Taahhüt: ${veri.taahhut || 'Yok'})</td>
-                                <td class="text-right">${parseFloat(veri.borcTutari).toLocaleString('tr-TR', {minimumFractionDigits: 2})} TL</td>
-                                <td class="text-right"></td>
-                            </tr>
-                        `;
-                    }
-                }
-            } else {
-                // Doğrudan sayfaya girilirse gösterilecek örnek veriler
-                if (tabloGövde) {
-                    tabloGövde.innerHTML = `
-                        <tr>
-                            <td class="text-center">01.01.2026</td>
-                            <td>F001</td>
-                            <td>Mal Alımı</td>
-                            <td class="text-right">5.000,00 TL</td>
-                            <td class="text-right"></td>
-                        </tr>
-                        <tr>
-                            <td class="text-center">10.01.2026</td>
-                            <td>F002</td>
-                            <td>Mal Satımı</td>
-                            <td class="text-right"></td>
-                            <td class="text-right">3.000,00 TL</td>
-                        </tr>
-                    `;
-                }
+        (function() {
+            // 1. localStorage'dan sipariş verisini al
+            const kayitliVeri = localStorage.getItem("guncelSiparis");
+            if (!kayitliVeri) {
+                document.body.innerHTML = '<p style="text-align:center;margin-top:50px;font-size:18px;color:red;">⚠️ Geçerli bir sipariş bulunamadı. Lütfen ana sayfadan satış yapınız.</p>';
+                return;
             }
-        };
+
+            const siparis = JSON.parse(kayitliVeri);
+
+            // 2. Bilgileri yerleştir
+            document.getElementById("musteriIsmi").textContent = siparis.musteriAdi || 'Belirtilmemiş';
+            document.getElementById("musteriTelefon").textContent = siparis.telefon ? '📞 ' + siparis.telefon : '';
+            document.getElementById("islemTarihi").textContent = siparis.tarih + ' ' + (siparis.saat || '');
+            document.getElementById("vadeSuresi").textContent = siparis.vadeSuresi || 'Belirsiz';
+            document.getElementById("vadeTarihi").textContent = siparis.vadeTarihi || '-';
+            document.getElementById("genelToplam").textContent = siparis.genelToplam.toFixed(2);
+
+            // 3. Ürün listesini oluştur
+            const tbody = document.getElementById("urunListesi");
+            let toplamTutar = 0;
+            if (siparis.urunler && siparis.urunler.length > 0) {
+                siparis.urunler.forEach(urun => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${urun.urunAdi}</td>
+                        <td>${urun.miktar}</td>
+                        <td>${urun.birimFiyat.toFixed(2)}</td>
+                        <td>${urun.toplam.toFixed(2)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                    toplamTutar += urun.toplam;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;">Ürün bulunmuyor</td></tr>';
+            }
+
+            // 4. Cari hesap tablosunu doldur (tek satır)
+            const cariTbody = document.getElementById("cariHesapTablosu");
+            const bugun = new Date().toLocaleDateString('tr-TR');
+            const belgeNo = siparis.belgeNo || 'BORÇ-' + Date.now();
+            const aciklama = siparis.islemTipi || 'Borç Satış';
+            const borcTutar = siparis.genelToplam;
+
+            cariTbody.innerHTML = `
+                <tr>
+                    <td>${bugun}</td>
+                    <td>${belgeNo}</td>
+                    <td>${aciklama}</td>
+                    <td>${borcTutar.toFixed(2)}</td>
+                    <td>0.00</td>
+                </tr>
+            `;
+            document.getElementById("kalanBorc").textContent = borcTutar.toFixed(2);
+
+            // 5. Sayfa yüklendiğinde otomatik yazdır
+            window.onload = function() {
+                window.print();
+                // Yazdırdıktan sonra localStorage'dan temizleyebilirsiniz (isteğe bağlı)
+                // localStorage.removeItem('guncelSiparis');
+            };
+        })();
     </script>
 </body>
 </html>
