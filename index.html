@@ -844,47 +844,75 @@
     <!-- MÜŞTERİ BORÇ TABI -->
     <div id="tab-borc" class="tab-content">
       <div class="form-card">
-        <h3 style="margin-top:0; font-family:'Oswald';">➕ Yeni Müşteri Borç Kaydı</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Müşteriye verilen malzeme/ürün borcunu kaydedin. Borç tahsil edildiğinde kapatabilirsiniz.</p>
+        <h3 style="margin-top:0; font-family:'Oswald';">🛒 Müşteri Sepeti / Borç Satış</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Müşteriye ürünleri sepete ekleyerek satış yapın. Satış tamamlandığında otomatik olarak <b>30 gün vadeli borç kaydı</b> oluşur ve yazdırılabilir fiş çıkar.</p>
 
         <div class="form-row">
-          <div><label>Müşteri Adı / Firma</label><input type="text" id="borc-customer" placeholder="Örn: Ahmet Usta İnşaat"></div>
-          <div><label>Telefon</label><input type="text" id="borc-phone" placeholder="0555 123 45 67"></div>
-        </div>
-        <div class="form-row">
-          <div><label>Borç Açıklaması</label><input type="text" id="borc-desc" placeholder="Örn: 10 adet 8mm vida, 5 kg boya..."></div>
-          <div><label>Borç Tutarı (₺)</label><input type="number" id="borc-amount" step="0.01" placeholder="0.00"></div>
-        </div>
-        <div class="form-row">
           <div>
-            <label>Ödeme / Tahsilat Vadesi</label>
-            <select id="borc-term">
-              <option value="7 Gün">7 Gün</option>
-              <option value="15 Gün">15 Gün</option>
-              <option value="30 Gün" selected>30 Gün</option>
-              <option value="45 Gün">45 Gün</option>
-              <option value="60 Gün">60 Gün</option>
-              <option value="90 Gün">90 Gün</option>
-              <option value="Belirsiz">Belirsiz / Anlaşmaya Göre</option>
-            </select>
+            <label>Müşteri Adı / Firma</label>
+            <input type="text" id="borc-sale-customer" placeholder="Örn: Ahmet Usta İnşaat">
           </div>
           <div>
-            <label>Durum</label>
-            <select id="borc-status">
-              <option value="Açık" selected>Açık (Ödenmedi)</option>
-              <option value="Kapalı">Kapalı (Ödendi)</option>
-              <option value="Kısmi">Kısmi Ödeme Yapıldı</option>
-            </select>
+            <label>Telefon</label>
+            <input type="text" id="borc-sale-phone" placeholder="0555 123 45 67">
           </div>
         </div>
         <div class="form-row">
-          <div><label>Notlar (Opsiyonel)</label><input type="text" id="borc-note" placeholder="Ek bilgiler..."></div>
-          <div style="display:flex; align-items:flex-end;">
-            <button class="btn btn-primary" onclick="addCustomerDebt()">💰 Borcu Kaydet</button>
+          <div>
+            <label>Ürün Ara (İsme veya Koda Göre)</label>
+            <input list="borc-order-product-list" id="borc-cart-product" placeholder="Ürünü yazmaya başlayın...">
+            <datalist id="borc-order-product-list"></datalist>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-end;">
+            <div style="flex:1;">
+              <label>Miktar</label>
+              <input type="number" id="borc-cart-qty" placeholder="1" value="1" min="0.1" step="any">
+            </div>
+            <button class="btn btn-primary" style="width:auto; padding:10px 15px;" onclick="addToBorcCart()">➕ Sepete Ekle</button>
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Vade Süresi (Gün)</label>
+            <select id="borc-sale-term">
+              <option value="7">7 Gün</option>
+              <option value="15">15 Gün</option>
+              <option value="30" selected>30 Gün</option>
+              <option value="45">45 Gün</option>
+              <option value="60">60 Gün</option>
+              <option value="90">90 Gün</option>
+            </select>
+          </div>
+          <div>
+            <label>Notlar (Opsiyonel)</label>
+            <input type="text" id="borc-sale-note" placeholder="Ek bilgiler...">
           </div>
         </div>
       </div>
 
+      <!-- BORÇ SEPETİ -->
+      <div id="borc-cart-container" class="form-card" style="display:none; padding:12px;">
+        <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">🧾 Müşteri Sepeti / Borç Kalemleri</h3>
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width: 400px;" id="borc-cart-table">
+            <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
+              <th style="padding-bottom:5px;">Ürün Bilgisi</th>
+              <th>Fiyat</th>
+              <th>Miktar</th>
+              <th>Ara Toplam</th>
+              <th>İşlem</th>
+            </tr></thead>
+            <tbody id="borc-cart-items"></tbody>
+          </table>
+        </div>
+        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
+          Genel Toplam: <span id="borc-cart-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
+        </div>
+        <button class="btn btn-success" style="margin-top:15px;" onclick="completeBorcSale()">✅ Satışı Tamamla &amp; Borç Fişi Oluştur</button>
+        <button class="btn btn-danger" style="margin-top:10px;" onclick="clearBorcCart()">🗑️ Sepeti Temizle</button>
+      </div>
+
+      <!-- BORÇ LİSTESİ -->
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex-wrap:wrap; gap:8px;">
         <h3 style="font-family:'Oswald'; margin:0;">📋 Müşteri Borç Listesi</h3>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -1373,6 +1401,7 @@ db.on('value', (snapshot) => {
   productsData = snapshot.val() || {};
   renderGrid();
   updateOrderProductList();
+  updateBorcOrderProductList();
   renderLayoutGrid();
   if(currentRole === 'admin') renderRecentUpdates();
   if (targetCode && productsData[targetCode]) {
@@ -1667,6 +1696,314 @@ function updateAuthUI() {
 }
 
 // ============================================================
+// BORÇ SEPETİ (MÜŞTERİ SATIŞ)
+// ============================================================
+
+let borcCart = [];
+
+// Borç sepeti için ürün listesini güncelle
+function updateBorcOrderProductList() {
+  const dl = document.getElementById('borc-order-product-list');
+  if (!dl) return;
+  dl.innerHTML = '';
+  Object.values(productsData).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = `${p.code} - ${p.name}`;
+    dl.appendChild(opt);
+  });
+}
+
+// Borç sepetine ürün ekle
+function addToBorcCart() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') {
+    alert("Bu işlem için yetkiniz yok!");
+    return;
+  }
+  
+  const inputVal = document.getElementById('borc-cart-product').value;
+  const qty = parseFloat(document.getElementById('borc-cart-qty').value);
+  
+  if (!inputVal || isNaN(qty) || qty <= 0) {
+    alert("Lütfen geçerli bir ürün ve miktar girin.");
+    return;
+  }
+  
+  const code = inputVal.split(' - ')[0].trim();
+  const p = productsData[code];
+  
+  if (!p) {
+    alert("Ürün bulunamadı! Lütfen listeden seçin.");
+    return;
+  }
+  
+  // Stok kontrolü
+  if (p.qty < qty) {
+    alert(`Yetersiz stok! Mevcut: ${p.qty} ${p.unit || 'Adet'}`);
+    return;
+  }
+  
+  const existingIndex = borcCart.findIndex(item => item.code === code);
+  if (existingIndex !== -1) {
+    const newQty = borcCart[existingIndex].qty + qty;
+    if (p.qty < newQty) {
+      alert(`Yetersiz stok! Mevcut: ${p.qty} ${p.unit || 'Adet'}`);
+      return;
+    }
+    borcCart[existingIndex].qty = newQty;
+    borcCart[existingIndex].total = newQty * borcCart[existingIndex].price;
+  } else {
+    const price = Number(p.price || 0);
+    borcCart.push({
+      code: p.code,
+      name: p.name,
+      price: price,
+      qty: qty,
+      unit: p.unit || 'Adet',
+      total: price * qty
+    });
+  }
+  
+  document.getElementById('borc-cart-product').value = '';
+  document.getElementById('borc-cart-qty').value = '1';
+  renderBorcCart();
+  showToast("Ürün sepete eklendi!");
+}
+
+// Borç sepetini görüntüle
+function renderBorcCart() {
+  const container = document.getElementById('borc-cart-container');
+  const tbody = document.getElementById('borc-cart-items');
+  
+  if (borcCart.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'block';
+  tbody.innerHTML = '';
+  let grandTotal = 0;
+  
+  borcCart.forEach((item, index) => {
+    grandTotal += item.total;
+    tbody.innerHTML += `
+      <tr style="border-bottom:1px dashed var(--steel-line);">
+        <td style="padding:10px 0; line-height:1.3;">
+          <strong>${item.name}</strong><br>
+          <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code}</small>
+        </td>
+        <td>₺${formatMoney(item.price)}</td>
+        <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
+        <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
+        <td><button class="btn btn-dark btn-sm" onclick="removeFromBorcCart(${index})">Çıkar</button></td>
+      </tr>
+    `;
+  });
+  
+  document.getElementById('borc-cart-total').textContent = "₺" + formatMoney(grandTotal);
+}
+
+// Borç sepetinden ürün çıkar
+function removeFromBorcCart(index) {
+  borcCart.splice(index, 1);
+  renderBorcCart();
+}
+
+// Borç sepetini temizle
+function clearBorcCart() {
+  if (borcCart.length === 0) return;
+  if (!confirm("Sepeti temizlemek istediğinize emin misiniz?")) return;
+  borcCart = [];
+  renderBorcCart();
+  showToast("Sepet temizlendi.");
+}
+
+// Borç satış fişini yazdır
+function printBorcSaleReceipt(debtData, grandTotal) {
+  const printArea = document.getElementById('print-area');
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('tr-TR');
+  const timeStr = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  
+  let itemsHtml = '';
+  (debtData.items || []).forEach(item => {
+    itemsHtml += `
+      <tr>
+        <td style="padding:4px 8px; border-bottom:1px solid #ddd;">${item.name}</td>
+        <td style="padding:4px 8px; border-bottom:1px solid #ddd; text-align:center;">${item.qty} ${item.unit}</td>
+        <td style="padding:4px 8px; border-bottom:1px solid #ddd; text-align:right;">₺${formatMoney(item.price)}</td>
+        <td style="padding:4px 8px; border-bottom:1px solid #ddd; text-align:right;">₺${formatMoney(item.total)}</td>
+      </tr>
+    `;
+  });
+  
+  printArea.innerHTML = `
+    <div style="width: 100%; max-width: 400px; margin: 0 auto; padding: 20px; font-family: 'Courier New', monospace; background: #fff; border: 2px solid #000; border-radius: 8px;">
+      <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px;">
+        <h2 style="margin: 0; font-size: 18px; text-transform: uppercase;">REYHANİ CAM HIRDAVAT</h2>
+        <p style="margin: 4px 0; font-size: 11px;">BORÇ SATIŞ FİŞİ</p>
+      </div>
+
+      <div style="font-size: 12px; margin-bottom: 10px;">
+        <p><strong>Fiş No:</strong> BORÇ-${new Date().getTime()}</p>
+        <p><strong>Tarih:</strong> ${dateStr} ${timeStr}</p>
+        <p><strong>Müşteri:</strong> ${debtData.customer}</p>
+        ${debtData.phone ? `<p><strong>Telefon:</strong> ${debtData.phone}</p>` : ''}
+        <p><strong>Vade Tarihi:</strong> ${debtData.dueDate || 'Belirsiz'}</p>
+        ${debtData.note ? `<p><strong>Not:</strong> ${debtData.note}</p>` : ''}
+      </div>
+
+      <div style="border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 10px 0; margin: 10px 0;">
+        <table style="width:100%; font-size:11px; border-collapse:collapse;">
+          <thead>
+            <tr style="border-bottom:2px solid #000;">
+              <th style="text-align:left; padding:4px 8px;">Ürün</th>
+              <th style="text-align:center; padding:4px 8px;">Miktar</th>
+              <th style="text-align:right; padding:4px 8px;">Birim Fiyat</th>
+              <th style="text-align:right; padding:4px 8px;">Toplam</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+          <tfoot>
+            <tr style="border-top:2px solid #000;">
+              <td colspan="3" style="text-align:right; padding:8px; font-weight:bold;">GENEL TOPLAM</td>
+              <td style="text-align:right; padding:8px; font-weight:bold; font-size:16px; color:var(--rust, #C1440E);">₺${formatMoney(grandTotal)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <div style="text-align: center; border-top: 2px dashed #000; padding-top: 10px; margin-top: 10px;">
+        <div style="font-size: 14px; font-weight: bold; color: var(--rust, #C1440E);">
+          BORÇ TUTARI: ₺${formatMoney(grandTotal)}
+        </div>
+        <div style="font-size: 11px; margin-top: 4px;">
+          Ödeme Son Tarih: ${debtData.dueDate || 'Belirsiz'}
+        </div>
+      </div>
+
+      <div style="text-align: center; font-size: 10px; color: var(--steel); padding-top: 10px; border-top: 1px solid #ddd; margin-top: 10px;">
+        <p>Bu belge, Reyhani Cam Hırdavat tarafından düzenlenmiştir.</p>
+        <p>Borcunuzu belirtilen vade tarihine kadar ödeyiniz.</p>
+      </div>
+    </div>
+  `;
+
+  document.body.className = 'printing-label';
+  setTimeout(() => {
+    window.print();
+    document.body.className = '';
+  }, 400);
+}
+
+// Borç satışı tamamla
+function completeBorcSale() {
+  if (currentRole !== 'admin') {
+    alert("Bu işlem için yönetici yetkisi gerekir!");
+    return;
+  }
+  
+  if (borcCart.length === 0) {
+    alert("Sepette ürün yok!");
+    return;
+  }
+  
+  const customer = document.getElementById('borc-sale-customer').value.trim();
+  const phone = document.getElementById('borc-sale-phone').value.trim();
+  const termDays = parseInt(document.getElementById('borc-sale-term').value);
+  const note = document.getElementById('borc-sale-note').value.trim();
+  
+  if (!customer) {
+    alert("Lütfen müşteri adını girin!");
+    return;
+  }
+  
+  let grandTotal = 0;
+  borcCart.forEach(item => grandTotal += item.total);
+  
+  // Stok kontrolü
+  let stockError = false;
+  borcCart.forEach(item => {
+    if (!productsData[item.code]) return;
+    const currentQty = productsData[item.code].qty || 0;
+    if (currentQty < item.qty) {
+      alert(`Yetersiz stok: ${item.name} (Mevcut: ${currentQty}, İstenen: ${item.qty})`);
+      stockError = true;
+    }
+  });
+  if (stockError) return;
+  
+  // Stok güncelle
+  borcCart.forEach(item => {
+    db.child(item.code).child('qty').transaction((currentQty) => {
+      const cur = Number(currentQty || 0);
+      return Math.max(0, cur - item.qty);
+    }, (error, committed) => {
+      if (error) { console.error(error); return; }
+      if (committed) {
+        logMovement(item.code, item.name, -item.qty, 'BORÇ SATIŞI: ' + customer);
+      }
+    });
+  });
+  
+  // Borç kaydı oluştur
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timeStr = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  
+  const dueDate = new Date(now);
+  dueDate.setDate(dueDate.getDate() + termDays);
+  const dueDateStr = dueDate.toISOString().slice(0, 10);
+  
+  const itemsDesc = borcCart.map(item => `${item.name} (${item.qty} ${item.unit})`).join(', ');
+  const fullDesc = `Satış: ${itemsDesc}`;
+  
+  const debtData = {
+    customer: customer,
+    phone: phone || '',
+    description: fullDesc,
+    amount: grandTotal,
+    remaining: grandTotal,
+    term: termDays + ' Gün',
+    dueDate: dueDateStr,
+    status: 'Açık',
+    note: note || '',
+    date: dateStr,
+    time: timeStr,
+    createdAt: now.toISOString(),
+    lastUpdatedBy: 'Yönetici',
+    items: borcCart.map(item => ({
+      code: item.code,
+      name: item.name,
+      price: item.price,
+      qty: item.qty,
+      unit: item.unit,
+      total: item.total
+    })),
+    saleType: 'borc_sale'
+  };
+  
+  dbCustomerDebts.push(debtData, (err) => {
+    if (!err) {
+      printBorcSaleReceipt(debtData, grandTotal);
+      
+      showToast(`Satış tamamlandı! ${customer} için ${formatMoney(grandTotal)}₺ borç oluşturuldu.`);
+      
+      borcCart = [];
+      renderBorcCart();
+      document.getElementById('borc-sale-customer').value = '';
+      document.getElementById('borc-sale-phone').value = '';
+      document.getElementById('borc-sale-note').value = '';
+      renderCustomerDebts();
+      renderGrid();
+    } else {
+      alert("Satış kaydedilemedi: " + err.message);
+    }
+  });
+}
+
+// ============================================================
 // MÜŞTERİ BORÇ YÖNETİMİ
 // ============================================================
 
@@ -1753,7 +2090,6 @@ function renderCustomerDebts() {
 
       const isOpen = d.status === 'Açık' || d.status === 'Kısmi';
       const isPastDue = d.dueDate && d.dueDate < new Date().toISOString().slice(0, 10) && isOpen;
-      const paidAmount = d.amount - (d.remaining || d.amount);
 
       if (isOpen) {
         totalOpen += d.amount;
