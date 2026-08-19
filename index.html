@@ -3952,6 +3952,48 @@
     }
   }
 
+  // ── OTOMATİK BARKOD ARAMA ────────────────────────────────────────────
+  // Barkod okutucu (kamera veya USB el terminali) numarayı yazdıktan sonra genelde
+  // ENTER gönderir; elle yazımda da yazma durunca (debounce) otomatik arama tetiklenir.
+  // Böylece "Bul" butonuna basmaya gerek kalmadan barkod girilir girilmez ürün adı
+  // internetten (veya kendi hafızamızdan) otomatik doldurulur.
+  function setupAutoBarcodeLookup(inputId, lookupFn) {
+    const el = document.getElementById(inputId);
+    if (!el) return;
+    let debounceTimer = null;
+    let lastAutoLookupValue = '';
+
+    el.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        clearTimeout(debounceTimer);
+        const val = el.value.trim();
+        if (val && val !== lastAutoLookupValue) {
+          lastAutoLookupValue = val;
+          lookupFn();
+        }
+      }
+    });
+
+    el.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      const val = el.value.trim();
+      // Çoğu barkod (EAN-8/13, UPC-A/E) 8-14 haneli sayıdan oluşur; yazım durunca otomatik ara.
+      if (val.length >= 8) {
+        debounceTimer = setTimeout(() => {
+          const current = el.value.trim();
+          if (current && current === val && current !== lastAutoLookupValue) {
+            lastAutoLookupValue = current;
+            lookupFn();
+          }
+        }, 500);
+      }
+    });
+  }
+
+  setupAutoBarcodeLookup('f-barcode-lookup', lookupBarcode);
+  setupAutoBarcodeLookup('fis-barcode-lookup', lookupFisBarcode);
+
   function addProduct() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('f-name').value.trim();
