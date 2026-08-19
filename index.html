@@ -22,504 +22,240 @@
 
 <style>
   :root{
-    --primary:#2c3e50;
-    --primary-light:#34495e;
-    --accent:#e67e22;
-    --accent-hover:#d35400;
-    --success:#27ae60;
-    --success-hover:#1e8449;
-    --info:#2980b9;
-    --info-hover:#1f618d;
-    --danger:#e74c3c;
-    --danger-hover:#c0392b;
-    --light-bg:#ecf0f1;
-    --card-bg:#ffffff;
-    --border:#bdc3c7;
-    --text:#2c3e50;
-    --text-light:#7f8c8d;
-    --shadow:0 2px 8px rgba(0,0,0,0.08);
-    --radius:8px;
-    --font:'Inter',sans-serif;
+    --concrete:#EDE8DF; --paper:#FFFFFF; --charcoal:#22262A; 
+    --steel:#565C63; --steel-line:#D8D2C6; --safety:#F5B700; 
+    --rust:#C1440E; --success:#28a745; --info:#17a2b8; --radius:4px;
   }
-  *{box-sizing:border-box; margin:0; padding:0;}
-  html,body{
-    background:var(--light-bg);
-    color:var(--text);
-    font-family:var(--font);
-    font-weight:500;
-    line-height:1.5;
-  }
-  .app{max-width:1000px;margin:0 auto;padding:0 16px 60px;}
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--concrete);color:var(--charcoal);font-family:'Inter',sans-serif;font-weight:500;}
+  
+  .app{max-width:900px;margin:0 auto;padding-bottom:60px;}
 
-  /* HEADER */
   header{
-    background:linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-    color:#fff;
-    padding:18px 20px;
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    border-radius:0 0 var(--radius) var(--radius);
-    box-shadow:0 4px 12px rgba(0,0,0,0.15);
-    margin-bottom:12px;
-    flex-wrap:wrap;
-    gap:10px;
+    background:var(--charcoal);color:#F5F3EF;padding:16px 20px;
+    display:flex;justify-content:space-between;align-items:center;
+    position:sticky;top:0;z-index:40;box-shadow:0 4px 12px rgba(0,0,0,0.15);
   }
-  .brand h1{
-    font-family:'Oswald',sans-serif;
-    font-size:22px;
-    margin:0;
-    letter-spacing:0.5px;
-    text-transform:uppercase;
-    color:#fff;
-  }
-  .brand span{
-    display:block;
-    font-size:12px;
-    color:rgba(255,255,255,0.7);
-    font-weight:400;
-  }
-  .auth-status{
-    display:flex;
-    align-items:center;
-    gap:10px;
-    flex-wrap:wrap;
-  }
-  .admin-badge{
-    font-size:12px;
-    padding:4px 14px;
-    border-radius:20px;
-    font-weight:600;
-    background:rgba(255,255,255,0.15);
-    color:#fff;
-  }
-  .admin-badge.role-admin{background:var(--success);}
-  .admin-badge.role-staff{background:var(--info);}
-  .admin-badge.role-guest{background:var(--text-light);}
+  .brand h1{font-family:'Oswald',sans-serif;font-size:18px;margin:0;letter-spacing:0.5px;text-transform:uppercase;}
+  .brand span{display:block;font-size:11px;color:#B9BEC4;}
+  
+  .auth-status{display:flex;align-items:center;gap:10px;}
+  .admin-badge{font-size:11px;padding:4px 10px;border-radius:12px;font-weight:600;}
+  .admin-badge.role-admin{background:var(--success);color:#fff;}
+  .admin-badge.role-staff{background:var(--info);color:#fff;}
+  .admin-badge.role-guest{background:var(--steel);color:#fff;}
 
-  /* NAV TABS */
-  .nav-tabs{
-    display:flex;
-    background:var(--card-bg);
-    border-radius:var(--radius);
-    box-shadow:var(--shadow);
-    overflow-x:auto;
-    margin-bottom:16px;
-    padding:4px;
-    gap:4px;
-    flex-wrap:nowrap;
-  }
+  .nav-tabs{display:flex;background:var(--paper);border-bottom:1px solid var(--steel-line);overflow-x:auto;}
   .tab-btn{
-    flex:0 0 auto;
-    padding:10px 18px;
-    font-family:'Oswald',sans-serif;
-    font-size:14px;
-    text-transform:uppercase;
-    border:none;
-    background:transparent;
-    cursor:pointer;
-    color:var(--text-light);
-    border-radius:var(--radius);
-    transition:all 0.2s;
-    white-space:nowrap;
-    font-weight:600;
+    flex:1; padding:12px; text-align:center; font-family:'Oswald',sans-serif;
+    font-size:14px; text-transform:uppercase; border:none; background:none;
+    cursor:pointer; color:var(--steel); border-bottom:3px solid transparent; white-space:nowrap;
   }
-  .tab-btn:hover{
-    background:rgba(0,0,0,0.05);
-    color:var(--text);
-  }
-  .tab-btn.active{
-    background:var(--accent);
-    color:#fff;
-    box-shadow:0 2px 6px rgba(230,126,34,0.3);
-  }
+  .tab-btn.active{color:var(--charcoal);border-bottom-color:var(--safety);font-weight:600;}
 
-  /* MAIN CONTENT */
-  main{padding:4px 0;}
-
+  main{padding:16px;}
   .tab-content{display:none;}
   .tab-content.active{display:block;}
 
-  /* SUMMARY CARDS */
-  .summary{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:12px;
-    margin-bottom:20px;
-  }
-  .summary .card{
-    background:var(--card-bg);
-    border-radius:var(--radius);
-    padding:16px;
-    text-align:center;
-    box-shadow:var(--shadow);
-    border-left:4px solid var(--accent);
-  }
-  .summary .card:nth-child(2){border-left-color:var(--info);}
-  .summary .card:nth-child(3){border-left-color:var(--success);}
-  .summary .num{
-    font-family:'IBM Plex Mono',monospace;
-    font-weight:700;
-    font-size:24px;
-    color:var(--primary);
-  }
-  .summary .lbl{
-    font-size:11px;
-    color:var(--text-light);
-    text-transform:uppercase;
-    font-weight:600;
-    letter-spacing:0.3px;
-    margin-top:4px;
-  }
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;}
+  .summary .card{background:var(--paper);border:1px solid var(--steel-line);padding:10px;border-radius:var(--radius);text-align:center;}
+  .summary .num{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
+  .summary .lbl{font-size:10px;color:var(--steel);text-transform:uppercase;margin-top:2px;}
 
-  /* FORM CARDS */
-  .form-card{
-    background:var(--card-bg);
-    border-radius:var(--radius);
-    box-shadow:var(--shadow);
-    padding:20px;
-    margin-bottom:20px;
-    border:1px solid var(--border);
-  }
-  .form-card h3{
-    font-family:'Oswald',sans-serif;
-    margin-top:0;
-    margin-bottom:16px;
-    color:var(--primary);
-    font-size:18px;
-    border-bottom:2px solid var(--accent);
-    padding-bottom:8px;
-    display:inline-block;
-  }
-
-  .form-row{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:12px;
-    margin-bottom:12px;
-  }
-  label{
-    display:block;
-    font-size:11px;
-    color:var(--text-light);
-    margin-bottom:4px;
-    text-transform:uppercase;
-    font-weight:600;
-    letter-spacing:0.3px;
-  }
+  .form-card{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:16px;margin-bottom:16px;}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;}
+  label{display:block;font-size:11px;color:var(--steel);margin-bottom:4px;text-transform:uppercase;font-weight:600;letter-spacing:0.2px;}
   input,select{
-    width:100%;
-    padding:10px 12px;
-    border:1px solid var(--border);
-    border-radius:var(--radius);
-    font-family:var(--font);
-    font-size:14px;
-    background:#fafafa;
-    color:var(--text);
-    transition:border 0.2s;
+    width:100%;padding:10px;border:1px solid var(--steel-line);border-radius:var(--radius);
+    font-family:'Inter';font-size:14px;background:#FCFBF9;color:var(--charcoal);font-weight:500;
   }
-  input:focus,select:focus{
-    outline:none;
-    border-color:var(--accent);
-    box-shadow:0 0 0 3px rgba(230,126,34,0.2);
-  }
-
-  /* BUTTONS */
   .btn{
-    font-family:'Oswald',sans-serif;
-    text-transform:uppercase;
-    font-size:13px;
-    border:none;
-    padding:12px 16px;
-    border-radius:var(--radius);
-    cursor:pointer;
-    font-weight:600;
-    transition:all 0.2s;
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    gap:6px;
-    width:100%;
+    font-family:'Oswald',sans-serif;text-transform:uppercase;
+    font-size:13px;border:none;padding:12px;border-radius:var(--radius);cursor:pointer;width:100%;font-weight:600;
   }
-  .btn-primary{background:var(--accent);color:#fff;}
-  .btn-primary:hover{background:var(--accent-hover);transform:translateY(-1px);}
-  .btn-dark{background:var(--primary);color:#fff;}
-  .btn-dark:hover{background:var(--primary-light);}
+  .btn-primary{background:var(--safety);color:var(--charcoal);font-weight:600;}
+  .btn-dark{background:var(--charcoal);color:#fff;}
   .btn-success{background:var(--success);color:#fff;}
-  .btn-success:hover{background:var(--success-hover);}
   .btn-info{background:var(--info);color:#fff;}
-  .btn-info:hover{background:var(--info-hover);}
-  .btn-danger{background:var(--danger);color:#fff;}
-  .btn-danger:hover{background:var(--danger-hover);}
-  .btn-sm{padding:6px 12px;font-size:11px;width:auto;}
+  .btn-danger{background:var(--rust);color:#fff;}
+  .btn-sm{padding:6px 10px;font-size:11px;width:auto;}
 
-  /* SEARCH & FILTER */
-  .search-wrap{
-    display:flex;
-    gap:10px;
-    flex-wrap:wrap;
-    margin-bottom:16px;
-    align-items:center;
-  }
-  .search-wrap input[type="text"]{
-    flex:2;
-    min-width:180px;
-  }
-  .search-wrap select{
-    flex:1;
-    min-width:140px;
-  }
+  .search-wrap{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;}
+  .grid{display:grid;grid-template-columns:1fr;gap:12px;}
+  @media(min-width:600px){.grid{grid-template-columns:1fr 1fr;}}
 
-  /* PRODUCT GRID */
-  .grid{
-    display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:16px;
-  }
-  @media(max-width:600px){.grid{grid-template-columns:1fr;}}
-
-  .tag{
-    background:var(--card-bg);
-    border:1px solid var(--border);
-    border-radius:var(--radius);
-    padding:16px;
-    box-shadow:var(--shadow);
-    transition:transform 0.2s, box-shadow 0.2s;
-    position:relative;
-  }
-  .tag:hover{
-    transform:translateY(-2px);
-    box-shadow:0 4px 16px rgba(0,0,0,0.1);
-  }
-  .tag.low{border-left:4px solid var(--danger);}
-  .tag-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
-    gap:8px;
-    margin-bottom:8px;
-  }
-  .tag-title{
-    font-weight:700;
-    font-size:16px;
-    color:var(--primary);
-  }
-  .tag-code{
-    font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    color:var(--text-light);
-    word-break:break-all;
-    line-height:1.4;
-  }
-
-  .product-photo{
-    width:100%;
-    height:120px;
-    border-radius:var(--radius);
-    overflow:hidden;
-    margin-bottom:8px;
-    background:var(--light-bg);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border:1px solid var(--border);
-  }
-  .product-photo img{width:100%;height:100%;object-fit:cover;}
-  .photo-placeholder{font-size:28px;color:var(--border);}
-
-  .qr-toggle-link{
-    display:block;
-    text-align:center;
-    font-size:11px;
-    color:var(--info);
-    text-decoration:underline;
-    background:none;
-    border:none;
-    cursor:pointer;
-    width:100%;
-    padding:4px 0;
-  }
-  .qr-box-mini{
-    display:flex;
-    justify-content:center;
-    margin:10px 0;
-    padding:6px;
-    background:#fff;
-    border:1px dashed var(--border);
-    width:80px;
-    height:80px;
-    margin-left:auto;
-    margin-right:auto;
-  }
+  .tag{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:14px;position:relative;overflow-wrap:anywhere;}
+  .tag.low{border-color:var(--rust);}
+  .tag.highlight{border:2px solid var(--safety);box-shadow:0 0 10px rgba(245,183,0,0.5);}
+  .tag-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
+  .tag-header > div:first-child{min-width:0;flex:1;}
+  .tag-title{font-weight:700;font-size:15px;overflow-wrap:anywhere;}
+  .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--steel);word-break:break-all;overflow-wrap:anywhere;line-height:1.5;font-weight:600;}
+  
+  .qr-box-mini{display:flex;justify-content:center;margin:10px 0;padding:6px;background:#fff;border:1px dashed var(--steel-line);width:80px;height:80px;margin-left:auto;margin-right:auto;}
+  .qr-box-mini img{width:100%!important;height:100%!important;}
   .qr-box-mini.hidden{display:none;}
 
-  .price-info-box{
-    font-size:12px;
-    color:var(--text-light);
-    margin-top:8px;
-    background:var(--light-bg);
-    padding:6px 10px;
-    border-radius:var(--radius);
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
+  .product-photo{
+    width:100%; height:120px; border-radius:3px; overflow:hidden; margin-bottom:8px;
+    background:var(--concrete); display:flex; align-items:center; justify-content:center;
+    border:1px solid var(--steel-line);
   }
-  .qty-control{
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    margin-top:10px;
-    background:var(--light-bg);
-    padding:6px 10px;
-    border-radius:var(--radius);
-  }
-  .qty-btn{
-    width:32px;
-    height:32px;
-    border:1px solid var(--border);
-    background:#fff;
-    border-radius:var(--radius);
-    font-weight:bold;
-    cursor:pointer;
-    transition:background 0.2s;
-  }
-  .qty-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
-  .qty-val{
-    font-family:'IBM Plex Mono',monospace;
-    font-weight:600;
-    font-size:18px;
-  }
-  .sm-btn{
-    background:none;
-    border:none;
-    color:var(--info);
-    font-size:11px;
-    text-decoration:underline;
-    cursor:pointer;
-    font-weight:600;
-  }
-  .sm-btn:hover{color:var(--info-hover);}
+  .product-photo img{width:100%; height:100%; object-fit:cover; display:block; cursor:pointer;}
+  .product-photo .photo-placeholder{font-size:26px; color:var(--steel-line);}
+  .qr-toggle-link{display:block; text-align:center; font-size:11px; color:var(--info); text-decoration:underline; background:none; border:none; cursor:pointer; width:100%; padding:4px 0;}
 
-  /* LOCATION BADGE */
+  .edit-photo-row{display:flex; gap:12px; align-items:center; margin-bottom:12px; background:#F7F5F0; padding:10px; border-radius:3px;}
+  .edit-photo-preview{width:64px; height:64px; border-radius:3px; overflow:hidden; background:var(--concrete); flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--steel-line);}
+  .edit-photo-preview img{width:100%; height:100%; object-fit:cover; cursor:pointer;}
+  .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
+
+  .layout-canvas{
+    position:relative; width:100%; aspect-ratio:4/3; min-height:280px;
+    background-color:#E4DFD3;
+    background-image:
+      linear-gradient(rgba(34,38,42,0.12) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(34,38,42,0.12) 1px, transparent 1px);
+    background-size:10% 10%;
+    border:2px solid var(--charcoal); border-radius:var(--radius);
+    overflow:hidden; touch-action:none;
+  }
+  .stand-box{
+    position:absolute; background:var(--paper); border:2px solid var(--charcoal); border-radius:3px;
+    padding:6px 4px; text-align:center; cursor:grab; box-sizing:border-box;
+    display:flex; flex-direction:column; justify-content:center; align-items:center;
+    transition:box-shadow .15s; user-select:none; overflow:hidden;
+  }
+  .stand-box:active{cursor:grabbing;}
+  .layout-canvas.view-only .stand-box{cursor:pointer;}
+  .stand-box.dragging{box-shadow:0 8px 20px rgba(0,0,0,0.35); z-index:60; opacity:0.92;}
+  .stand-box.has-items{border-color:var(--success); background:#EAF7EC;}
+  .stand-box.empty-stand{border-style:dashed; border-color:var(--steel-line); background:#FAFAF8;}
+  .stand-status-dot{position:absolute; top:4px; left:4px; font-size:9px; line-height:1;}
+  .stand-letter{font-family:'Oswald',sans-serif; font-size:20px; font-weight:700; line-height:1;}
+  .stand-label{font-size:8.5px; color:var(--steel); margin-top:2px; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;}
+  .stand-count{font-size:9.5px; font-family:'IBM Plex Mono'; margin-top:3px; color:var(--info); font-weight:600;}
+  .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
+  .stand-rotate{position:absolute; top:2px; right:18px; font-size:11px; color:var(--info); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
+  .stand-resize-handle{
+    position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; z-index:6;
+    background:linear-gradient(135deg, transparent 0 50%, var(--safety) 50% 60%, transparent 60% 70%, var(--safety) 70% 80%, transparent 80% 100%);
+    border-bottom-right-radius:3px;
+  }
+  .stand-box.highlight{
+    border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45); z-index:40;
+    animation:standPulse 1s ease-in-out 3;
+  }
+  @keyframes standPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
   .location-badge{
-    display:inline-block;
-    font-size:10px;
-    font-family:'IBM Plex Mono';
-    font-weight:600;
-    background:var(--primary);
-    color:#fff;
-    padding:2px 8px;
-    border-radius:12px;
-    margin-left:6px;
-    cursor:pointer;
+    display:inline-block; font-size:10px; font-family:'IBM Plex Mono'; font-weight:600;
+    background:var(--charcoal); color:#fff; padding:2px 7px; border-radius:10px; margin-left:6px; cursor:pointer;
   }
+  .slot-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(60px,1fr)); gap:6px; margin-top:10px;}
+  .slot-cell{border:1px solid var(--steel-line); border-radius:3px; padding:6px 4px; text-align:center; font-size:11px; min-height:44px;}
+  .slot-cell.filled{background:#FFF7E0; border-color:var(--safety);}
+  .slot-num{font-family:'IBM Plex Mono'; font-weight:700; font-size:12px;}
+  .slot-item{font-size:9px; color:var(--charcoal-soft, var(--charcoal)); line-height:1.2; margin-top:2px; word-break:break-word;}
 
-  /* TOAST */
+  .cost-calc-box{
+    margin-top:6px; padding:8px 10px; background:#F7F5F0; border:1px dashed var(--steel-line);
+    border-radius:3px; font-size:11px; color:var(--steel); line-height:1.6; display:none;
+  }
+  .cost-calc-box.active{display:block;}
+  .cost-calc-box b{color:var(--charcoal); font-family:'IBM Plex Mono';}
+  .duplicate-warning-box{
+    margin-top:8px; padding:10px; background:#FFF6E9; border:1px solid #E8C27A;
+    border-radius:3px; font-size:11px; color:var(--charcoal); line-height:1.5; display:none;
+  }
+  .recent-update-row{
+    display:flex; justify-content:space-between; align-items:center; padding:8px 0;
+    border-top:1px solid var(--steel-line); font-size:12px;
+  }
+  .recent-update-row .ru-time{font-size:13px; color:var(--charcoal); font-weight:600; font-family:'IBM Plex Mono'; margin-top:2px;}
+  .last-update-note{
+    font-size:13px; color:var(--charcoal); font-weight:600; font-family:'IBM Plex Mono';
+    background:#FFF7E0; border:1px solid var(--safety); border-radius:3px;
+    padding:8px 10px; margin:2px 0 12px;
+  }
+  
+  .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
+
+  .qty-control{display:flex;align-items:center;justify-content:space-between;margin-top:10px;background:var(--concrete);padding:6px 10px;border-radius:var(--radius);}
+  .qty-btn{width:32px;height:32px;border:1px solid var(--steel-line);background:#fff;font-weight:bold;cursor:pointer;}
+  .qty-val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
+  
+  .sm-btn{background:none;border:none;color:var(--steel);font-size:11px;text-decoration:underline;cursor:pointer;font-weight:600;}
+
+  #reader{width:100%;max-width:500px;margin:0 auto;border:2px dashed var(--steel-line);border-radius:var(--radius);}
+  #scan-result{margin-top:16px;}
+
   .toast{
-    position:fixed;
-    bottom:20px;
-    left:50%;
-    transform:translateX(-50%);
-    background:var(--primary);
-    color:#fff;
-    padding:12px 24px;
-    border-radius:30px;
-    font-size:13px;
-    z-index:100;
-    display:none;
-    box-shadow:0 4px 12px rgba(0,0,0,0.2);
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--charcoal);color:#fff;padding:10px 20px;border-radius:20px;
+    font-size:12px;z-index:100;display:none;
+  }
+  .disabled-action{opacity:0.4;pointer-events:none;}
+
+  .report-box { background:var(--paper); border:1px solid var(--steel-line); padding:16px; border-radius:var(--radius); text-align:center; }
+  .report-box h3 { margin-top:0; font-family:'Oswald'; }
+  .report-box p { font-size:13px; color:var(--steel); margin-bottom:16px; }
+
+  .balance-box { background:#F7F5F0; padding:10px; border-radius:3px; margin-top:10px; text-align:center; font-family:'IBM Plex Mono'; font-size:18px; font-weight:bold; border:1px solid var(--steel-line);}
+  .balance-negative { color:var(--rust); }
+  .balance-positive { color:var(--success); }
+  .action-grid { display:grid; grid-template-columns: 1fr 1fr; gap:6px; margin-top:10px; }
+
+  .day-badge { display:inline-block; background:var(--info); color:#fff; padding:2px 6px; border-radius:10px; font-size:10px; margin-top:4px; font-weight:600;}
+
+  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;}
+  .modal-content { background:var(--paper); width:90%; max-width:500px; border-radius:var(--radius); padding:20px; max-height:85vh; overflow-y:auto; position:relative; }
+  .modal-close { position:absolute; top:15px; right:15px; background:none; border:none; font-size:18px; cursor:pointer; font-weight:bold; color:var(--rust); }
+  
+
+  #print-area { display: none; }
+  #thermal-print-area { display: none; }
+
+  @page {
+    size: 58mm auto;
+    margin: 0;
   }
 
-  /* MODAL */
-  .modal-overlay{
-    display:none;
-    position:fixed;
-    top:0;left:0;width:100%;height:100%;
-    background:rgba(0,0,0,0.6);
-    z-index:1000;
-    align-items:center;
-    justify-content:center;
-    backdrop-filter:blur(3px);
-  }
-  .modal-content{
-    background:var(--card-bg);
-    width:90%;
-    max-width:500px;
-    border-radius:var(--radius);
-    padding:24px;
-    max-height:85vh;
-    overflow-y:auto;
-    position:relative;
-    box-shadow:0 8px 30px rgba(0,0,0,0.3);
-  }
-  .modal-close{
-    position:absolute;
-    top:12px;
-    right:16px;
-    background:none;
-    border:none;
-    font-size:22px;
-    cursor:pointer;
-    color:var(--danger);
-  }
+  @media print {
+    body * { visibility: hidden; }
 
-  /* DISABLED */
-  .disabled-action{opacity:0.5;pointer-events:none;}
-
-  /* PRINT */
-  #print-area{display:none;}
-  #thermal-print-area{display:none;}
-
-  @page{size:58mm auto;margin:0;}
-  @media print{
-    body *{visibility:hidden;}
     body.printing-label .app,
     body.printing-barcode-label .app,
-    body.printing-receipt .app{display:none !important;}
-    body.printing-label #print-area,
-    body.printing-label #print-area *{visibility:visible;}
-    body.printing-label #print-area{display:flex !important;flex-wrap:wrap;gap:4mm;position:absolute;left:0;top:0;width:100%;background:#fff;}
-    .sticker-label{width:50mm;height:30mm;border:1px dashed #000;padding:2mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:space-between;page-break-inside:avoid;text-align:center;}
-    .sticker-title{font-size:9px;font-weight:bold;font-family:sans-serif;height:12px;overflow:hidden;}
-    .sticker-qr{width:18mm;height:18mm;display:flex;justify-content:center;align-items:center;overflow:hidden;}
-    .sticker-qr img,.sticker-qr canvas{width:100% !important;height:100% !important;max-width:100%;max-height:100%;}
-    .sticker-footer{font-size:8px;font-family:monospace;font-weight:bold;width:100%;display:flex;justify-content:space-between;}
+    body.printing-receipt .app { display: none !important; }
+    
+    body.printing-label #print-area, body.printing-label #print-area * { visibility: visible; }
+    body.printing-label #print-area { display: flex !important; flex-wrap: wrap; gap: 4mm; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
+    .sticker-label { width: 50mm; height: 30mm; border: 1px dashed #000; padding: 2mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
+    .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
+    .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+    .sticker-qr img, .sticker-qr canvas { width: 100% !important; height: 100% !important; max-width: 100%; max-height: 100%; }
+    .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
 
-    body.printing-barcode-label #print-area,
-    body.printing-barcode-label #print-area *{visibility:visible;}
-    body.printing-barcode-label #print-area{display:block !important;position:absolute;left:0;top:0;width:100mm;background:#fff;overflow:hidden;}
-    .barcode-strip-page{width:100mm;height:40mm;max-width:100mm;max-height:40mm;box-sizing:border-box;display:flex;flex-direction:row;page-break-after:always;page-break-inside:avoid;overflow:hidden;}
-    .barcode-strip-page:last-child{page-break-after:auto;}
-    .barcode-strip-page .bl-cell{width:20mm;height:40mm;max-width:20mm;max-height:40mm;flex-shrink:0;padding:0.5mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;}
-    .barcode-strip-page .bl-cell .bl-qr{width:16mm;height:16mm;max-width:16mm;max-height:16mm;flex-shrink:0;display:flex;justify-content:center;align-items:center;overflow:hidden;}
-    .barcode-strip-page .bl-cell .bl-qr img,.barcode-strip-page .bl-cell .bl-qr canvas{width:100% !important;height:100% !important;max-width:100% !important;max-height:100% !important;image-rendering:pixelated;}
-    .barcode-strip-page .bl-cell .bl-name{font-size:6px;font-weight:bold;font-family:sans-serif;line-height:1.05;max-height:12px;overflow:hidden;margin-top:0.8mm;}
-    .barcode-strip-page .bl-cell .bl-code{font-size:5.5px;font-family:monospace;font-weight:bold;margin-top:0.5mm;word-break:break-all;}
+    body.printing-barcode-label #print-area, body.printing-barcode-label #print-area * { visibility: visible; }
+    body.printing-barcode-label #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100mm; background: #fff; overflow: hidden; }
+    .barcode-strip-page { width: 100mm; height: 40mm; max-width: 100mm; max-height: 40mm; box-sizing: border-box; display: flex; flex-direction: row; page-break-after: always; page-break-inside: avoid; overflow: hidden; }
+    .barcode-strip-page:last-child { page-break-after: auto; }
+    .barcode-strip-page .bl-cell { width: 20mm; height: 40mm; max-width: 20mm; max-height: 40mm; flex-shrink: 0; padding: 0.5mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
+    .barcode-strip-page .bl-cell .bl-qr { width: 16mm; height: 16mm; max-width: 16mm; max-height: 16mm; flex-shrink: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; }
+    .barcode-strip-page .bl-cell .bl-qr img, .barcode-strip-page .bl-cell .bl-qr canvas { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important; image-rendering: pixelated; }
+    .barcode-strip-page .bl-cell .bl-name { font-size: 6px; font-weight: bold; font-family: sans-serif; line-height: 1.05; max-height: 12px; overflow: hidden; margin-top: 0.8mm; }
+    .barcode-strip-page .bl-cell .bl-code { font-size: 5.5px; font-family: monospace; font-weight: bold; margin-top: 0.5mm; word-break: break-all; }
 
-    body.printing-receipt #thermal-print-area,
-    body.printing-receipt #thermal-print-area *{visibility:visible;}
-    body.printing-receipt #thermal-print-area{display:block !important;position:absolute;left:0;top:0;width:56mm;margin:0;padding:0;page-break-after:avoid;}
-  }
-
-  /* MISC */
-  .balance-box{
-    background:var(--light-bg);
-    padding:10px;
-    border-radius:var(--radius);
-    margin-top:10px;
-    text-align:center;
-    font-family:'IBM Plex Mono',monospace;
-    font-size:18px;
-    font-weight:bold;
-    border:1px solid var(--border);
-  }
-  .balance-negative{color:var(--danger);}
-  .balance-positive{color:var(--success);}
-
-  /* RESPONSIVE */
-  @media(max-width:480px){
-    .form-row{grid-template-columns:1fr;}
-    .summary{grid-template-columns:1fr;}
+    body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area * { visibility: visible; }
+    body.printing-receipt #thermal-print-area { 
+      display: block !important; 
+      position: absolute; 
+      left: 0; 
+      top: 0; 
+      width: 56mm; 
+      margin: 0; 
+      padding: 0;
+      page-break-after: avoid;
+    }
   }
 </style>
 </head>
@@ -529,7 +265,7 @@
   <header>
     <div class="brand">
       <h1>Reyhani Cam Hırdavat</h1>
-      <span>Canlı Bulut · QR Stok · Görev · Fiş · Borç Yönetimi</span>
+      <span>Canlı Bulut &amp; QR Stok, Görev ve Fiş Paneli</span>
     </div>
     <div class="auth-status">
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
@@ -538,13 +274,13 @@
   </header>
 
   <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('stok')">📦 Stok</button>
-    <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')" style="display:none;">➕ Ürün Ekle</button>
+    <button class="tab-btn active" onclick="switchTab('stok')">Stok Listesi</button>
+    <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')" style="display:none;">+ Ürün Ekle</button>
     <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
-    <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Görevler</button>
+    <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Günlük Görevler</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
     <button class="tab-btn" id="nav-fis-btn" onclick="switchTab('fis')" style="display:none;">📥 Malzeme Fişi</button>
-    <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış</button>
+    <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış / Sepet</button>
     <button class="tab-btn" id="nav-yerlesim-btn" onclick="switchTab('yerlesim')" style="display:none;">🗺️ Yerleşim</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
     <button class="tab-btn" id="nav-borc-btn" onclick="switchTab('borc')" style="display:none;">💰 Müşteri Borç</button>
@@ -559,23 +295,9 @@
         <div class="card"><div class="num" id="sum-value">***</div><div class="lbl">Envanter Değeri (Maliyet)</div></div>
       </div>
       <div class="search-wrap">
-        <input type="text" id="search" placeholder="Ürün adı, kodu, kategori, marka veya konum ara..." oninput="renderGrid()">
-        <select id="category-filter" onchange="renderGrid()">
-          <option value="">Tüm Kategoriler</option>
-          <option value="Banyo">Banyo</option>
-          <option value="Bahçe">Bahçe</option>
-          <option value="Mutfak">Mutfak</option>
-          <option value="Boya">Boya</option>
-          <option value="Toz Grubu">Toz Grubu</option>
-          <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
-          <option value="Cam & Aksesuar">Cam & Aksesuar</option>
-          <option value="Silikon & Mastik">Silikon & Mastik</option>
-          <option value="Vida & Civata">Vida & Civata</option>
-          <option value="El Aletleri">El Aletleri</option>
-          <option value="Diğer">Diğer</option>
-        </select>
+        <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
         <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
-        <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Etiket Bas</button>
+        <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
       </div>
       <div id="grid" class="grid"></div>
       <div id="grid-load-more-wrap" style="text-align:center; margin-top:16px;"></div>
@@ -584,10 +306,10 @@
     <!-- ÜRÜN EKLE TABI -->
     <div id="tab-ekle" class="tab-content">
       <div class="form-card disabled-action" id="add-form-card">
-        <h3>Yeni Ürün Ekle</h3>
+        <h3 style="margin-top:0;font-family:'Oswald';">Yeni Ürün Ekle</h3>
 
-        <div style="background:var(--light-bg); border:1px dashed var(--border); border-radius:var(--radius); padding:12px; margin-bottom:16px;">
-          <label style="margin-bottom:4px;">📦 Ürünün Kendi Barkodunu Okutarak İsmi Otomatik Doldur <span style="text-transform:none; color:var(--text-light); font-size:9px;">(opsiyonel)</span></label>
+        <div style="background:#F7F5F0; border:1px dashed var(--steel-line); border-radius:4px; padding:12px; margin-bottom:16px;">
+          <label style="margin-bottom:4px;">📦 Ürünün Kendi Barkodunu Okutarak İsmi Otomatik Doldur <span style="text-transform:none; color:var(--steel); font-size:9px;">(opsiyonel)</span></label>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <input type="text" id="f-barcode-lookup" placeholder="Barkod numarasını yazın..." style="flex:1; min-width:140px;">
             <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="lookupBarcode()">🔎 Bul</button>
@@ -634,7 +356,7 @@
         </div>
         <div class="form-row" style="grid-template-columns: 1fr;">
           <div>
-            <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--text-light); font-size:9px;">— maliyet, satış fiyatından farklı</span></label>
+            <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— maliyet, satış fiyatından farklı</span></label>
             <input type="number" id="f-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('f'); updateAddProfit();">
             <div class="cost-calc-box" id="f-cost-calc"></div>
           </div>
@@ -664,14 +386,14 @@
       </div>
 
       <div class="form-card disabled-action" id="bulk-import-card">
-        <h3>📥 Excel'den Toplu Ürün Aktar</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-8px;">Aktif Pos veya başka bir sistemden aldığınız Excel/CSV dosyasını <b>olduğu gibi</b> yükleyebilirsiniz — sütun isimleri farklı olsa bile, dosyanızın hangi sütununun bizim hangi alanımıza karşılık geldiğini aşağıda kendiniz eşleştirirsiniz. Sistem, sistemde zaten kayıtlı ürünlerle <b>barkod ve isim benzerliğine göre çakışma kontrolü</b> yapar; mükerrer kayıt oluşturmadan önce size sorar.</p>
+        <h3 style="margin-top:0;font-family:'Oswald';">📥 Excel'den Toplu Ürün Aktar</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Aktif Pos veya başka bir sistemden aldığınız Excel/CSV dosyasını <b>olduğu gibi</b> yükleyebilirsiniz — sütun isimleri farklı olsa bile, dosyanızın hangi sütununun bizim hangi alanımıza karşılık geldiğini aşağıda kendiniz eşleştirirsiniz. Sistem, sistemde zaten kayıtlı ürünlerle <b>barkod ve isim benzerliğine göre çakışma kontrolü</b> yapar; mükerrer kayıt oluşturmadan önce size sorar.</p>
         <button class="btn btn-dark btn-sm" style="width:auto;" onclick="downloadImportTemplate()">⬇️ Boş Şablonu İndir (opsiyonel, Barkod sütunu dahildir)</button>
         <div style="margin-top:14px;">
           <label>Excel/CSV Dosyanızı Seçin (Aktif Pos dahil, herhangi bir format)</label>
           <input type="file" accept=".xlsx,.xls,.csv" id="bulk-import-file">
         </div>
-        <div id="import-mapping-section" style="display:none; background:var(--light-bg); padding:10px; border-radius:var(--radius); margin-top:12px;"></div>
+        <div id="import-mapping-section" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-top:12px;"></div>
         <div id="bulk-import-preview"></div>
         <div id="bulk-import-status" style="font-size:12px; margin-top:8px;"></div>
         <button class="btn btn-success" id="bulk-import-start-btn" onclick="analyzeImportConflicts()" style="display:none; margin-top:10px;">🔍 Çakışmaları Kontrol Et ve Devam Et</button>
@@ -679,27 +401,27 @@
       </div>
 
       <div class="form-card disabled-action" id="barcode-fix-card">
-        <h3>🏷️ Var Olan Ürünlere Toplu Barkod Ata</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-8px;">Daha önce barkodsuz aktardığınız (koda otomatik <span style="font-family:'IBM Plex Mono';">RYH-xxxxxx</span> atanmış) ürünleriniz varsa, barkod bilgisi içeren Excel dosyanızı (aynı Aktif Pos dosyanız olabilir) buraya tekrar yükleyin. Sistem, dosyanızdaki ürün isimlerini sistemde kayıtlı ürünlerle eşleştirip otomatik kodları gerçek barkodla değiştirir.</p>
+        <h3 style="margin-top:0;font-family:'Oswald';">🏷️ Var Olan Ürünlere Toplu Barkod Ata</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Daha önce barkodsuz aktardığınız (koda otomatik <span style="font-family:'IBM Plex Mono';">RYH-xxxxxx</span> atanmış) ürünleriniz varsa, barkod bilgisi içeren Excel dosyanızı (aynı Aktif Pos dosyanız olabilir) buraya tekrar yükleyin. Sistem, dosyanızdaki ürün isimlerini sistemde kayıtlı ürünlerle eşleştirip otomatik kodları gerçek barkodla değiştirir.</p>
         <div style="margin-top:14px;">
           <label>Barkod İçeren Excel/CSV Dosyanızı Seçin</label>
           <input type="file" accept=".xlsx,.xls,.csv" id="barcode-fix-file">
         </div>
-        <div id="barcode-fix-mapping" style="display:none; background:var(--light-bg); padding:10px; border-radius:var(--radius); margin-top:12px;"></div>
+        <div id="barcode-fix-mapping" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-top:12px;"></div>
         <div id="barcode-fix-status" style="font-size:12px; margin-top:8px;"></div>
         <button class="btn btn-success" id="barcode-fix-analyze-btn" onclick="analyzeBarcodeFix()" style="display:none; margin-top:10px;">🔍 Eşleşmeleri Bul</button>
         <div id="barcode-fix-review" style="display:none;"></div>
       </div>
 
       <div class="form-card disabled-action" id="brand-settings-card">
-        <h3>Marka İskonto / KDV Ayarları</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-8px;">Her marka için kendi iskonto ve KDV yüzdenizi girip kaydedin. Bu oranlar markanın yanında saklanır, hesaplamaları buradan yönetebilirsiniz.</p>
+        <h3 style="margin-top:0;font-family:'Oswald';">Marka İskonto / KDV Ayarları</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Her marka için kendi iskonto ve KDV yüzdenizi girip kaydedin. Bu oranlar markanın yanında saklanır, hesaplamaları buradan yönetebilirsiniz.</p>
         <div id="brand-settings-list"></div>
       </div>
 
       <div class="form-card disabled-action" id="recent-updates-card">
-        <h3>🕒 Son Güncellenen Ürünler</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-8px;">En son eklenen veya düzenlenen (fiyat, miktar, kategori, konum vb.) ürünler — en yeniden eskiye, kimin güncellediğiyle birlikte.</p>
+        <h3 style="margin-top:0;font-family:'Oswald';">🕒 Son Güncellenen Ürünler</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">En son eklenen veya düzenlenen (fiyat, miktar, kategori, konum vb.) ürünler — en yeniden eskiye, kimin güncellediğiyle birlikte.</p>
         <div id="recent-updates-list"></div>
       </div>
     </div>
@@ -707,7 +429,7 @@
     <!-- QR OKUT TABI -->
     <div id="tab-okut" class="tab-content">
       <div style="text-align:center;">
-        <p style="font-size:13px;color:var(--text-light);">Kamerayı açarak ürün üzerindeki QR kodu okutun:</p>
+        <p style="font-size:13px;color:var(--steel);">Kamerayı açarak ürün üzerindeki QR kodu okutun:</p>
         <div id="reader"></div>
         <div id="scan-result"></div>
       </div>
@@ -716,19 +438,19 @@
     <!-- GÜNLÜK GÖREVLER TABI -->
     <div id="tab-gorevler" class="tab-content">
       <div id="manager-task-section" style="display:none;">
-        <div class="form-card" style="border-left: 4px solid var(--accent);">
+        <div class="form-card" style="border-left: 4px solid var(--safety);">
           <h3 style="margin-top:0;font-family:'Oswald'; display:flex; justify-content:space-between; align-items:center;">
             <span>📥 Toptancı / Ürün Giriş Bildirimleri</span>
-            <span id="notif-badge" style="background:var(--danger); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; display:none;">0 Yeni</span>
+            <span id="notif-badge" style="background:var(--rust); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; display:none;">0 Yeni</span>
           </h3>
-          <p style="font-size:12px; color:var(--text-light); margin-top:-4px; margin-bottom:12px;">Dükkana eklenen ürünler buraya bildirim olarak düşer. İstediğiniz bildirimi çalışana görev olarak atayabilirsiniz.</p>
+          <p style="font-size:12px; color:var(--steel); margin-top:-4px; margin-bottom:12px;">Dükkana eklenen ürünler buraya bildirim olarak düşer. İstediğiniz bildirimi çalışana görev olarak atayabilirsiniz.</p>
           <div id="notifications-list">
-            <p style="font-size:13px; color:var(--text-light); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>
+            <p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>
           </div>
         </div>
 
         <div class="form-card">
-          <h3>Yönetici Görev veya Not Ata</h3>
+          <h3 style="margin-top:0;font-family:'Oswald';">Yönetici Görev veya Not Ata</h3>
           <form onsubmit="handleManagerAssignTask(event)">
             <div class="form-row">
               <div><label>Görev / Not Açıklaması</label><input type="text" id="m-task-desc" placeholder="Örn: Vitrin camlarını sil ve düzenle" required></div>
@@ -746,18 +468,18 @@
       </div>
 
       <div class="form-card">
-        <h3>📋 Günlük İş / Görev Listesi &amp; Takibi</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-bottom:12px;">Çalışanlar düzenlemeler bittikten sonra <strong>Yeşil Tik</strong> ile görevi işaretleyebilir, yönetici anlık olarak durumunu görebilir.</p>
+        <h3 style="margin-top:0;font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:8px;">📋 Günlük İş / Görev Listesi &amp; Takibi</h3>
+        <p style="font-size:12px; color:var(--steel); margin-bottom:12px;">Çalışanlar düzenlemeler bittikten sonra <strong>Yeşil Tik</strong> ile görevi işaretleyebilir, yönetici anlık olarak durumunu görebilir.</p>
         
-        <div id="bulk-task-actions" style="display:none; justify-content:space-between; align-items:center; background:var(--light-bg); padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); margin-bottom:10px;">
-          <span style="font-size:12px; font-weight:600; color:var(--text);" id="selected-task-count">0 görev seçildi</span>
+        <div id="bulk-task-actions" style="display:none; justify-content:space-between; align-items:center; background:#F7F5F0; padding:8px 12px; border:1px solid var(--steel-line); border-radius:3px; margin-bottom:10px;">
+          <span style="font-size:12px; font-weight:600; color:var(--charcoal);" id="selected-task-count">0 görev seçildi</span>
           <button class="btn btn-danger btn-sm" id="bulk-del-btn" onclick="deleteSelectedTasks()" style="display:none;">🗑️ Seçilen Görevleri Sil</button>
         </div>
 
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:450px;">
             <thead>
-              <tr style="border-bottom:1px solid var(--border); color:var(--text-light);">
+              <tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
                 <th style="width:30px; padding-bottom:6px; text-align:center;"><input type="checkbox" id="select-all-tasks" onclick="toggleSelectAllTasks(this)" title="Tümünü Seç"></th>
                 <th style="padding-bottom:6px;">Görev / İş Açıklaması</th>
                 <th>Atanan Personel</th>
@@ -774,7 +496,7 @@
     <!-- TOPTANCILAR TABI -->
     <div id="tab-toptanci" class="tab-content">
       <div class="form-card">
-        <h3>Yeni Toptancı / Firma Ekle</h3>
+        <h3 style="margin-top:0;font-family:'Oswald';">Yeni Toptancı / Firma Ekle</h3>
         <div class="form-row">
           <div><label>Firma / Toptancı Adı</label><input type="text" id="w-name" placeholder="Örn: Koçtaş Hırdavat"></div>
           <div><label>Yetkili Kişi</label><input type="text" id="w-contact" placeholder="Örn: Ahmet Bey (satış temsilcisi)"></div>
@@ -838,7 +560,7 @@
           </div>
         </div>
       </div>
-      <h3 style="font-family:'Oswald'; border-bottom:1px solid var(--border); padding-bottom:5px;">Cari Hesaplar ve Planlar</h3>
+      <h3 style="font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Cari Hesaplar ve Planlar</h3>
       <div class="form-row" style="margin-bottom:10px;">
         <div>
           <label>Listele</label>
@@ -869,11 +591,11 @@
     <!-- MALZEME FİŞİ (TOPTANCI MAL GİRİŞİ) TABI -->
     <div id="tab-fis" class="tab-content">
       <div class="form-card">
-        <h3>Yeni Malzeme Fişi (Toptancıdan Mal Girişi)</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-5px; margin-bottom:12px;">Toptancıdan gelen malzemeleri buraya işleyin: hangi toptancıdan hangi malzeme, ne kadar geldiğini kaydedin. Onayladığınızda ilgili ürünlerin stoğu otomatik artırılır ve fiş arşivlenir.</p>
+        <h3 style="margin-top:0;font-family:'Oswald';">Yeni Malzeme Fişi (Toptancıdan Mal Girişi)</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Toptancıdan gelen malzemeleri buraya işleyin: hangi toptancıdan hangi malzeme, ne kadar geldiğini kaydedin. Onayladığınızda ilgili ürünlerin stoğu otomatik artırılır ve fiş arşivlenir.</p>
 
-        <div style="background:var(--light-bg); border:1px dashed var(--border); border-radius:var(--radius); padding:12px; margin-bottom:16px;">
-          <label style="margin-bottom:4px;">📦 Malzemenin Barkodunu Okutarak Bul / Tanımla <span style="text-transform:none; color:var(--text-light); font-size:9px;">(bazı ürünler barkodlu geliyorsa kullanın, opsiyonel)</span></label>
+        <div style="background:#F7F5F0; border:1px dashed var(--steel-line); border-radius:4px; padding:12px; margin-bottom:16px;">
+          <label style="margin-bottom:4px;">📦 Malzemenin Barkodunu Okutarak Bul / Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bazı ürünler barkodlu geliyorsa kullanın, opsiyonel)</span></label>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <input type="text" id="fis-barcode-lookup" placeholder="Barkod numarasını yazın..." style="flex:1; min-width:140px;">
             <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="lookupFisBarcode()">🔎 Bul</button>
@@ -899,10 +621,10 @@
           <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any"></div>
           <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit()"></div>
         </div>
-        <div id="fis-new-fields" style="display:none; background:var(--light-bg); padding:10px; border-radius:var(--radius); margin-bottom:10px;">
+        <div id="fis-new-fields" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-bottom:10px;">
           <p style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;">ℹ️ Bu malzeme sistemde bulunamadı, YENİ ÜRÜN olarak stoğa eklenecek. Lütfen aşağıdaki bilgileri de girin:</p>
           <div style="margin-bottom:10px;">
-            <label>Barkod Tanımla <span style="text-transform:none; color:var(--text-light); font-size:9px;">(bu ürünün üzerindeki barkodu okutun veya elle girin — boş bırakılırsa sistem otomatik kod atar)</span></label>
+            <label>Barkod Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bu ürünün üzerindeki barkodu okutun veya elle girin — boş bırakılırsa sistem otomatik kod atar)</span></label>
             <div style="display:flex; gap:8px;">
               <input type="text" id="fis-new-barcode" placeholder="Barkod numarası..." style="flex:1;" oninput="document.getElementById('fis-barcode-pending-code').value = this.value.trim();">
               <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Okut</button>
@@ -946,19 +668,19 @@
           <div class="form-row" style="grid-template-columns: 1fr; margin-bottom:0; margin-top:10px;">
             <div><label>Satış Fiyatı (₺)</label><input type="number" id="fis-price" step="0.01" placeholder="0.00"></div>
           </div>
-          <div style="display:flex; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--border);">
+          <div style="display:flex; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
             <input type="checkbox" id="fis-create-now" checked style="width:auto; margin-top:2px;">
-            <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünü fişe eklerken <b>hemen stok listesine düşür</b> <span style="color:var(--text-light); font-weight:normal;">— böylece fişi yarıda bırakıp silseniz bile ürün tanımı (isim, fiyat, barkod vb.) kaybolmaz, sadece o fişten gelecek stok miktarı işlenmemiş olur.</span></label>
+            <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünü fişe eklerken <b>hemen stok listesine düşür</b> <span style="color:var(--steel); font-weight:normal;">— böylece fişi yarıda bırakıp silseniz bile ürün tanımı (isim, fiyat, barkod vb.) kaybolmaz, sadece o fişten gelecek stok miktarı işlenmemiş olur.</span></label>
           </div>
         </div>
         <button class="btn btn-primary" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
       </div>
 
       <div id="fis-container" class="form-card" style="display:none; padding:12px;">
-        <h3>Fiş Kalemleri</h3>
+        <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Fiş Kalemleri</h3>
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:400px;" id="fis-table">
-             <thead><tr style="border-bottom:1px solid var(--border); color:var(--text-light);">
+             <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
                <th style="padding-bottom:5px;">Malzeme Bilgisi</th>
                <th>B.Fiyat</th>
                <th>Miktar</th>
@@ -968,8 +690,8 @@
              <tbody id="fis-items"></tbody>
           </table>
         </div>
-        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--border);">
-            Fiş Toplamı: <span id="fis-total" style="font-size:22px; font-weight:bold; color:var(--text);">₺0,00</span>
+        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
+            Fiş Toplamı: <span id="fis-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
         </div>
         <div class="form-row" style="margin-top:12px; align-items:flex-end;">
           <div><label>Fiş Notu (Opsiyonel)</label><input type="text" id="fis-note" placeholder="Örn: Kısmi teslimat, eksikler sonra gelecek"></div>
@@ -981,7 +703,7 @@
         <button class="btn btn-success" style="margin-top:10px;" onclick="completeGoodsReceipt()">✅ Fişi Onayla ve Stoğa İşle</button>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-bottom: 1px solid var(--steel-line); padding-bottom: 5px;">
         <h3 style="font-family:'Oswald'; margin: 0;">Geçmiş Malzeme Fişleri</h3>
       </div>
       <div id="past-receipts-list" style="margin-top: 10px;"></div>
@@ -990,8 +712,8 @@
     <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
     <div id="tab-siparis" class="tab-content">
       <div class="form-card">
-        <h3>Satış / Sepet Ekranı</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-5px; margin-bottom:12px;">Satış yapılacak ürünleri sepete ekleyerek hem stoktan düşebilir hem de müşteri için fiş kesebilirsiniz.</p>
+        <h3 style="margin-top:0; font-family:'Oswald';">Satış / Sepet Ekranı</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Satış yapılacak ürünleri sepete ekleyerek hem stoktan düşebilir hem de müşteri için fiş kesebilirsiniz.</p>
         
         <div class="form-row" style="grid-template-columns: 2fr 1fr;">
           <div>
@@ -1010,10 +732,10 @@
       </div>
       
       <div id="cart-container" class="form-card" style="display:none; padding:12px;">
-        <h3>Sepetteki Ürünler</h3>
+        <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Sepetteki Ürünler</h3>
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width: 400px;" id="cart-table">
-             <thead><tr style="border-bottom:1px solid var(--border); color:var(--text-light);">
+             <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
                <th style="padding-bottom:5px;">Ürün Bilgisi</th>
                <th>B.Fiyat</th>
                <th>Miktar</th>
@@ -1023,13 +745,13 @@
              <tbody id="cart-items"></tbody>
           </table>
         </div>
-        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--border);">
-            Genel Toplam: <span id="cart-total" style="font-size:22px; font-weight:bold; color:var(--text);">₺0,00</span>
+        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
+            Genel Toplam: <span id="cart-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
         </div>
         <button class="btn btn-success" style="margin-top:15px;" onclick="completeOrder()">Satışı Tamamla &amp; Fiş / Excel İşlemi</button>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-bottom: 1px solid var(--border); padding-bottom: 5px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-bottom: 1px solid var(--steel-line); padding-bottom: 5px;">
         <h3 style="font-family:'Oswald'; margin: 0;">Geçmiş Satış / Sipariş Listeleri (Son 40 Gün)</h3>
         <button class="btn btn-danger btn-sm" onclick="clearSalesHistory()">🗑️ Satış Geçmişini Temizle</button>
       </div>
@@ -1047,7 +769,7 @@
           <button class="btn btn-primary btn-sm" id="add-plan-btn" style="width:auto; display:none;" onclick="toggleNewPlanForm()">+ Yeni Kroki</button>
           <button class="btn btn-danger btn-sm" id="delete-plan-btn" style="width:auto; display:none;" onclick="deleteCurrentPlan()">Bu Krokiyi Sil</button>
         </div>
-        <div id="new-plan-form" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--border);">
+        <div id="new-plan-form" style="display:none; margin-top:12px; padding-top:12px; border-top:1px dashed var(--steel-line);">
           <div class="form-row">
             <div><label>Kroki Adı</label><input type="text" id="np-name" placeholder="Örn: Depo, 2. Kat Ambar"></div>
             <div><label>Görünürlük</label>
@@ -1062,14 +784,14 @@
       </div>
 
       <div class="form-card">
-        <h3>📍 Ürün Nerede? Ara</h3>
+        <h3 style="margin-top:0; font-family:'Oswald';">📍 Ürün Nerede? Ara</h3>
         <input type="text" id="layout-search" placeholder="Ürün adı veya kodu yazın..." oninput="findProductLocation()">
         <div id="layout-search-result"></div>
       </div>
 
       <div class="form-card" id="stand-form-card" style="display:none;">
-        <h3>Yeni Stand Ekle</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-8px;">Eklendikten sonra standı krokinin üzerinde parmağınızla/fareyle sürükleyerek gerçek konumuna taşıyabilirsiniz.</p>
+        <h3 style="margin-top:0; font-family:'Oswald';">Yeni Stand Ekle</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Eklendikten sonra standı krokinin üzerinde parmağınızla/fareyle sürükleyerek gerçek konumuna taşıyabilirsiniz.</p>
         <div class="form-row">
           <div><label>Stand Harfi</label><input type="text" id="ns-letter" maxlength="2" placeholder="Örn: A" style="text-transform:uppercase;"></div>
           <div><label>Bölme (Numara) Adedi</label><input type="number" id="ns-slots" min="1" value="10" placeholder="10"></div>
@@ -1089,11 +811,11 @@
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
-        <h3 style="font-family:'Oswald'; margin:0; border-bottom:1px solid var(--border); padding-bottom:5px; flex:1;">Mağaza Krokisi</h3>
+        <h3 style="font-family:'Oswald'; margin:0; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex:1;">Mağaza Krokisi</h3>
         <button class="btn btn-dark btn-sm" id="edit-mode-toggle-btn" onclick="toggleLayoutEditMode()" style="width:auto; display:none;">✏️ Düzenle Modu: Kapalı</button>
         <button class="btn btn-primary btn-sm" id="toggle-stand-form-btn" onclick="toggleStandForm()" style="width:auto; margin-left:10px; display:none;">+ Stand Ekle</button>
       </div>
-      <p style="font-size:12px; color:var(--text-light); margin-top:-4px;" id="layout-hint-text">
+      <p style="font-size:12px; color:var(--steel); margin-top:-4px;" id="layout-hint-text">
         Bir standa <b>tıklayınca</b> içindekileri görürsünüz. Standları taşımak için önce "✏️ Düzenle Modu"nu açın. 🟢 dolu, ⚪ boş standı gösterir.
       </p>
       <div id="layout-grid" class="layout-canvas"></div>
@@ -1115,15 +837,15 @@
         <button class="btn btn-success" onclick="generateDailyZReport()">Bugünün Z Raporunu Oluştur &amp; Arşivle</button>
       </div>
 
-      <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--border); padding-bottom:5px;">Geçmiş Z Raporları (Gün Gün Arşiv)</h3>
+      <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Geçmiş Z Raporları (Gün Gün Arşiv)</h3>
       <div id="past-z-reports-list"></div>
     </div>
 
     <!-- MÜŞTERİ BORÇ TABI -->
     <div id="tab-borc" class="tab-content">
       <div class="form-card">
-        <h3>🛒 Müşteri Sepeti / Borç Satış</h3>
-        <p style="font-size:12px; color:var(--text-light); margin-top:-5px; margin-bottom:12px;">Müşteriye ürünleri sepete ekleyerek satış yapın. Satış tamamlandığında otomatik olarak <b>30 gün vadeli borç kaydı</b> oluşur ve yazdırılabilir fiş çıkar.</p>
+        <h3 style="margin-top:0; font-family:'Oswald';">🛒 Müşteri Sepeti / Borç Satış</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Müşteriye ürünleri sepete ekleyerek satış yapın. Satış tamamlandığında otomatik olarak <b>belirlediğiniz vade ile borç kaydı</b> oluşur ve fatura sayfası açılır.</p>
 
         <div class="form-row">
           <div>
@@ -1170,10 +892,10 @@
 
       <!-- BORÇ SEPETİ -->
       <div id="borc-cart-container" class="form-card" style="display:none; padding:12px;">
-        <h3>🧾 Müşteri Sepeti / Borç Kalemleri</h3>
+        <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">🧾 Müşteri Sepeti / Borç Kalemleri</h3>
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width: 400px;" id="borc-cart-table">
-            <thead><tr style="border-bottom:1px solid var(--border); color:var(--text-light);">
+            <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
               <th style="padding-bottom:5px;">Ürün Bilgisi</th>
               <th>Fiyat</th>
               <th>Miktar</th>
@@ -1183,18 +905,18 @@
             <tbody id="borc-cart-items"></tbody>
           </table>
         </div>
-        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--border);">
-          Genel Toplam: <span id="borc-cart-total" style="font-size:22px; font-weight:bold; color:var(--text);">₺0,00</span>
+        <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
+          Genel Toplam: <span id="borc-cart-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
         </div>
-        <button class="btn btn-success" style="margin-top:15px;" onclick="completeBorcSale()">✅ Satışı Tamamla &amp; Borç Fişi Oluştur</button>
+        <button class="btn btn-success" style="margin-top:15px;" onclick="completeBorcSale()">✅ Satışı Tamamla &amp; Faturayı Aç</button>
         <button class="btn btn-danger" style="margin-top:10px;" onclick="clearBorcCart()">🗑️ Sepeti Temizle</button>
       </div>
 
       <!-- BORÇ LİSTESİ -->
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--border); padding-bottom:5px; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex-wrap:wrap; gap:8px;">
         <h3 style="font-family:'Oswald'; margin:0;">📋 Müşteri Borç Listesi</h3>
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <span style="font-size:11px; color:var(--text-light);">Filtre:</span>
+          <span style="font-size:11px; color:var(--steel);">Filtre:</span>
           <select id="borc-filter-status" onchange="renderCustomerDebts()" style="width:auto; padding:6px 10px; font-size:12px;">
             <option value="hepsi">Hepsi</option>
             <option value="Açık">Sadece Açık</option>
@@ -1337,9 +1059,9 @@
         <label style="margin-bottom:6px;">Ürün Fotoğrafı</label>
         <input type="file" accept="image/*" id="edit-photo-file" style="padding:4px; font-size:11px;">
         <div style="display:flex; gap:8px; margin-top:6px;">
-          <button class="sm-btn" id="edit-photo-remove-btn" onclick="removeProductImage()" style="display:none; color:var(--danger);">Fotoğrafı Kaldır</button>
+          <button class="sm-btn" id="edit-photo-remove-btn" onclick="removeProductImage()" style="display:none; color:var(--rust);">Fotoğrafı Kaldır</button>
         </div>
-        <div id="edit-photo-status" style="font-size:10px; color:var(--text-light); margin-top:4px;"></div>
+        <div id="edit-photo-status" style="font-size:10px; color:var(--steel); margin-top:4px;"></div>
       </div>
     </div>
 
@@ -1349,13 +1071,13 @@
     </div>
     <div class="form-row" id="edit-code-section" style="display:none;">
       <div>
-        <label>Barkod / Ürün Kodu <span style="text-transform:none; color:var(--text-light); font-size:9px;">— otomatik atanmış kodu gerçek barkodla değiştirebilirsiniz</span></label>
+        <label>Barkod / Ürün Kodu <span style="text-transform:none; color:var(--steel); font-size:9px;">— otomatik atanmış kodu gerçek barkodla değiştirebilirsiniz</span></label>
         <input type="text" id="edit-code-visible" placeholder="Örn: 8690123456789">
-        <div id="edit-code-status" style="font-size:10px; color:var(--danger); margin-top:4px;"></div>
+        <div id="edit-code-status" style="font-size:10px; color:var(--rust); margin-top:4px;"></div>
       </div>
     </div>
     <div class="form-row">
-      <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--danger); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01"></div>
+      <div><label>Fiyat (₺) <span id="price-lock-note" style="font-size:9px; color:var(--rust); display:none;">(Çalışan Modunda Fiyat Değiştirilemez)</span></label><input type="number" id="edit-price" step="0.01"></div>
       <div><label>Ölçü Birimi</label>
         <select id="edit-unit">
           <option value="Adet">Adet</option>
@@ -1384,13 +1106,13 @@
     <div id="edit-cost-section" style="display:none;">
       <div class="form-row" style="grid-template-columns: 1fr;">
         <div>
-          <label>Marka / Katalog Grubu <span style="text-transform:none; color:var(--text-light); font-size:9px;">— sadece yönetici</span></label>
+          <label>Marka / Katalog Grubu <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici</span></label>
           <select id="edit-brand" onchange="updateCostCalc('edit')"></select>
         </div>
       </div>
       <div class="form-row" style="grid-template-columns: 1fr;">
         <div>
-          <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--text-light); font-size:9px;">— sadece yönetici, satış fiyatından farklı</span></label>
+          <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici, satış fiyatından farklı</span></label>
           <input type="number" id="edit-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('edit'); updateEditProfit();">
           <div class="cost-calc-box" id="edit-cost-calc"></div>
         </div>
@@ -1431,7 +1153,7 @@
     <button class="modal-close" onclick="closeBarcodeLookupScanner()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';">Barkodu Kameraya Gösterin</h3>
     <div id="barcode-lookup-reader"></div>
-    <p style="font-size:11px; color:var(--text-light); margin-top:8px;">Ürünün üzerindeki çizgili barkodu (karekod değil) kameraya net ve yakın şekilde gösterin.</p>
+    <p style="font-size:11px; color:var(--steel); margin-top:8px;">Ürünün üzerindeki çizgili barkodu (karekod değil) kameraya net ve yakın şekilde gösterin.</p>
   </div>
 </div>
 
@@ -1440,7 +1162,7 @@
     <button class="modal-close" onclick="closeFisBarcodeScanner()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';">Malzeme Barkodunu Kameraya Gösterin</h3>
     <div id="fis-barcode-reader"></div>
-    <p style="font-size:11px; color:var(--text-light); margin-top:8px;">Malzemenin üzerindeki çizgili barkodu (karekod değil) kameraya net ve yakın şekilde gösterin.</p>
+    <p style="font-size:11px; color:var(--steel); margin-top:8px;">Malzemenin üzerindeki çizgili barkodu (karekod değil) kameraya net ve yakın şekilde gösterin.</p>
   </div>
 </div>
 
@@ -1449,10 +1171,11 @@
 <!-- GÖRSEL BÜYÜTME MODALI -->
 <div class="modal-overlay" id="image-modal" style="display:none; z-index: 2000;" onclick="closeImageModal()">
   <div style="position:relative; max-width:90%; max-height:90%; margin:auto; top:50%; transform:translateY(-50%); text-align:center;">
-    <button style="position:absolute; top:-15px; right:-15px; background:var(--danger); color:#fff; border:none; border-radius:50%; width:30px; height:30px; font-weight:bold; cursor:pointer;" onclick="closeImageModal()">X</button>
+    <button style="position:absolute; top:-15px; right:-15px; background:var(--rust); color:#fff; border:none; border-radius:50%; width:30px; height:30px; font-weight:bold; cursor:pointer;" onclick="closeImageModal()">X</button>
     <img id="enlarged-image" src="" style="max-width:100%; max-height:85vh; border-radius:8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
   </div>
 </div>
+
 <script>
 // FIREBASE BAĞLANTISI
 const firebaseConfig = { databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/" };
@@ -1725,18 +1448,18 @@ dbGoodsReceipts.on('value', snapshot => {
                  <div class="tag-code">🕒 ${rec.time || ''} ${rec.fisNo ? '| 📄 ' + rec.fisNo : ''} | 📦 ${(rec.items || []).length} Kalem</div>
               </div>
               <div style="text-align:right;">
-                 <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--text);">₺${formatMoney(rec.total)}</div>
+                 <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--charcoal);">₺${formatMoney(rec.total)}</div>
                  <button class="btn btn-info btn-sm" onclick="downloadReceiptById('${receiptId}')">İndir (Excel)</button>
               </div>
            </div>
-           <div style="font-size:11px; color:var(--text-light); margin-top:8px; line-height:1.4;">${itemsSummary}</div>
-           ${rec.note ? `<div style="font-size:11px; color:var(--text); margin-top:4px; font-style:italic;">Not: ${rec.note}</div>` : ''}
+           <div style="font-size:11px; color:var(--steel); margin-top:8px; line-height:1.4;">${itemsSummary}</div>
+           ${rec.note ? `<div style="font-size:11px; color:var(--charcoal); margin-top:4px; font-style:italic;">Not: ${rec.note}</div>` : ''}
         </div>
       `;
     });
   });
 
-  if(!hasReceipts) listDiv.innerHTML = '<p style="color:var(--text-light);font-size:13px;text-align:center;">Henüz kaydedilmiş malzeme fişi bulunamadı.</p>';
+  if(!hasReceipts) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz kaydedilmiş malzeme fişi bulunamadı.</p>';
 });
 
 dbMovements.on('value', (snapshot) => {
@@ -1795,9 +1518,9 @@ dbZReports.on('value', (snapshot) => {
          <div>
             <div class="tag-title">📅 Z Raporu: ${rep.date}</div>
             <div class="tag-code">🕒 Oluşturma: ${rep.time || 'N/A'} | 📦 Mal Giriş: ${rep.malGirisi} | 📤 Mal Çıkış: ${rep.malCikisi}</div>
-            <div style="font-size:12px; margin-top:4px; color:var(--text);">
+            <div style="font-size:12px; margin-top:4px; color:var(--charcoal);">
                Para Girişi: <strong style="color:var(--success);">₺${formatMoney(rep.paraGirisi)}</strong> | 
-               Para Çıkışı: <strong style="color:var(--danger);">₺${formatMoney(rep.paraCikisi)}</strong>
+               Para Çıkışı: <strong style="color:var(--rust);">₺${formatMoney(rep.paraCikisi)}</strong>
             </div>
          </div>
          <div style="text-align:right;">
@@ -1807,7 +1530,7 @@ dbZReports.on('value', (snapshot) => {
     `;
   });
   
-  if(!hasReports) listDiv.innerHTML = '<p style="color:var(--text-light);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
+  if(!hasReports) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
 });
 
 dbOrders.on('value', snapshot => {
@@ -1841,7 +1564,7 @@ dbOrders.on('value', snapshot => {
               <div class="tag-code">🕒 ${order.time} | 📦 ${order.items.length} Çeşit Ürün</div>
            </div>
            <div style="text-align:right;">
-              <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--text);">₺${formatMoney(order.total)}</div>
+              <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--charcoal);">₺${formatMoney(order.total)}</div>
               <button class="btn btn-info btn-sm" onclick="downloadOrderById('${orderId}')">İndir (Excel)</button>
            </div>
         </div>
@@ -1849,7 +1572,7 @@ dbOrders.on('value', snapshot => {
     });
   });
   
-  if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--text-light);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
+  if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
 });
 
 function clearSalesHistory() {
@@ -1862,7 +1585,7 @@ function clearSalesHistory() {
     dbOrders.remove((err) => {
       if (!err) {
         globalPastOrders = {};
-        document.getElementById('past-orders-list').innerHTML = '<p style="color:var(--text-light);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
+        document.getElementById('past-orders-list').innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
         showToast("Satış geçmişi ve arşiv başarıyla sıfırlandı!");
       } else {
         alert("Temizleme sırasında bir hata oluştu.");
@@ -2063,14 +1786,14 @@ function renderBorcCart() {
   borcCart.forEach((item, index) => {
     grandTotal += item.total;
     tbody.innerHTML += `
-      <tr style="border-bottom:1px dashed var(--border);">
+      <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 0; line-height:1.3;">
           <strong>${item.name}</strong><br>
-          <small style="color:var(--text-light); font-family:'IBM Plex Mono';">${item.code}</small>
+          <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code}</small>
         </td>
         <td>₺${formatMoney(item.price)}</td>
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
-        <td style="font-weight:bold; color:var(--danger);">₺${formatMoney(item.total)}</td>
+        <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
         <td><button class="btn btn-dark btn-sm" onclick="removeFromBorcCart(${index})">Çıkar</button></td>
       </tr>
     `;
@@ -2094,87 +1817,7 @@ function clearBorcCart() {
   showToast("Sepet temizlendi.");
 }
 
-// Borç satış fişini yazdır
-function printBorcSaleReceipt(debtData, grandTotal) {
-  const printArea = document.getElementById('print-area');
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('tr-TR');
-  const timeStr = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
-  
-  let itemsHtml = '';
-  (debtData.items || []).forEach(item => {
-    itemsHtml += `
-      <tr>
-        <td style="padding:4px 8px; border-bottom:1px solid #ddd;">${item.name}</td>
-        <td style="padding:4px 8px; border-bottom:1px solid #ddd; text-align:center;">${item.qty} ${item.unit}</td>
-        <td style="padding:4px 8px; border-bottom:1px solid #ddd; text-align:right;">₺${formatMoney(item.price)}</td>
-        <td style="padding:4px 8px; border-bottom:1px solid #ddd; text-align:right;">₺${formatMoney(item.total)}</td>
-      </tr>
-    `;
-  });
-  
-  printArea.innerHTML = `
-    <div style="width: 100%; max-width: 400px; margin: 0 auto; padding: 20px; font-family: 'Courier New', monospace; background: #fff; border: 2px solid #000; border-radius: 8px;">
-      <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px;">
-        <h2 style="margin: 0; font-size: 18px; text-transform: uppercase;">REYHANİ CAM HIRDAVAT</h2>
-        <p style="margin: 4px 0; font-size: 11px;">BORÇ SATIŞ FİŞİ</p>
-      </div>
-
-      <div style="font-size: 12px; margin-bottom: 10px;">
-        <p><strong>Fiş No:</strong> BORÇ-${new Date().getTime()}</p>
-        <p><strong>Tarih:</strong> ${dateStr} ${timeStr}</p>
-        <p><strong>Müşteri:</strong> ${debtData.customer}</p>
-        ${debtData.phone ? `<p><strong>Telefon:</strong> ${debtData.phone}</p>` : ''}
-        <p><strong>Vade Tarihi:</strong> ${debtData.dueDate || 'Belirsiz'}</p>
-        ${debtData.note ? `<p><strong>Not:</strong> ${debtData.note}</p>` : ''}
-      </div>
-
-      <div style="border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 10px 0; margin: 10px 0;">
-        <table style="width:100%; font-size:11px; border-collapse:collapse;">
-          <thead>
-            <tr style="border-bottom:2px solid #000;">
-              <th style="text-align:left; padding:4px 8px;">Ürün</th>
-              <th style="text-align:center; padding:4px 8px;">Miktar</th>
-              <th style="text-align:right; padding:4px 8px;">Birim Fiyat</th>
-              <th style="text-align:right; padding:4px 8px;">Toplam</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-          <tfoot>
-            <tr style="border-top:2px solid #000;">
-              <td colspan="3" style="text-align:right; padding:8px; font-weight:bold;">GENEL TOPLAM</td>
-              <td style="text-align:right; padding:8px; font-weight:bold; font-size:16px; color:var(--danger);">₺${formatMoney(grandTotal)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <div style="text-align: center; border-top: 2px dashed #000; padding-top: 10px; margin-top: 10px;">
-        <div style="font-size: 14px; font-weight: bold; color: var(--danger);">
-          BORÇ TUTARI: ₺${formatMoney(grandTotal)}
-        </div>
-        <div style="font-size: 11px; margin-top: 4px;">
-          Ödeme Son Tarih: ${debtData.dueDate || 'Belirsiz'}
-        </div>
-      </div>
-
-      <div style="text-align: center; font-size: 10px; color: var(--text-light); padding-top: 10px; border-top: 1px solid #ddd; margin-top: 10px;">
-        <p>Bu belge, Reyhani Cam Hırdavat tarafından düzenlenmiştir.</p>
-        <p>Borcunuzu belirtilen vade tarihine kadar ödeyiniz.</p>
-      </div>
-    </div>
-  `;
-
-  document.body.className = 'printing-label';
-  setTimeout(() => {
-    window.print();
-    document.body.className = '';
-  }, 400);
-}
-
-// Borç satışı tamamla
+// Borç satışı tamamla (FATURA BAĞLANTISI BURADA)
 function completeBorcSale() {
   if (currentRole !== 'admin') {
     alert("Bu işlem için yönetici yetkisi gerekir!");
@@ -2263,9 +1906,29 @@ function completeBorcSale() {
   
   dbCustomerDebts.push(debtData, (err) => {
     if (!err) {
-      printBorcSaleReceipt(debtData, grandTotal);
+      // ---- FATURA BAĞLANTISI ----
+      const faturaData = {
+        musteriAdi: customer,
+        telefon: phone,
+        tarih: new Date().toLocaleDateString('tr-TR'),
+        saat: timeStr,
+        vadeSuresi: termDays + ' Gün',
+        vadeTarihi: dueDateStr,
+        genelToplam: grandTotal,
+        urunler: borcCart.map(item => ({
+          urunAdi: item.name,
+          miktar: item.qty,
+          birimFiyat: item.price,
+          toplam: item.total
+        })),
+        islemTipi: 'Borç Satış',
+        belgeNo: 'BORÇ-' + Date.now()
+      };
+      localStorage.setItem('guncelSiparis', JSON.stringify(faturaData));
+      window.open('fatura.html', '_blank');
+      // -------------------------
       
-      showToast(`Satış tamamlandı! ${customer} için ${formatMoney(grandTotal)}₺ borç oluşturuldu.`);
+      showToast(`Satış tamamlandı! ${customer} için ${formatMoney(grandTotal)}₺ borç oluşturuldu. Fatura açılıyor...`);
       
       borcCart = [];
       renderBorcCart();
@@ -2353,7 +2016,7 @@ function renderCustomerDebts() {
     const keys = Object.keys(data).reverse();
 
     if (keys.length === 0) {
-      listDiv.innerHTML = '<p style="color:var(--text-light); font-size:13px; text-align:center;">Henüz kayıtlı borç yok.</p>';
+      listDiv.innerHTML = '<p style="color:var(--steel); font-size:13px; text-align:center;">Henüz kayıtlı borç yok.</p>';
       return;
     }
 
@@ -2374,7 +2037,7 @@ function renderCustomerDebts() {
       }
 
       html += `
-        <div class="tag" style="margin-bottom:10px; ${isPastDue ? 'border-left: 4px solid var(--danger);' : ''}">
+        <div class="tag" style="margin-bottom:10px; ${isPastDue ? 'border-left: 4px solid var(--rust);' : ''}">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
             <div>
               <div class="tag-title">${d.customer} ${d.phone ? '📞 ' + d.phone : ''}</div>
@@ -2405,9 +2068,9 @@ function renderCustomerDebts() {
 
     if (filter === 'hepsi' || filter === 'Açık') {
       html += `
-        <div style="background:var(--card-bg); border:1px solid var(--border); border-radius:var(--radius); padding:12px; margin-top:10px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-          <span style="font-weight:bold;">Toplam Açık Borç: <span style="color:var(--danger);">${totalOpen}₺</span></span>
-          <span style="font-weight:bold;">Kalan Toplam: <span style="color:var(--accent);">${totalRemaining}₺</span></span>
+        <div style="background:var(--paper); border:1px solid var(--steel-line); border-radius:var(--radius); padding:12px; margin-top:10px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <span style="font-weight:bold;">Toplam Açık Borç: <span style="color:var(--rust);">${totalOpen}₺</span></span>
+          <span style="font-weight:bold;">Kalan Toplam: <span style="color:var(--safety);">${totalRemaining}₺</span></span>
         </div>
       `;
     }
@@ -2520,12 +2183,12 @@ function printDebtSlip(key) {
 
         <div style="border-top: 2px dashed #000; border-bottom: 2px dashed #000; padding: 10px 0; margin: 10px 0; text-align: center;">
           <div style="font-size: 14px; font-weight: bold;">BORÇ TUTARI</div>
-          <div style="font-size: 28px; font-weight: bold; color: var(--danger);">₺${formatMoney(d.amount)}</div>
-          ${d.remaining != null && d.remaining !== d.amount ? `<div style="font-size: 12px; color: var(--text-light);">Ödenen: ₺${formatMoney(d.amount - d.remaining)} | Kalan: ₺${formatMoney(d.remaining)}</div>` : ''}
+          <div style="font-size: 28px; font-weight: bold; color: var(--rust, #C1440E);">₺${formatMoney(d.amount)}</div>
+          ${d.remaining != null && d.remaining !== d.amount ? `<div style="font-size: 12px; color: var(--steel);">Ödenen: ₺${formatMoney(d.amount - d.remaining)} | Kalan: ₺${formatMoney(d.remaining)}</div>` : ''}
           <div style="font-size: 11px; margin-top: 4px; font-weight: bold;">Durum: ${d.status}</div>
         </div>
 
-        <div style="text-align: center; font-size: 10px; color: var(--text-light); padding-top: 10px; border-top: 1px solid #ddd;">
+        <div style="text-align: center; font-size: 10px; color: var(--steel); padding-top: 10px; border-top: 1px solid #ddd;">
           <p>Bu belge, Reyhani Cam Hırdavat tarafından düzenlenmiştir.</p>
           <p>Borcunuzu ödemek için lütfen belirtilen vade tarihine uyunuz.</p>
         </div>
@@ -2730,7 +2393,7 @@ function renderLayoutGrid() {
   if (!canvas) return;
 
   if (!currentPlanId) {
-    canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--text-light); font-size:13px; padding:20px;">${currentRole === 'admin' ? 'Önce "+ Yeni Kroki" ile bir kroki oluşturun.' : 'Görüntülenebilir bir kroki yok.'}</p>`;
+    canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--steel); font-size:13px; padding:20px;">${currentRole === 'admin' ? 'Önce "+ Yeni Kroki" ile bir kroki oluşturun.' : 'Görüntülenebilir bir kroki yok.'}</p>`;
     return;
   }
 
@@ -2740,7 +2403,7 @@ function renderLayoutGrid() {
     .sort();
 
   if (letters.length === 0) {
-    canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--text-light); font-size:13px; padding:20px;">Bu krokide henüz stand yok. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
+    canvas.innerHTML = `<p style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--steel); font-size:13px; padding:20px;">Bu krokide henüz stand yok. ${currentRole === 'admin' ? '"+ Stand Ekle" ile başlayın.' : 'Yönetici standları tanımladığında burada görünecek.'}</p>`;
     return;
   }
 
@@ -2970,7 +2633,7 @@ function openStandDetail(letter) {
     html += `
       <div class="slot-cell ${items.length ? 'filled' : ''}">
         <div class="slot-num">${letter}-${i}</div>
-        ${items.map(p => `<div class="slot-item">${p.name}</div>`).join('') || '<div class="slot-item" style="color:var(--text-light);">boş</div>'}
+        ${items.map(p => `<div class="slot-item">${p.name}</div>`).join('') || '<div class="slot-item" style="color:var(--steel-line);">boş</div>'}
       </div>
     `;
   }
@@ -2996,16 +2659,16 @@ function findProductLocation() {
   ).slice(0, 8);
 
   if (matches.length === 0) {
-    resultBox.innerHTML = `<p style="font-size:12px; color:var(--text-light); margin-top:8px;">Eşleşen ürün yok.</p>`;
+    resultBox.innerHTML = `<p style="font-size:12px; color:var(--steel); margin-top:8px;">Eşleşen ürün yok.</p>`;
     return;
   }
 
   resultBox.innerHTML = matches.map(p => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--border);">
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px solid var(--steel-line);">
       <span style="font-size:13px;">${p.name}</span>
       ${p.location
         ? `<span class="location-badge" onclick="highlightStand('${p.location.split('-')[0]}')">📍 ${p.location}</span>`
-        : `<span style="font-size:11px; color:var(--text-light);">Konum atanmamış</span>`}
+        : `<span style="font-size:11px; color:var(--steel);">Konum atanmamış</span>`}
     </div>
   `).join('');
 }
@@ -3094,19 +2757,19 @@ function renderBrandSettings() {
   const brands = currentBrandList();
 
   let html = `
-    <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:10px; margin-bottom:4px; border-bottom:2px solid var(--primary);">
+    <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:10px; margin-bottom:4px; border-bottom:2px solid var(--charcoal);">
       <div style="flex:1;"><label style="margin-bottom:2px;">Yeni Marka Adı</label><input type="text" id="new-brand-name" placeholder="Örn: Makita"></div>
       <button class="btn btn-primary btn-sm" style="width:auto;" onclick="addBrandGroup()">+ Marka Ekle</button>
     </div>
   `;
 
   if (brands.length === 0) {
-    html += `<p style="font-size:12px; color:var(--text-light); text-align:center; padding:14px 0;">Henüz marka eklenmedi.</p>`;
+    html += `<p style="font-size:12px; color:var(--steel); text-align:center; padding:14px 0;">Henüz marka eklenmedi.</p>`;
   } else {
     html += brands.map(brand => {
       const s = brandSettingsData[brand] || {};
       return `
-        <div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-top:1px solid var(--border);">
+        <div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-top:1px solid var(--steel-line);">
           <div style="flex:1.2;"><label style="margin-bottom:2px;">${brand}</label></div>
           <div style="flex:1;">
             <label style="margin-bottom:2px;">İskonto %</label>
@@ -3237,7 +2900,7 @@ function renderRecentUpdates() {
   const extraCount = withoutDate.length;
 
   if (list.length === 0 && extraCount === 0) {
-    box.innerHTML = `<p style="font-size:12px; color:var(--text-light); text-align:center; padding:10px 0;">Henüz hiç ürün yok.</p>`;
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hiç ürün yok.</p>`;
     return;
   }
 
@@ -3247,12 +2910,12 @@ function renderRecentUpdates() {
     return `
       <div class="recent-update-row">
         <div>
-          <div>${p.name} <span style="color:var(--text-light); font-size:10px;">(${p.code})</span></div>
+          <div>${p.name} <span style="color:var(--steel); font-size:10px;">(${p.code})</span></div>
           <div class="ru-time">${dateStr}${p.lastUpdatedBy ? ' · ' + p.lastUpdatedBy : ''}</div>
         </div>
         <div style="text-align:right;">
           <div>Satış: <b>₺${formatMoney(p.price || 0)}</b></div>
-          ${p.costPrice != null ? `<div style="color:var(--text-light);">Geliş: ₺${formatMoney(p.costPrice)}</div>` : ''}
+          ${p.costPrice != null ? `<div style="color:var(--steel);">Geliş: ₺${formatMoney(p.costPrice)}</div>` : ''}
         </div>
       </div>
     `;
@@ -3260,7 +2923,7 @@ function renderRecentUpdates() {
 
   if (extraCount > 0) {
     html += `
-      <div class="recent-update-row" style="color:var(--text-light); font-style:italic;">
+      <div class="recent-update-row" style="color:var(--steel); font-style:italic;">
         <div>${extraCount} üründe henüz güncelleme tarihi yok (bu özellik eklenmeden önce oluşturulmuş — bir kez düzenleyip kaydedince tarih başlayacak).</div>
       </div>
     `;
@@ -3329,7 +2992,7 @@ function renderNotifications() {
   const keys = Object.keys(notificationsData);
   
   if(keys.length === 0) {
-    listDiv.innerHTML = '<p style="font-size:13px; color:var(--text-light); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>';
+    listDiv.innerHTML = '<p style="font-size:13px; color:var(--steel); text-align:center; padding:10px;">Yeni bildirim bulunmuyor.</p>';
     badge.style.display = 'none';
     return;
   }
@@ -3340,14 +3003,14 @@ function renderNotifications() {
   keys.reverse().forEach(key => {
     const n = notificationsData[key];
     listDiv.innerHTML += `
-      <div style="background:var(--light-bg); border:1px solid var(--border); padding:10px; border-radius:var(--radius); margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <div style="background:#F7F5F0; border:1px solid var(--steel-line); padding:10px; border-radius:3px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
          <div>
-            <div style="font-size:12px; font-weight:bold; color:var(--text);">📥 ${n.text}</div>
-            <div style="font-size:10px; color:var(--text-light); font-family:'IBM Plex Mono';">🕒 ${n.time}</div>
+            <div style="font-size:12px; font-weight:bold; color:var(--charcoal);">📥 ${n.text}</div>
+            <div style="font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';">🕒 ${n.time}</div>
          </div>
          <div style="display:flex; flex-direction:column; gap:4px;">
            <button class="btn btn-primary btn-sm" onclick="convertNotifToTask('${key}')" style="white-space:nowrap;">Çalışana Görev Ata</button>
-           <button class="sm-btn" onclick="dismissNotification('${key}')" style="color:var(--text-light);">Yoksay / Kapat</button>
+           <button class="sm-btn" onclick="dismissNotification('${key}')" style="color:var(--steel);">Yoksay / Kapat</button>
          </div>
       </div>
     `;
@@ -3503,7 +3166,7 @@ function renderTasks() {
   updateBulkDeleteUI();
 
   if(keys.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:var(--text-light);">Kayıtlı görev bulunmuyor.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:15px; color:var(--steel);">Kayıtlı görev bulunmuyor.</td></tr>`;
     const master = document.getElementById('select-all-tasks');
     if(master) master.checked = false;
     return;
@@ -3516,23 +3179,23 @@ function renderTasks() {
     const isAdmin = currentRole === 'admin';
     
     tbody.innerHTML += `
-      <tr style="border-bottom:1px dashed var(--border);">
+      <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 4px; text-align:center;">
           <input type="checkbox" value="${key}" ${isSelected ? 'checked' : ''} onclick="toggleTaskSelection('${key}', this)">
         </td>
         <td style="padding:10px 4px;">
           <strong>${t.text}</strong><br>
-          <span style="font-size:10px; color:var(--text-light);">Kategori: ${t.category || 'Genel'}</span>
+          <span style="font-size:10px; color:var(--steel);">Kategori: ${t.category || 'Genel'}</span>
         </td>
         <td style="padding:10px 4px; font-weight:500;">${t.person}</td>
         <td style="padding:10px 4px;">
-          ${isDone ? `<span style="color:var(--success); font-weight:bold; font-size:12px;">✅ Tamamlandı (${t.time})</span>` : `<span style="color:var(--danger); font-weight:bold; font-size:12px;">⏳ Bekliyor</span>`}
+          ${isDone ? `<span style="color:var(--success); font-weight:bold; font-size:12px;">✅ Tamamlandı (${t.time})</span>` : `<span style="color:var(--rust); font-weight:bold; font-size:12px;">⏳ Bekliyor</span>`}
         </td>
         <td style="padding:10px 4px; text-align:center; white-space:nowrap;">
           <button class="btn btn-sm ${isDone ? 'btn-success' : 'btn-dark'}" onclick="toggleTaskStatus('${key}')">
             ${isDone ? '✅ Tamamlandı (Geri Al)' : '🔲 Yeşil Tik İle Bitir'}
           </button>
-          ${isAdmin ? `<button class="sm-btn" onclick="deleteTask('${key}')" style="color:var(--danger); margin-left:8px;">Sil</button>` : ''}
+          ${isAdmin ? `<button class="sm-btn" onclick="deleteTask('${key}')" style="color:var(--rust); margin-left:8px;">Sil</button>` : ''}
         </td>
       </tr>
     `;
@@ -3632,8 +3295,8 @@ function checkNameDuplicate() {
   warnBox.innerHTML = `
     <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu ürünü mü arıyordunuz? Sistemde benzer isimli ürün(ler) var, mükerrer kayıt oluşturmamak için kontrol edin:</div>
     ${matches.map(m => `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--border);">
-        <span>${m.product.name} <small style="color:var(--text-light); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
+        <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
         <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="openEditModal('${m.product.code}')">Bu Ürünü Düzenle</button>
       </div>
     `).join('')}
@@ -3699,14 +3362,14 @@ function renderCart() {
   cart.forEach((item, index) => {
     grandTotal += item.total;
     tbody.innerHTML += `
-      <tr style="border-bottom:1px dashed var(--border);">
+      <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 0; line-height:1.3;">
           <strong>${item.name}</strong><br>
-          <small style="color:var(--text-light); font-family:'IBM Plex Mono';">${item.code}</small>
+          <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code}</small>
         </td>
         <td>₺${formatMoney(item.price)}</td>
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
-        <td style="font-weight:bold; color:var(--danger);">₺${formatMoney(item.total)}</td>
+        <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
         <td><button class="btn btn-dark btn-sm" onclick="removeFromCart(${index})">Çıkar</button></td>
       </tr>
     `;
@@ -3818,8 +3481,8 @@ function checkFisProductMatch() {
   warnBox.innerHTML = `
     <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu malzemeyi mi arıyordunuz? Sistemde benzer isimli ürün(ler) var, mükerrer kayıt açmamak için kontrol edin:</div>
     ${matches.map(m => `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--border);">
-        <span>${m.product.name} <small style="color:var(--text-light); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
+        <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
         <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="selectFisSuggestion('${m.product.code}')">Bunu Seç</button>
       </div>
     `).join('')}
@@ -3947,15 +3610,15 @@ function renderGoodsReceiptCart() {
   goodsReceiptCart.forEach((item, index) => {
     grandTotal += item.total;
     tbody.innerHTML += `
-      <tr style="border-bottom:1px dashed var(--border);">
+      <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 0; line-height:1.3;">
           <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}<br>
-          <small style="color:var(--text-light); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
-          ${(item.isNew || item.justCreated) && item.price ? `<br><small style="color:var(--text-light);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
+          <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
+          ${(item.isNew || item.justCreated) && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
         </td>
         <td>₺${formatMoney(item.cost)}</td>
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
-        <td style="font-weight:bold; color:var(--danger);">₺${formatMoney(item.total)}</td>
+        <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
         <td style="display:flex; gap:4px; flex-wrap:wrap;">
           <button class="btn btn-info btn-sm" style="width:auto;" onclick="editFisItem(${index})">✏️ Düzenle</button>
           <button class="btn btn-dark btn-sm" style="width:auto;" onclick="removeFromGoodsReceipt(${index})">Çıkar</button>
@@ -4199,7 +3862,6 @@ function saveWholesalerEdit() {
 function renderGrid() {
   const grid = document.getElementById('grid');
   const search = document.getElementById('search').value.toLowerCase();
-  const categoryFilter = document.getElementById('category-filter').value;
 
   if (search !== lastGridSearch) {
     gridCurrentPage = 1;
@@ -4218,13 +3880,13 @@ function renderGrid() {
     const pLoc = p.location ? p.location.toLowerCase() : '';
     const pBrand = p.brand ? p.brand.toLowerCase() : '';
 
-    if (categoryFilter && p.category !== categoryFilter) return;
-
     if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
       count++;
       units += parseFloat(p.qty || 0);
+
       const itemCost = p.costPrice != null ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
       value += parseFloat(p.qty || 0) * itemCost;
+
       matchedProducts.push(p);
     }
   });
@@ -4232,43 +3894,49 @@ function renderGrid() {
   const visibleCount = Math.min(matchedProducts.length, gridCurrentPage * GRID_PAGE_SIZE);
   const pageProducts = matchedProducts.slice(0, visibleCount);
   const matchedCodes = [];
+
   const htmlParts = [];
 
   pageProducts.forEach(p => {
     matchedCodes.push(p.code);
     const isLow = p.qty <= 5;
+
     let editActions = '';
     if (canEdit) {
       editActions = `
-        <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--border); padding-top:8px;">
+        <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--steel-line); padding-top:8px;">
           <button class="sm-btn" onclick="openEditModal('${p.code}')">✏️ Düzenle</button>
-          ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--danger);">🗑️ Sil</button>` : ''}
+          ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--rust);">🗑️ Sil</button>` : ''}
         </div>
       `;
     }
+
     htmlParts.push(`
       <div class="tag ${isLow ? 'low' : ''}" id="card-${p.code}">
         <div class="tag-header">
           <div>
             <div class="tag-title">${p.name}</div>
             <div class="tag-code">${p.code}</div>
-            <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--primary-light); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
+            <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
           </div>
           <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
             <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
-            <button class="sm-btn" onclick="printBarcodeLabel('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🏷️ Barkod</button>
+            <button class="sm-btn" onclick="printBarcodeLabel('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🏷️ Barkod Yazıcı</button>
           </div>
         </div>
+
         <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
         <button class="qr-toggle-link" onclick="toggleQR('${p.code}')">🔳 Karekodu Görüntüle</button>
         <div class="qr-box-mini hidden" id="grid-qr-${p.code}"></div>
+
         <div class="price-info-box">
-           <span>Birim Fiyatı: <strong style="color:var(--primary);font-size:14px;">₺${formatMoney(p.price || 0)}</strong></span>
+           <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
            <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
         </div>
+
         <div class="qty-control">
           <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
-          <div class="qty-val">${p.qty} <span style="font-size:10px;font-weight:400;color:var(--text-light);">${p.unit || 'Adet'}</span></div>
+          <div class="qty-val">${p.qty} <span style="font-size:10px;font-family:'Inter';color:var(--steel);">${p.unit || 'Adet'}</span></div>
           <button class="qty-btn" onclick="updateQty('${p.code}', 1)" ${!canEdit ? 'disabled' : ''}>+</button>
         </div>
         ${editActions}
@@ -4345,7 +4013,7 @@ function renderImportMapping(headers) {
     `;
   });
   html += `</div>`;
-  html += `<div id="import-barcode-warning" style="display:none; margin-top:10px; padding:8px; background:#FFF6E9; border:1px solid #E8C27A; border-radius:3px; font-size:11px; color:var(--text);">⚠️ <b>Barkod sütunu seçilmedi!</b> Dosyanızdaki gerçek barkodlar kaydedilmeyecek, tüm ürünlere sistem tarafından rastgele kod atanacak. Barkodlarınız varsa yukarıdan "Barkod / Stok Kodu" alanı için doğru sütunu seçin.</div>`;
+  html += `<div id="import-barcode-warning" style="display:none; margin-top:10px; padding:8px; background:#FFF6E9; border:1px solid #E8C27A; border-radius:3px; font-size:11px; color:var(--charcoal);">⚠️ <b>Barkod sütunu seçilmedi!</b> Dosyanızdaki gerçek barkodlar kaydedilmeyecek, tüm ürünlere sistem tarafından rastgele kod atanacak. Barkodlarınız varsa yukarıdan "Barkod / Stok Kodu" alanı için doğru sütunu seçin.</div>`;
   box.innerHTML = html;
   box.style.display = 'block';
   onImportMappingChange();
@@ -4403,7 +4071,7 @@ document.getElementById('bulk-import-file').addEventListener('change', (e) => {
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
       if (rows.length === 0) {
-        statusEl.innerHTML = `<span style="color:var(--danger);">Dosyada okunacak satır bulunamadı.</span>`;
+        statusEl.innerHTML = `<span style="color:var(--rust);">Dosyada okunacak satır bulunamadı.</span>`;
         return;
       }
       pendingImportRows = rows;
@@ -4413,7 +4081,7 @@ document.getElementById('bulk-import-file').addEventListener('change', (e) => {
       startBtn.style.display = 'inline-block';
       renderImportPreview(rows);
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--danger);">Dosya okunamadı: ${err.message}</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dosya okunamadı: ${err.message}</span>`;
     }
   };
   reader.readAsArrayBuffer(file);
@@ -4423,17 +4091,17 @@ function renderImportPreview(rows) {
   const box = document.getElementById('bulk-import-preview');
   const preview = rows.slice(0, 5);
   let html = `<div style="overflow-x:auto; margin-top:10px;"><table style="width:100%; font-size:11px; border-collapse:collapse; min-width:400px;">
-    <tr style="background:var(--light-bg); text-align:left;"><th style="padding:5px;">Ürün Adı</th><th style="padding:5px;">Barkod</th><th style="padding:5px;">Miktar</th><th style="padding:5px;">Fiyat</th><th style="padding:5px;">Kategori</th></tr>`;
+    <tr style="background:var(--concrete); text-align:left;"><th style="padding:5px;">Ürün Adı</th><th style="padding:5px;">Barkod</th><th style="padding:5px;">Miktar</th><th style="padding:5px;">Fiyat</th><th style="padding:5px;">Kategori</th></tr>`;
   preview.forEach(r => {
-    const name = getMappedValue(r, 'name') || '<span style="color:var(--danger);">BOŞ</span>';
+    const name = getMappedValue(r, 'name') || '<span style="color:var(--rust);">BOŞ</span>';
     const barcode = getMappedValue(r, 'barcode') || '-';
     const qty = getMappedValue(r, 'qty') || 0;
     const price = getMappedValue(r, 'price') || 0;
     const category = getMappedValue(r, 'category') || '-';
-    html += `<tr style="border-top:1px solid var(--border);"><td style="padding:5px;">${name}</td><td style="padding:5px; font-family:'IBM Plex Mono';">${barcode}</td><td style="padding:5px;">${qty}</td><td style="padding:5px;">${price}</td><td style="padding:5px;">${category}</td></tr>`;
+    html += `<tr style="border-top:1px solid var(--steel-line);"><td style="padding:5px;">${name}</td><td style="padding:5px; font-family:'IBM Plex Mono';">${barcode}</td><td style="padding:5px;">${qty}</td><td style="padding:5px;">${price}</td><td style="padding:5px;">${category}</td></tr>`;
   });
   html += `</table></div>`;
-  if (rows.length > 5) html += `<p style="font-size:10px; color:var(--text-light); margin-top:4px;">...ve ${rows.length - 5} satır daha</p>`;
+  if (rows.length > 5) html += `<p style="font-size:10px; color:var(--steel); margin-top:4px;">...ve ${rows.length - 5} satır daha</p>`;
   box.innerHTML = html;
 }
 
@@ -4511,27 +4179,27 @@ function renderImportConflictReview() {
   const barcodeConflicts = importRowPlans.filter(p => p.status === 'barcode_conflict');
   const nameConflicts = importRowPlans.filter(p => p.status === 'name_conflict');
 
-  let html = `<div style="background:var(--light-bg); border:1px solid var(--border); border-radius:var(--radius); padding:12px; margin-top:12px;">`;
+  let html = `<div style="background:#F7F5F0; border:1px solid var(--steel-line); border-radius:4px; padding:12px; margin-top:12px;">`;
   html += `<h4 style="margin:0 0 8px; font-family:'Oswald';">📋 Ön Kontrol Sonucu</h4>`;
   html += `<p style="font-size:12px; margin:2px 0;">✅ <b>${newRows.length}</b> satır tamamen yeni ürün olarak eklenecek.</p>`;
-  if (invalidRows.length) html += `<p style="font-size:12px; margin:2px 0; color:var(--danger);">⛔ <b>${invalidRows.length}</b> satır atlanacak (isim boş veya dosya içinde tekrar eden barkod).</p>`;
+  if (invalidRows.length) html += `<p style="font-size:12px; margin:2px 0; color:var(--rust);">⛔ <b>${invalidRows.length}</b> satır atlanacak (isim boş veya dosya içinde tekrar eden barkod).</p>`;
 
   if (barcodeConflicts.length) {
-    html += `<div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--border);">
-      <p style="font-size:12px; font-weight:600; color:var(--danger); margin-bottom:6px;">⚠️ ${barcodeConflicts.length} satırın barkodu, sistemde zaten kayıtlı bir ürünle birebir aynı. Bu satırlarda ne yapılsın?</p>
+    html += `<div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
+      <p style="font-size:12px; font-weight:600; color:var(--rust); margin-bottom:6px;">⚠️ ${barcodeConflicts.length} satırın barkodu, sistemde zaten kayıtlı bir ürünle birebir aynı. Bu satırlarda ne yapılsın?</p>
       <select id="global-barcode-conflict-action" onchange="applyGlobalBarcodeAction()">
         <option value="merge">Stok miktarlarını topla (mevcut stok + gelen miktar)</option>
         <option value="overwrite">Var olan ürünün bilgilerini güncelle, miktarı yeni değerle DEĞİŞTİR</option>
         <option value="skip">Bu satırları atla, dokunma</option>
       </select>
       <div style="max-height:150px; overflow-y:auto; margin-top:8px; font-size:11px;">
-        ${barcodeConflicts.map(p => `<div style="padding:3px 0; border-top:1px dashed var(--border);">${p.name} <span style="color:var(--text-light); font-family:'IBM Plex Mono';">(${p.barcode})</span> → sistemde kayıtlı: <b>${p.matchProduct.name}</b> (mevcut stok: ${p.matchProduct.qty ?? 0})</div>`).join('')}
+        ${barcodeConflicts.map(p => `<div style="padding:3px 0; border-top:1px dashed var(--steel-line);">${p.name} <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.barcode})</span> → sistemde kayıtlı: <b>${p.matchProduct.name}</b> (mevcut stok: ${p.matchProduct.qty ?? 0})</div>`).join('')}
       </div>
     </div>`;
   }
 
   if (nameConflicts.length) {
-    html += `<div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--border);">
+    html += `<div style="margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
       <p style="font-size:12px; font-weight:600; color:var(--info); margin-bottom:6px;">
         ⚡ Tümüne Uygula (${nameConflicts.length} adet isim benzerliği çakışması için)
       </p>
@@ -4542,8 +4210,8 @@ function renderImportConflictReview() {
       </select>
       <div style="max-height:240px; overflow-y:auto; margin-top:6px;">
         ${nameConflicts.map(p => `
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-top:1px dashed var(--border); font-size:11px; flex-wrap:wrap;">
-            <span>"${p.name}" ≈ sistemde <b>${p.matchProduct.name}</b> <span style="color:var(--text-light); font-family:'IBM Plex Mono';">(${p.matchProduct.code}, stok: ${p.matchProduct.qty ?? 0})</span></span>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:11px; flex-wrap:wrap;">
+            <span>"${p.name}" ≈ sistemde <b>${p.matchProduct.name}</b> <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.matchProduct.code}, stok: ${p.matchProduct.qty ?? 0})</span></span>
             <select style="width:auto; flex-shrink:0;" onchange="importRowPlans[${p.idx}].action=this.value">
               <option value="new" ${p.action === 'new' ? 'selected' : ''}>Farklı ürün, yeni olarak ekle</option>
               <option value="merge" ${p.action === 'merge' ? 'selected' : ''}>Aynı ürün, stoğu bu ürüne ekle</option>
@@ -4634,7 +4302,7 @@ function finalizeBulkImport() {
   const finishUp = () => {
     let resultHtml = `<span style="color:var(--success); font-weight:bold;">✅ Tamamlandı: ${newCount} yeni ürün eklendi, ${mergedCount} ürünün stoğu toplandı, ${overwrittenCount} ürün güncellendi.</span>`;
     if (skippedCount > 0 || errorRows.length > 0) {
-      resultHtml += `<div style="margin-top:6px; color:var(--danger); font-size:11px;">${skippedCount} satır atlandı.${errorRows.length ? '<br>' + errorRows.slice(0, 15).join('<br>') : ''}</div>`;
+      resultHtml += `<div style="margin-top:6px; color:var(--rust); font-size:11px;">${skippedCount} satır atlandı.${errorRows.length ? '<br>' + errorRows.slice(0, 15).join('<br>') : ''}</div>`;
     }
     statusEl.innerHTML = resultHtml;
     pendingImportRows = null;
@@ -4651,7 +4319,7 @@ function finalizeBulkImport() {
 
   db.update(updates, (err) => {
     if (err) {
-      statusEl.innerHTML = `<span style="color:var(--danger);">Yükleme hatası: ${err.message}</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Yükleme hatası: ${err.message}</span>`;
       return;
     }
     if (qtyIncrements.length === 0) { finishUp(); return; }
@@ -4663,7 +4331,7 @@ function finalizeBulkImport() {
         if (err2) hadError = true;
         remaining--;
         if (remaining === 0) {
-          if (hadError) statusEl.innerHTML = `<span style="color:var(--danger);">Bazı stok toplama işlemlerinde hata oluştu, lütfen kontrol edin.</span>`;
+          if (hadError) statusEl.innerHTML = `<span style="color:var(--rust);">Bazı stok toplama işlemlerinde hata oluştu, lütfen kontrol edin.</span>`;
           finishUp();
         }
       });
@@ -4698,7 +4366,7 @@ document.getElementById('barcode-fix-file').addEventListener('change', (e) => {
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
       if (rows.length === 0) {
-        statusEl.innerHTML = `<span style="color:var(--danger);">Dosyada okunacak satır bulunamadı.</span>`;
+        statusEl.innerHTML = `<span style="color:var(--rust);">Dosyada okunacak satır bulunamadı.</span>`;
         return;
       }
       pendingBarcodeFixRows = rows;
@@ -4707,7 +4375,7 @@ document.getElementById('barcode-fix-file').addEventListener('change', (e) => {
       statusEl.innerHTML = `<b>${rows.length}</b> satır okundu. Sütun eşleştirmesini kontrol edip "Eşleşmeleri Bul" butonuna basın.`;
       analyzeBtn.style.display = 'inline-block';
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--danger);">Dosya okunamadı: ${err.message}</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dosya okunamadı: ${err.message}</span>`;
     }
   };
   reader.readAsArrayBuffer(file);
@@ -4780,19 +4448,19 @@ function renderBarcodeFixReview() {
   if (!box || !barcodeFixPlans) return;
 
   if (barcodeFixPlans.length === 0) {
-    box.innerHTML = `<p style="font-size:12px; color:var(--text-light); margin-top:12px;">Eşleşme bulunamadı. Ürün adlarının dosyanızla sistemdekiyle örtüştüğünden ve barkodların sistemde henüz kayıtlı olmadığından emin olun.</p>`;
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); margin-top:12px;">Eşleşme bulunamadı. Ürün adlarının dosyanızla sistemdekiyle örtüştüğünden ve barkodların sistemde henüz kayıtlı olmadığından emin olun.</p>`;
     box.style.display = 'block';
     return;
   }
 
-  let html = `<div style="background:var(--light-bg); border:1px solid var(--border); border-radius:var(--radius); padding:12px; margin-top:12px;">`;
+  let html = `<div style="background:#F7F5F0; border:1px solid var(--steel-line); border-radius:4px; padding:12px; margin-top:12px;">`;
   html += `<p style="font-size:12px; font-weight:600; margin-bottom:8px;">🔗 ${barcodeFixPlans.length} ürün için eşleşme bulundu. Onaylamak istemediklerinizin işaretini kaldırın:</p>`;
   html += `<div style="max-height:280px; overflow-y:auto;">`;
   barcodeFixPlans.forEach((p, i) => {
     html += `
-      <div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--border); font-size:11px;">
+      <div style="display:flex; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line); font-size:11px;">
         <input type="checkbox" checked style="width:auto;" onchange="barcodeFixPlans[${i}].include=this.checked">
-        <span style="flex:1;">${p.matchProduct.name} <span style="color:var(--text-light); font-family:'IBM Plex Mono';">(${p.oldCode})</span> → <b>${p.barcode}</b></span>
+        <span style="flex:1;">${p.matchProduct.name} <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.oldCode})</span> → <b>${p.barcode}</b></span>
       </div>
     `;
   });
@@ -4838,7 +4506,7 @@ async function applyBarcodeFix() {
     }
   }
 
-  statusEl.innerHTML = `<span style="color:var(--success); font-weight:bold;">✅ ${success} ürüne barkod atandı.</span>${failed ? `<br><span style="color:var(--danger);">${failed} üründe hata oluştu.</span>` : ''}`;
+  statusEl.innerHTML = `<span style="color:var(--success); font-weight:bold;">✅ ${success} ürüne barkod atandı.</span>${failed ? `<br><span style="color:var(--rust);">${failed} üründe hata oluştu.</span>` : ''}`;
   showToast(`${success} ürüne barkod atandı!`);
 
   pendingBarcodeFixRows = null;
@@ -4883,7 +4551,7 @@ function openBarcodeLookupScanner() {
     () => {}
   ).catch((err) => {
     document.getElementById('f-barcode-lookup-status').innerHTML =
-      `<span style="color:var(--danger);">Kamera açılamadı: ${err}</span>`;
+      `<span style="color:var(--rust);">Kamera açılamadı: ${err}</span>`;
   });
 }
 
@@ -4922,7 +4590,7 @@ function openFisBarcodeScanner() {
     () => {}
   ).catch((err) => {
     document.getElementById('fis-barcode-lookup-status').innerHTML =
-      `<span style="color:var(--danger);">Kamera açılamadı: ${err}</span>`;
+      `<span style="color:var(--rust);">Kamera açılamadı: ${err}</span>`;
   });
 }
 
@@ -4977,7 +4645,7 @@ async function fetchUpcItemDb(code) {
 async function lookupFisBarcode() {
   const code = document.getElementById('fis-barcode-lookup').value.trim();
   const statusEl = document.getElementById('fis-barcode-lookup-status');
-  if (!code) { statusEl.innerHTML = '<span style="color:var(--danger);">Önce bir barkod numarası girin ya da okutun.</span>'; return; }
+  if (!code) { statusEl.innerHTML = '<span style="color:var(--rust);">Önce bir barkod numarası girin ya da okutun.</span>'; return; }
 
   statusEl.textContent = "Aranıyor...";
   setFisPendingBarcode('');
@@ -5008,13 +4676,13 @@ async function lookupFisBarcode() {
     if (resp.status === 429) {
       setFisPendingBarcode(code);
       checkFisProductMatch();
-      statusEl.innerHTML = `<span style="color:var(--danger); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkı dolmuş.</span> Malzeme adını elle girin — barkod (${code}) yine de ürün kodu olarak kaydedilecek.`;
+      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkı dolmuş.</span> Malzeme adını elle girin — barkod (${code}) yine de ürün kodu olarak kaydedilecek.`;
       return;
     }
     if (!resp.ok) {
       setFisPendingBarcode(code);
       checkFisProductMatch();
-      statusEl.innerHTML = `<span style="color:var(--danger); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Malzeme adını elle girin, barkod (${code}) yine de kaydedilecek.`;
+      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Malzeme adını elle girin, barkod (${code}) yine de kaydedilecek.`;
       return;
     }
 
@@ -5033,19 +4701,19 @@ async function lookupFisBarcode() {
     } else {
       setFisPendingBarcode(code);
       checkFisProductMatch();
-      statusEl.innerHTML = `<span style="color:var(--text-light);">Bu barkod hiçbir yerde bulunamadı. Malzeme adını elle girip fişe ekleyin — barkod (${code}) yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod hiçbir yerde bulunamadı. Malzeme adını elle girip fişe ekleyin — barkod (${code}) yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
     }
   } catch (err) {
     setFisPendingBarcode(code);
     checkFisProductMatch();
-    statusEl.innerHTML = `<span style="color:var(--danger);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
+    statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
   }
 }
 
 async function lookupBarcode() {
   const code = document.getElementById('f-barcode-lookup').value.trim();
   const statusEl = document.getElementById('f-barcode-lookup-status');
-  if (!code) { statusEl.innerHTML = '<span style="color:var(--danger);">Önce bir barkod numarası girin ya da okutun.</span>'; return; }
+  if (!code) { statusEl.innerHTML = '<span style="color:var(--rust);">Önce bir barkod numarası girin ya da okutun.</span>'; return; }
 
   statusEl.textContent = "Aranıyor...";
   document.getElementById('f-code').value = code;
@@ -5064,14 +4732,14 @@ async function lookupBarcode() {
     const resp = await fetchUpcItemDb(code);
 
     if (resp.status === 429) {
-      statusEl.innerHTML = `<span style="color:var(--danger); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkın (100) dolmuş.</span> Barkod numarası dolduruldu — ürün adını elle girip kaydet, <b>kendi hafızamıza kaydedilecek ve bir dahaki sefere hiç sorgu harcamadan tanınacak.</b> Dış sorgu hakkı ertesi gün yeniden açılıyor.`;
+      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkın (100) dolmuş.</span> Barkod numarası dolduruldu — ürün adını elle girip kaydet, <b>kendi hafızamıza kaydedilecek ve bir dahaki sefere hiç sorgu harcamadan tanınacak.</b> Dış sorgu hakkı ertesi gün yeniden açılıyor.`;
       return;
     }
 
     if (!resp.ok) {
       const rawText = await resp.text().catch(() => '(okunamadı)');
-      statusEl.innerHTML = `<span style="color:var(--danger); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Barkod numarası dolduruldu, ürün adını elle girin.
-        <details style="margin-top:6px; font-size:10px; color:var(--text-light);"><summary style="cursor:pointer;">Teknik detay (ekran görüntüsü alıp gönderebilirsin)</summary>${String(rawText).slice(0,300)}</details>`;
+      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Barkod numarası dolduruldu, ürün adını elle girin.
+        <details style="margin-top:6px; font-size:10px; color:var(--steel);"><summary style="cursor:pointer;">Teknik detay (ekran görüntüsü alıp gönderebilirsin)</summary>${String(rawText).slice(0,300)}</details>`;
       return;
     }
 
@@ -5084,10 +4752,10 @@ async function lookupBarcode() {
       }
       statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${item.title || '-'}"${item.brand ? ' — ' + item.brand : ''}.</span> Kontrol edip fiyat/miktar/kategori girin. (Bu barkod artık kendi hafızamıza da kaydedildi.)`;
     } else {
-      statusEl.innerHTML = `<span style="color:var(--text-light);">Ne kendi hafızamızda ne dış veritabanında bulunamadı (kod: ${data && data.code ? data.code : 'bilinmiyor'}). Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
+      statusEl.innerHTML = `<span style="color:var(--steel);">Ne kendi hafızamızda ne dış veritabanında bulunamadı (kod: ${data && data.code ? data.code : 'bilinmiyor'}). Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
     }
   } catch (err) {
-    statusEl.innerHTML = `<span style="color:var(--danger);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
+    statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
   }
 }
 
@@ -5568,7 +5236,7 @@ function startScanner() {
       document.getElementById('search').value = code;
       renderGrid();
     } else {
-      document.getElementById('scan-result').innerHTML += `<p style="color:var(--danger);">Ürün sistemde bulunamadı.</p>`;
+      document.getElementById('scan-result').innerHTML += `<p style="color:var(--rust);">Ürün sistemde bulunamadı.</p>`;
     }
   }, (err) => {});
 }
@@ -5636,7 +5304,7 @@ function renderWholesalers() {
       <div class="tag" style="${isPassive ? 'opacity:0.6;' : ''}">
         <div class="tag-header">
           <div>
-            <div class="tag-title">${w.name} ${isPassive ? '<span style="font-size:11px; color:var(--danger); font-weight:600;">(PASİF)</span>' : ''}</div>
+            <div class="tag-title">${w.name} ${isPassive ? '<span style="font-size:11px; color:var(--rust); font-weight:600;">(PASİF)</span>' : ''}</div>
             <div class="tag-code">
               ${w.contact ? `👤 ${w.contact}<br>` : ''}
               📞 ${w.phone || '-'}${w.whatsapp ? ` | 💬 ${w.whatsapp}` : ''} | 📅 Ziyaret: ${w.day}<br>
@@ -5650,7 +5318,7 @@ function renderWholesalers() {
           ${currentRole === 'admin' ? `
             <div style="display:flex; gap:4px; flex-shrink:0;">
               <button class="sm-btn" style="color:var(--info);" onclick="openWholesalerEdit('${key}')">✏️ Düzenle</button>
-              <button class="sm-btn" style="color:var(--danger);" onclick="deleteWholesaler('${key}')">Sil</button>
+              <button class="sm-btn" style="color:var(--rust);" onclick="deleteWholesaler('${key}')">Sil</button>
             </div>
           ` : ''}
         </div>
@@ -5667,7 +5335,7 @@ function renderWholesalers() {
   });
 
   if (!grid.innerHTML) {
-    grid.innerHTML = '<p style="color:var(--text-light); font-size:13px;">Bu filtreye uyan toptancı yok.</p>';
+    grid.innerHTML = '<p style="color:var(--steel); font-size:13px;">Bu filtreye uyan toptancı yok.</p>';
   }
 }
 
@@ -5719,14 +5387,14 @@ function closeHistory() {
 
 function loadHistory(key) {
   const list = document.getElementById('history-list');
-  list.innerHTML = '<p style="font-size:12px; color:var(--text-light);">Yükleniyor...</p>';
+  list.innerHTML = '<p style="font-size:12px; color:var(--steel);">Yükleniyor...</p>';
   dbWholesalers.child(key).child('transactions').on('value', snap => {
     const data = snap.val() || {};
     const w = wholesalersData[key] || {};
     const isAdmin = currentRole === 'admin';
 
     let html = isAdmin ? `
-      <div style="margin-bottom:15px; background:var(--light-bg); padding:10px; border-radius:var(--radius);">
+      <div style="margin-bottom:15px; background:var(--concrete); padding:10px; border-radius:4px;">
          <label>İşlem Açıklaması</label>
          <input type="text" id="h-desc" placeholder="Örn: Mal Alımı / Yapılan Ödeme" style="margin-bottom:8px;">
          <div class="form-row" style="margin-bottom:8px;">
@@ -5751,12 +5419,12 @@ function loadHistory(key) {
             <div>${t.desc}</div>
             <div class="ru-time">${t.date}</div>
           </div>
-          <div style="font-family:'IBM Plex Mono'; font-weight:bold; color:${t.type === 'borc' ? 'var(--danger)' : 'var(--success)'}">
+          <div style="font-family:'IBM Plex Mono'; font-weight:bold; color:${t.type === 'borc' ? 'var(--rust)' : 'var(--success)'}">
             ${t.type === 'borc' ? '+' : '-'}₺${formatMoney(t.amount)}
           </div>
         </div>
       `;
-    }).join('') || '<p style="font-size:12px; color:var(--text-light); text-align:center; padding:10px 0;">Henüz hareket kaydı yok.</p>';
+    }).join('') || '<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hareket kaydı yok.</p>';
 
     list.innerHTML = html + `<div class="balance-box ${balance < 0 ? 'balance-negative' : 'balance-positive'}">Güncel Bakiye: ₺${formatMoney(balance)}</div>` + rows;
   });
