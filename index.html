@@ -3835,6 +3835,28 @@
     if (visible) visible.value = code || '';
   }
 
+  // Dış barkod veritabanına (upcitemdb) istek atar. Tarayıcı doğrudan isteği CORS/ağ nedeniyle
+  // engellerse ("Failed to fetch"), otomatik olarak bir CORS proxy üzerinden tekrar dener.
+  async function fetchUpcItemDb(code) {
+    const directUrl = `https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`;
+    try {
+      return await fetch(directUrl);
+    } catch (directErr) {
+      try {
+        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(directUrl)}`;
+        return await fetch(proxyUrl);
+      } catch (proxyErr) {
+        try {
+          const altProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
+          return await fetch(altProxyUrl);
+        } catch (altErr) {
+          // Üç yol da başarısız oldu — muhtemelen internet bağlantısı yok. Orijinal hatayı fırlat.
+          throw directErr;
+        }
+      }
+    }
+  }
+
   async function lookupFisBarcode() {
     const code = document.getElementById('fis-barcode-lookup').value.trim();
     const statusEl = document.getElementById('fis-barcode-lookup-status');
@@ -3864,7 +3886,7 @@
     } catch (e) { /* sessizce dış API'ye geç */ }
 
     try {
-      const resp = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+      const resp = await fetchUpcItemDb(code);
 
       if (resp.status === 429) {
         setFisPendingBarcode(code);
@@ -3899,7 +3921,7 @@
     } catch (err) {
       setFisPendingBarcode(code);
       checkFisProductMatch();
-      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b>. Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — proxy yolları da denendi). Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
     }
   }
 
@@ -3922,7 +3944,7 @@
     } catch (e) { /* hafıza okunamadıysa sessizce dış API'ye geç */ }
 
     try {
-      const resp = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`);
+      const resp = await fetchUpcItemDb(code);
 
       if (resp.status === 429) {
         statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkın (100) dolmuş.</span> Barkod numarası dolduruldu — ürün adını elle girip kaydet, <b>kendi hafızamıza kaydedilecek ve bir dahaki sefere hiç sorgu harcamadan tanınacak.</b> Dış sorgu hakkı ertesi gün yeniden açılıyor.`;
@@ -3948,7 +3970,7 @@
         statusEl.innerHTML = `<span style="color:var(--steel);">Ne kendi hafızamızda ne dış veritabanında bulunamadı (kod: ${data && data.code ? data.code : 'bilinmiyor'}). Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
       }
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b>. Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — proxy yolları da denendi). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
     }
   }
 
