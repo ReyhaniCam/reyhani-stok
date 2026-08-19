@@ -498,9 +498,26 @@
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Toptancı / Firma Ekle</h3>
         <div class="form-row">
           <div><label>Firma / Toptancı Adı</label><input type="text" id="w-name" placeholder="Örn: Koçtaş Hırdavat"></div>
-          <div><label>Telefon</label><input type="text" id="w-phone" placeholder="0555..."></div>
+          <div><label>Yetkili Kişi</label><input type="text" id="w-contact" placeholder="Örn: Ahmet Bey (satış temsilcisi)"></div>
         </div>
         <div class="form-row">
+          <div><label>Telefon</label><input type="text" id="w-phone" placeholder="0555..."></div>
+          <div><label>WhatsApp (farklıysa)</label><input type="text" id="w-whatsapp" placeholder="0555..."></div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Sattığı Ürün Grubu</label>
+            <select id="w-category">
+              <option value="Genel">Genel / Karışık</option>
+              <option value="Cam">Cam</option>
+              <option value="Hırdavat">Hırdavat</option>
+              <option value="Nalburiye">Nalburiye</option>
+              <option value="Boya-Vernik">Boya - Vernik</option>
+              <option value="Elektrik">Elektrik Malzemesi</option>
+              <option value="Alüminyum-PVC">Alüminyum / PVC</option>
+              <option value="Diğer">Diğer</option>
+            </select>
+          </div>
           <div>
             <label>Ziyaret Günü (Ne Zaman Gelir?)</label>
             <select id="w-day">
@@ -513,14 +530,63 @@
               <option value="Cumartesi">Cumartesi</option>
             </select>
           </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Ödeme Vadesi</label>
+            <select id="w-payment-term">
+              <option value="Peşin">Peşin</option>
+              <option value="7 Gün">7 Gün Vade</option>
+              <option value="15 Gün">15 Gün Vade</option>
+              <option value="30 Gün">30 Gün Vade</option>
+              <option value="45 Gün">45 Gün Vade</option>
+              <option value="60 Gün">60 Gün Vade</option>
+              <option value="Değişken">Değişken / Anlaşmaya Göre</option>
+            </select>
+          </div>
+          <div><label>Vergi No / Vergi Dairesi</label><input type="text" id="w-tax" placeholder="Örn: 1234567890 - Arsuz V.D."></div>
+        </div>
+        <div class="form-row">
+          <div><label>IBAN (Havale/EFT için)</label><input type="text" id="w-iban" placeholder="TR.. .. .... .... .... .... .."></div>
+          <div><label>Adres</label><input type="text" id="w-address" placeholder="Depo/mağaza adresi"></div>
+        </div>
+        <div class="form-row">
+          <div style="grid-column:1 / -1;"><label>Notlar</label><input type="text" id="w-notes" placeholder="Örn: iadeleri sadece Pazartesi kabul ediyor, min. sipariş 500₺ vb."></div>
+        </div>
+        <div class="form-row">
           <div style="display:flex; align-items:flex-end;">
             <button class="btn btn-dark" onclick="addWholesaler()">Toptancıyı Kaydet</button>
           </div>
         </div>
       </div>
       <h3 style="font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Cari Hesaplar ve Planlar</h3>
+      <div class="form-row" style="margin-bottom:10px;">
+        <div>
+          <label>Listele</label>
+          <select id="w-filter-status" onchange="renderWholesalers()">
+            <option value="aktif">Sadece Aktif Toptancılar</option>
+            <option value="hepsi">Hepsi (Aktif + Pasif)</option>
+            <option value="pasif">Sadece Pasif Toptancılar</option>
+          </select>
+        </div>
+        <div>
+          <label>Ürün Grubuna Göre Filtrele</label>
+          <select id="w-filter-category" onchange="renderWholesalers()">
+            <option value="">Tüm Ürün Grupları</option>
+            <option value="Genel">Genel / Karışık</option>
+            <option value="Cam">Cam</option>
+            <option value="Hırdavat">Hırdavat</option>
+            <option value="Nalburiye">Nalburiye</option>
+            <option value="Boya-Vernik">Boya - Vernik</option>
+            <option value="Elektrik">Elektrik Malzemesi</option>
+            <option value="Alüminyum-PVC">Alüminyum / PVC</option>
+            <option value="Diğer">Diğer</option>
+          </select>
+        </div>
+      </div>
       <div id="wholesalers-grid" class="grid"></div>
     </div>
+
 
     <!-- MALZEME FİŞİ (TOPTANCI MAL GİRİŞİ) TABI -->
     <div id="tab-fis" class="tab-content">
@@ -814,9 +880,26 @@
     <input type="hidden" id="we-key">
     <div class="form-row">
       <div><label>Firma / Toptancı Adı</label><input type="text" id="we-name"></div>
-      <div><label>Telefon</label><input type="text" id="we-phone"></div>
+      <div><label>Yetkili Kişi</label><input type="text" id="we-contact"></div>
     </div>
     <div class="form-row">
+      <div><label>Telefon</label><input type="text" id="we-phone"></div>
+      <div><label>WhatsApp (farklıysa)</label><input type="text" id="we-whatsapp"></div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Sattığı Ürün Grubu</label>
+        <select id="we-category">
+          <option value="Genel">Genel / Karışık</option>
+          <option value="Cam">Cam</option>
+          <option value="Hırdavat">Hırdavat</option>
+          <option value="Nalburiye">Nalburiye</option>
+          <option value="Boya-Vernik">Boya - Vernik</option>
+          <option value="Elektrik">Elektrik Malzemesi</option>
+          <option value="Alüminyum-PVC">Alüminyum / PVC</option>
+          <option value="Diğer">Diğer</option>
+        </select>
+      </div>
       <div>
         <label>Ziyaret Günü (Ne Zaman Gelir?)</label>
         <select id="we-day">
@@ -829,12 +912,44 @@
           <option value="Cumartesi">Cumartesi</option>
         </select>
       </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Ödeme Vadesi</label>
+        <select id="we-payment-term">
+          <option value="Peşin">Peşin</option>
+          <option value="7 Gün">7 Gün Vade</option>
+          <option value="15 Gün">15 Gün Vade</option>
+          <option value="30 Gün">30 Gün Vade</option>
+          <option value="45 Gün">45 Gün Vade</option>
+          <option value="60 Gün">60 Gün Vade</option>
+          <option value="Değişken">Değişken / Anlaşmaya Göre</option>
+        </select>
+      </div>
+      <div><label>Vergi No / Vergi Dairesi</label><input type="text" id="we-tax"></div>
+    </div>
+    <div class="form-row">
+      <div><label>IBAN (Havale/EFT için)</label><input type="text" id="we-iban"></div>
+      <div><label>Adres</label><input type="text" id="we-address"></div>
+    </div>
+    <div class="form-row">
+      <div style="grid-column:1 / -1;"><label>Notlar</label><input type="text" id="we-notes"></div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>Durum</label>
+        <select id="we-status">
+          <option value="aktif">Aktif</option>
+          <option value="pasif">Pasif (artık çalışmıyoruz)</option>
+        </select>
+      </div>
       <div style="display:flex; align-items:flex-end;">
         <button class="btn btn-dark" onclick="saveWholesalerEdit()">Değişiklikleri Kaydet</button>
       </div>
     </div>
   </div>
 </div>
+
 
 <div class="modal-overlay" id="history-modal" style="display:none;">
   <div class="modal-content">
@@ -2569,6 +2684,7 @@
     sel.innerHTML = '<option value="">-- Toptancı Seçin --</option>';
     Object.keys(wholesalersData).forEach(key => {
       const w = wholesalersData[key];
+      if ((w.status || 'aktif') === 'pasif') return; // pasif toptancılardan yeni mal girişi kaydedilmez
       const opt = document.createElement('option');
       opt.value = key;
       opt.textContent = w.name;
@@ -3068,8 +3184,17 @@
     if(!w) return;
     document.getElementById('we-key').value = key;
     document.getElementById('we-name').value = w.name || '';
+    document.getElementById('we-contact').value = w.contact || '';
     document.getElementById('we-phone').value = w.phone || '';
+    document.getElementById('we-whatsapp').value = w.whatsapp || '';
+    document.getElementById('we-category').value = w.category || 'Genel';
     document.getElementById('we-day').value = w.day || 'Belirsiz';
+    document.getElementById('we-payment-term').value = w.paymentTerm || 'Peşin';
+    document.getElementById('we-tax').value = w.tax || '';
+    document.getElementById('we-iban').value = w.iban || '';
+    document.getElementById('we-address').value = w.address || '';
+    document.getElementById('we-notes').value = w.notes || '';
+    document.getElementById('we-status').value = w.status || 'aktif';
     document.getElementById('wholesaler-edit-modal').style.display = 'flex';
   }
 
@@ -3081,13 +3206,24 @@
     if(currentRole !== 'admin') return;
     const key = document.getElementById('we-key').value;
     const name = document.getElementById('we-name').value.trim();
+    const contact = document.getElementById('we-contact').value.trim();
     const phone = document.getElementById('we-phone').value.trim();
+    const whatsapp = document.getElementById('we-whatsapp').value.trim();
+    const category = document.getElementById('we-category').value;
     const day = document.getElementById('we-day').value;
+    const paymentTerm = document.getElementById('we-payment-term').value;
+    const tax = document.getElementById('we-tax').value.trim();
+    const iban = document.getElementById('we-iban').value.trim();
+    const address = document.getElementById('we-address').value.trim();
+    const notes = document.getElementById('we-notes').value.trim();
+    const status = document.getElementById('we-status').value;
 
     if(!key) return;
     if(!name) { alert("Firma adı boş olamaz."); return; }
 
-    dbWholesalers.child(key).update({ name, phone, day }, (err) => {
+    dbWholesalers.child(key).update({
+      name, contact, phone, whatsapp, category, day, paymentTerm, tax, iban, address, notes, status
+    }, (err) => {
       if(!err) {
         showToast("Toptancı bilgileri güncellendi.");
         closeWholesalerEdit();
@@ -4476,16 +4612,28 @@
   function addWholesaler() {
     if(currentRole !== 'admin') return;
     const name = document.getElementById('w-name').value.trim();
+    const contact = document.getElementById('w-contact').value.trim();
     const phone = document.getElementById('w-phone').value.trim();
+    const whatsapp = document.getElementById('w-whatsapp').value.trim();
+    const category = document.getElementById('w-category').value;
     const day = document.getElementById('w-day').value;
-    
+    const paymentTerm = document.getElementById('w-payment-term').value;
+    const tax = document.getElementById('w-tax').value.trim();
+    const iban = document.getElementById('w-iban').value.trim();
+    const address = document.getElementById('w-address').value.trim();
+    const notes = document.getElementById('w-notes').value.trim();
+
     if(!name) { alert("Firma adı giriniz."); return; }
-    
-    dbWholesalers.push({ name, phone, day, balance: 0 }, (err) => {
+
+    dbWholesalers.push({
+      name, contact, phone, whatsapp, category, day, paymentTerm, tax, iban, address, notes,
+      status: 'aktif', balance: 0
+    }, (err) => {
       if(!err) {
         showToast("Toptancı eklendi!");
-        document.getElementById('w-name').value = '';
-        document.getElementById('w-phone').value = '';
+        ['w-name','w-contact','w-phone','w-whatsapp','w-tax','w-iban','w-address','w-notes'].forEach(id => {
+          document.getElementById(id).value = '';
+        });
       }
     });
   }
@@ -4494,16 +4642,35 @@
     const grid = document.getElementById('wholesalers-grid');
     if(!grid) return;
     grid.innerHTML = '';
-    
+
+    const statusFilterEl = document.getElementById('w-filter-status');
+    const categoryFilterEl = document.getElementById('w-filter-category');
+    const statusFilter = statusFilterEl ? statusFilterEl.value : 'aktif';
+    const categoryFilter = categoryFilterEl ? categoryFilterEl.value : '';
+
     Object.keys(wholesalersData).forEach(key => {
       const w = wholesalersData[key];
+      const status = w.status || 'aktif';
+      if (statusFilter === 'aktif' && status !== 'aktif') return;
+      if (statusFilter === 'pasif' && status !== 'pasif') return;
+      if (categoryFilter && (w.category || 'Genel') !== categoryFilter) return;
+
       const isNegative = w.balance < 0;
+      const isPassive = status === 'pasif';
       grid.innerHTML += `
-        <div class="tag">
+        <div class="tag" style="${isPassive ? 'opacity:0.6;' : ''}">
           <div class="tag-header">
             <div>
-              <div class="tag-title">${w.name}</div>
-              <div class="tag-code">📞 ${w.phone || '-'} | 📅 Ziyaret: ${w.day}</div>
+              <div class="tag-title">${w.name} ${isPassive ? '<span style="font-size:11px; color:var(--rust); font-weight:600;">(PASİF)</span>' : ''}</div>
+              <div class="tag-code">
+                ${w.contact ? `👤 ${w.contact}<br>` : ''}
+                📞 ${w.phone || '-'}${w.whatsapp ? ` | 💬 ${w.whatsapp}` : ''} | 📅 Ziyaret: ${w.day}<br>
+                🏷️ ${w.category || 'Genel'} | 💳 Vade: ${w.paymentTerm || 'Peşin'}
+                ${w.address ? `<br>📍 ${w.address}` : ''}
+                ${w.tax ? `<br>🧾 ${w.tax}` : ''}
+                ${w.iban ? `<br>🏦 ${w.iban}` : ''}
+                ${w.notes ? `<br>📝 ${w.notes}` : ''}
+              </div>
             </div>
             ${currentRole === 'admin' ? `
               <div style="display:flex; gap:4px; flex-shrink:0;">
@@ -4523,12 +4690,16 @@
         </div>
       `;
     });
+
+    if (!grid.innerHTML) {
+      grid.innerHTML = '<p style="color:var(--steel); font-size:13px;">Bu filtreye uyan toptancı yok.</p>';
+    }
   }
 
   function deleteWholesaler(key) {
     if (currentRole !== 'admin') return;
     const w = wholesalersData[key];
-    if (!confirm(`"${w ? w.name : ''}" toptancısını silmek istediğinize emin misiniz?`)) return;
+    if (!confirm(`"${w ? w.name : ''}" toptancısını kalıcı olarak silmek istediğinize emin misiniz?\n\nİpucu: Artık çalışmadığınız ama geçmiş cari hesabını (ekstresini) saklamak istediğiniz bir toptancı varsa, silmek yerine "Düzenle" ekranından durumunu "Pasif" yapmanız önerilir.`)) return;
     dbWholesalers.child(key).remove(() => showToast("Toptancı silindi."));
   }
 
