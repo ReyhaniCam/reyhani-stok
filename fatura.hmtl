@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <title>Reyhani Cam - Müşteri Fişi</title>
+    <style>
+        /* A4 ve Tablo düzeni için temel CSS */
+        body { font-family: Arial, sans-serif; padding: 2cm; }
+        .baslik { text-align: center; border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+        .bilgi-alani { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .toplam-alani { text-align: right; margin-top: 20px; font-weight: bold; font-size: 1.2em; }
+        
+        @media print {
+            body { padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="baslik">
+        <h1>REYHANİ CAM</h1>
+        <p>Hırdavat ve Cam Sanayi - Teslimat Fişi</p>
+    </div>
+
+    <div class="bilgi-alani">
+        <div><strong>Müşteri:</strong> <span id="musteriIsmi"></span></div>
+        <div>
+            <strong>Tarih:</strong> <span id="islemTarihi"></span><br>
+            <strong>Taahhüt:</strong> <span id="vadeSuresi"></span>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Ürün Adı</th>
+                <th>Miktar</th>
+                <th>B. Fiyat</th>
+                <th>Toplam</th>
+            </tr>
+        </thead>
+        <tbody id="urunListesi">
+            <!-- Ürünler buraya Javascript ile eklenecek -->
+        </tbody>
+    </table>
+
+    <div class="toplam-alani">
+        Genel Toplam: <span id="genelToplam"></span> ₺
+    </div>
+
+    <script>
+        // 1. Tarayıcı hafızasındaki siparişi çek
+        const kayitliVeri = localStorage.getItem("guncelSiparis");
+
+        if (kayitliVeri) {
+            const siparis = JSON.parse(kayitliVeri);
+
+            // 2. Müşteri ve tarih bilgilerini ekrana yazdır
+            document.getElementById("musteriIsmi").textContent = siparis.musteriAdi;
+            document.getElementById("islemTarihi").textContent = siparis.tarih;
+            document.getElementById("vadeSuresi").textContent = siparis.taahhutSuresi;
+            document.getElementById("genelToplam").textContent = siparis.genelToplam;
+
+            // 3. Ürünleri tabloya döngü ile ekle
+            const tabloGövdesi = document.getElementById("urunListesi");
+            siparis.urunler.forEach(urun => {
+                const satir = `<tr>
+                    <td>${urun.urunAdi}</td>
+                    <td>${urun.miktar}</td>
+                    <td>${urun.birimFiyat} ₺</td>
+                    <td>${urun.toplam} ₺</td>
+                </tr>`;
+                tabloGövdesi.innerHTML += satir;
+            });
+
+            // 4. Ekrana yerleştirme bittiğinde yazdırma penceresini otomatik aç
+            window.onload = function() {
+                window.print();
+            };
+        }
+    </script>
+</body>
+</html>
