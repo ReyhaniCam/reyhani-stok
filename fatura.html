@@ -82,5 +82,37 @@
             };
         }
     </script>
+    <script>
+    // Sayfa açıldığında hafızadaki veriyi çek
+    window.onload = function() {
+        const veriKimligi = localStorage.getItem("aktifCariHesap");
+
+        if (veriKimligi) {
+            const veri = JSON.parse(veriKimligi);
+
+            // Müşteri bilgilerini yerleştir
+            if(document.getElementById("isletmeAdi")) document.getElementById("isletmeAdi").innerText = veri.isletmeAdi || "";
+            if(document.getElementById("isletmeAdres")) document.getElementById("isletmeAdres").innerText = veri.adres || "";
+            if(document.getElementById("isletmeTel")) document.getElementById("isletmeTel").innerText = veri.telefon || "";
+
+            // Tablo satırlarını oluştur
+            const tabloGövde = document.getElementById("cariTabloGövde");
+            if (tabloGövde && veri.kalemler) {
+                tabloGövde.innerHTML = ""; // Örnek verileri temizle
+                
+                veri.kalemler.forEach(item => {
+                    const satir = `<tr>
+                        <td class="text-center">${item.tarih}</td>
+                        <td>${item.belgeno || '-'}</td>
+                        <td>${item.aciklama}</td>
+                        <td class="text-right">${item.borc ? item.borc + ' TL' : ''}</td>
+                        <td class="text-right">${item.alacak ? item.alacak + ' TL' : ''}</td>
+                    </tr>`;
+                    tabloGövde.innerHTML += satir;
+                });
+            }
+        }
+    };
+</script>
 </body>
 </html>
