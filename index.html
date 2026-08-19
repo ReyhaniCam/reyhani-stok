@@ -3835,26 +3835,43 @@
     if (visible) visible.value = code || '';
   }
 
-  // Dış barkod veritabanına (upcitemdb) istek atar. Tarayıcı doğrudan isteği CORS/ağ nedeniyle
-  // engellerse ("Failed to fetch"), otomatik olarak bir CORS proxy üzerinden tekrar dener.
+  // Dış barkod veritabanına (upcitemdb) istek atar. Doğrudan istek tarayıcıda CORS/ağ nedeniyle
+  // engellenirse ("Failed to fetch"), sırasıyla birkaç farklı CORS proxy yolu dener — çünkü
+  // ücretsiz proxy servisleri (corsproxy.io, allorigins vb.) zaman zaman yalnızca localhost/
+  // geliştirme ortamlarına izin veriyor veya kotaları doluyor; hepsi bloklanırsa hata fırlatılır.
   async function fetchUpcItemDb(code) {
     const directUrl = `https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`;
-    try {
-      return await fetch(directUrl);
-    } catch (directErr) {
+    const attempts = [
+      { url: directUrl },
+      { url: `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(directUrl)}` },
+      { url: `https://api.allorigins.win/get?url=${encodeURIComponent(directUrl)}`, wrapper: 'allorigins' },
+      { url: `https://corsproxy.io/?url=${encodeURIComponent(directUrl)}` },
+      { url: `https://thingproxy.freeboard.io/fetch/${directUrl}` }
+    ];
+
+    let lastErr = null;
+    for (const attempt of attempts) {
       try {
-        const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(directUrl)}`;
-        return await fetch(proxyUrl);
-      } catch (proxyErr) {
-        try {
-          const altProxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(directUrl)}`;
-          return await fetch(altProxyUrl);
-        } catch (altErr) {
-          // Üç yol da başarısız oldu — muhtemelen internet bağlantısı yok. Orijinal hatayı fırlat.
-          throw directErr;
+        const resp = await fetch(attempt.url);
+        if (attempt.wrapper === 'allorigins') {
+          // allorigins /get isteği {contents, status:{http_code}} şeklinde JSON'a sarar.
+          const wrapperData = await resp.json();
+          const httpCode = wrapperData && wrapperData.status ? wrapperData.status.http_code : resp.status;
+          const bodyText = wrapperData && wrapperData.contents != null ? wrapperData.contents : '';
+          return {
+            ok: httpCode >= 200 && httpCode < 300,
+            status: httpCode,
+            json: async () => JSON.parse(bodyText),
+            text: async () => bodyText
+          };
         }
+        return resp;
+      } catch (err) {
+        lastErr = err; // bu yol başarısız oldu, sıradaki yola geç
       }
     }
+    // Hiçbir yol çalışmadı.
+    throw lastErr || new Error('Tüm bağlantı yolları başarısız oldu.');
   }
 
   async function lookupFisBarcode() {
@@ -3921,7 +3938,7 @@
     } catch (err) {
       setFisPendingBarcode(code);
       checkFisProductMatch();
-      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — proxy yolları da denendi). Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
     }
   }
 
@@ -3970,7 +3987,7 @@
         statusEl.innerHTML = `<span style="color:var(--steel);">Ne kendi hafızamızda ne dış veritabanında bulunamadı (kod: ${data && data.code ? data.code : 'bilinmiyor'}). Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
       }
     } catch (err) {
-      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — proxy yolları da denendi). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
     }
   }
 
