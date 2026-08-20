@@ -304,6 +304,7 @@
       <div class="search-wrap">
         <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
         <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
+        <button class="btn btn-info btn-sm disabled-action" id="auto-update-btn" onclick="enableAutoStockUpdate()" title="Her stok giriş/çıkışında bu klasördeki dosyayı otomatik günceller">🔄 Otomatik Güncellemeyi Aç</button>
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
       </div>
       <div id="grid" class="grid"></div>
@@ -1605,6 +1606,53 @@ function logMovement(code, name, change, type) {
   const dateStr = new Date().toISOString().slice(0, 10);
   const timeStr = new Date().toLocaleTimeString('tr-TR');
   dbMovements.child(dateStr).push({ time: timeStr, code: code, name: name, change: change, type: type });
+  // Her giriş/çıkışta, otomatik güncelleme açıksa güncel stok Excel dosyasını sessizce yeniden yaz.
+  autoUpdateStockExcel();
+}
+
+let autoStockUpdateEnabled = false;
+
+// Kullanıcı bir kez klasör seçtiğinde, o andan itibaren her stok hareketinde
+// aynı dosya (Reyhani_Stok_Guncel.xlsx) sessizce yeniden yazılır — yani "kendini günceller".
+async function enableAutoStockUpdate() {
+  if (currentRole !== 'admin') return;
+  const dirHandle = await getReyhaniFolder();
+  if (!dirHandle) {
+    alert("Klasör seçilmedi. Otomatik güncelleme açılamadı.");
+    return;
+  }
+  autoStockUpdateEnabled = true;
+  const btn = document.getElementById('auto-update-btn');
+  if (btn) { btn.textContent = '✅ Otomatik Güncelleme Açık'; btn.classList.add('btn-success'); btn.classList.remove('btn-info'); }
+  showToast("Otomatik stok güncellemesi açıldı. Her giriş/çıkışta 'Reyhani_Stok_Guncel.xlsx' dosyası bu klasörde otomatik yenilenecek.");
+  autoUpdateStockExcel(); // ilk anlık güncel halini de hemen yaz
+}
+
+async function autoUpdateStockExcel() {
+  if (!autoStockUpdateEnabled || !reyhaniDirHandle) return;
+  try {
+    const dataRow = [["Ürün Kodu", "Ürün Adı", "Kategori", "Marka", "Miktar", "Birim", "Satış Fiyatı", "Geliş Fiyatı", "Konum", "Envanter (Maliyet)", "Son Güncelleme"]];
+    const now = new Date().toLocaleString('tr-TR');
+    Object.values(productsData).forEach(p => {
+      const cost = p.costPrice != null ? p.costPrice : (p.price || 0);
+      dataRow.push([
+        p.code, p.name, p.category || '', p.brand || '', p.qty, p.unit || 'Adet',
+        p.price, p.costPrice || '', p.location || '', parseFloat(p.qty) * cost, now
+      ]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(dataRow);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Stok");
+    // Sabit dosya adı: tarihe göre değişmez, her seferinde aynı dosyanın üzerine yazılır.
+    const fileHandle = await reyhaniDirHandle.getFileHandle('Reyhani_Stok_Guncel.xlsx', { create: true });
+    const writable = await fileHandle.createWritable();
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/octet-stream' });
+    await writable.write(blob);
+    await writable.close();
+  } catch (err) {
+    console.error("Otomatik stok güncelleme hatası:", err);
+  }
 }
 
 async function toggleAuth() {
@@ -1632,6 +1680,7 @@ function updateAuthUI() {
   const authBtn = document.getElementById('auth-btn');
   const addCard = document.getElementById('add-form-card');
   const backupBtn = document.getElementById('backup-btn');
+  const autoUpdateBtn = document.getElementById('auto-update-btn');
   const printAllBtn = document.getElementById('print-all-btn');
   
   document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
@@ -1647,7 +1696,7 @@ function updateAuthUI() {
 
   if(currentRole === 'admin') {
     statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
-    addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action');
+    addCard.classList.remove('disabled-action'); backupBtn.classList.remove('disabled-action'); autoUpdateBtn.classList.remove('disabled-action');
     printAllBtn.style.display = 'inline-block';
     document.getElementById('manager-task-section').style.display = 'block';
     document.getElementById('toggle-stand-form-btn').style.display = 'inline-block';
@@ -1660,7 +1709,7 @@ function updateAuthUI() {
     document.getElementById('recent-updates-card').style.display = 'block';
   } else if(currentRole === 'staff') {
     statusBadge.textContent = "Çalışan Modu"; statusBadge.className = "admin-badge role-staff"; authBtn.textContent = "Çıkış Yap";
-    addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
+    addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action'); autoUpdateBtn.classList.add('disabled-action');
     printAllBtn.style.display = 'inline-block';
     layoutEditMode = false;
     document.getElementById('manager-task-section').style.display = 'none';
@@ -1675,7 +1724,7 @@ function updateAuthUI() {
     document.getElementById('recent-updates-card').style.display = 'none';
   } else {
     statusBadge.textContent = "Ziyaretçi Modu"; statusBadge.className = "admin-badge role-guest"; authBtn.textContent = "Giriş Yap";
-    addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action');
+    addCard.classList.add('disabled-action'); backupBtn.classList.add('disabled-action'); autoUpdateBtn.classList.add('disabled-action');
     printAllBtn.style.display = 'none';
     layoutEditMode = false;
     document.getElementById('manager-task-section').style.display = 'none';
