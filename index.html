@@ -22,247 +22,192 @@
 
 <style>
   :root{
-    --concrete:#F3F6FB; --paper:#FFFFFF; --charcoal:#182337;
-    --steel:#4B5768; --steel-line:#D9E2EC; --safety:#FFB020;
-    --rust:#E8482C; --success:#1DB876; --info:#2E7DF7; --radius:10px;
-    --glass:#0EA5E9; --violet:#7C5CFC;
+    --bg:#F8FAFC; --paper:#FFFFFF; --charcoal:#0F172A; --steel:#475569;
+    --steel-line:#E2E8F0; --safety:#F59E0B; --rust:#EF4444; --success:#10B981;
+    --info:#3B82F6; --glass:#0EA5E9; --violet:#8B5CF6; --radius:12px;
+    --shadow:0 4px 20px rgba(15,23,42,0.08);
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;background:var(--concrete);color:var(--charcoal);font-family:'Inter',sans-serif;font-weight:500;font-size:15.5px;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--charcoal);font-family:'Inter',sans-serif;font-weight:500;font-size:15.5px;}
 
-  .app{max-width:900px;margin:0 auto;padding-bottom:60px;}
+  .app{max-width:960px;margin:0 auto;padding-bottom:60px;}
 
   header{
-    background:linear-gradient(120deg,var(--charcoal) 0%,#233458 55%,var(--glass) 130%);
-    color:#fff;padding:18px 20px;
+    background:linear-gradient(135deg,var(--charcoal) 0%,#1E293B 60%,var(--glass) 130%);
+    color:#fff;padding:18px 24px;
     display:flex;justify-content:space-between;align-items:center;
-    position:sticky;top:0;z-index:40;box-shadow:0 6px 18px rgba(14,20,34,0.25);
+    position:sticky;top:0;z-index:40;box-shadow:0 6px 20px rgba(15,23,42,0.25);
+    border-bottom:2px solid rgba(255,255,255,0.1);
   }
-  .brand h1{font-family:'Oswald',sans-serif;font-size:19px;margin:0;letter-spacing:0.5px;text-transform:uppercase;}
+  .brand h1{font-family:'Oswald',sans-serif;font-size:20px;margin:0;letter-spacing:0.5px;text-transform:uppercase;}
   .brand span{display:block;font-size:11px;color:#BFD4FF;}
 
-  .auth-status{display:flex;align-items:center;gap:10px;}
-  .admin-badge{font-size:11px;padding:5px 12px;border-radius:14px;font-weight:700;box-shadow:0 2px 6px rgba(0,0,0,0.15);}
+  .auth-status{display:flex;align-items:center;gap:12px;}
+  .admin-badge{font-size:11px;padding:5px 14px;border-radius:20px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.15);}
   .admin-badge.role-admin{background:var(--success);color:#fff;}
   .admin-badge.role-staff{background:var(--info);color:#fff;}
   .admin-badge.role-guest{background:var(--steel);color:#fff;}
 
-  .nav-tabs{display:flex;background:var(--paper);border-bottom:2px solid var(--steel-line);overflow-x:auto;box-shadow:0 2px 6px rgba(24,35,55,0.05);}
+  .nav-tabs{display:flex;background:var(--paper);border-bottom:2px solid var(--steel-line);overflow-x:auto;box-shadow:var(--shadow);}
   .tab-btn{
-    flex:1; padding:14px 10px; text-align:center; font-family:'Oswald',sans-serif;
-    font-size:14px; text-transform:uppercase; border:none; background:none;
+    flex:1; padding:14px 12px; text-align:center; font-family:'Oswald',sans-serif;
+    font-size:13px; text-transform:uppercase; border:none; background:none;
     cursor:pointer; color:var(--steel); border-bottom:4px solid transparent; white-space:nowrap;
-    transition:all .15s ease;
+    transition:all .2s ease;
   }
-  .tab-btn:hover{background:var(--concrete);}
+  .tab-btn:hover{background:var(--bg);}
   .tab-btn.active{color:#fff;background:var(--safety);border-bottom-color:var(--rust);font-weight:700;box-shadow:inset 0 -2px 0 rgba(0,0,0,0.08);}
 
-  main{padding:16px;}
+  main{padding:20px;}
   .tab-content{display:none;}
   .tab-content.active{display:block;}
 
-  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
-  .summary .card{background:var(--paper);border:2px solid var(--steel-line);padding:12px 8px;border-radius:var(--radius);text-align:center;box-shadow:0 2px 8px rgba(24,35,55,0.06);}
-  .summary .num{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:18px;color:var(--glass);}
-  .summary .lbl{font-size:10.5px;color:var(--steel);text-transform:uppercase;margin-top:3px;font-weight:600;}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+  .summary .card{background:var(--paper);border:1px solid var(--steel-line);padding:14px 10px;border-radius:var(--radius);text-align:center;box-shadow:var(--shadow);}
+  .summary .num{font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:20px;color:var(--glass);}
+  .summary .lbl{font-size:11px;color:var(--steel);text-transform:uppercase;margin-top:4px;font-weight:600;}
 
-  .form-card{background:var(--paper);border:2px solid var(--steel-line);border-radius:var(--radius);padding:18px;margin-bottom:18px;box-shadow:0 3px 10px rgba(24,35,55,0.06);}
-  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
-  label{display:block;font-size:12px;color:var(--steel);margin-bottom:5px;text-transform:uppercase;font-weight:700;letter-spacing:0.2px;}
+  .form-card{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:20px;margin-bottom:20px;box-shadow:var(--shadow);}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;}
+  label{display:block;font-size:12px;color:var(--steel);margin-bottom:5px;text-transform:uppercase;font-weight:700;letter-spacing:0.3px;}
   input,select{
-    width:100%;padding:12px;border:2px solid var(--steel-line);border-radius:var(--radius);
-    font-family:'Inter';font-size:15px;background:#FCFDFF;color:var(--charcoal);font-weight:600;
+    width:100%;padding:12px 14px;border:2px solid var(--steel-line);border-radius:var(--radius);
+    font-family:'Inter';font-size:15px;background:#FCFDFF;color:var(--charcoal);font-weight:500;
+    transition:border .2s, box-shadow .2s;
   }
-  input:focus,select:focus{outline:none;border-color:var(--glass);box-shadow:0 0 0 3px rgba(14,165,233,0.18);}
+  input:focus,select:focus{outline:none;border-color:var(--glass);box-shadow:0 0 0 4px rgba(14,165,233,0.15);}
   .btn{
     font-family:'Oswald',sans-serif;text-transform:uppercase;
     font-size:14px;border:none;padding:14px;border-radius:var(--radius);cursor:pointer;width:100%;font-weight:700;
-    box-shadow:0 3px 0 rgba(0,0,0,0.15);transition:transform .08s ease;
+    transition:transform .08s ease, box-shadow .2s;
+    box-shadow:0 4px 0 rgba(0,0,0,0.1);
   }
-  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,0.15);}
-  .btn-primary{background:var(--safety);color:var(--charcoal);font-weight:700;}
+  .btn:active{transform:translateY(2px);box-shadow:0 1px 0 rgba(0,0,0,0.1);}
+  .btn:hover{filter:brightness(1.05);}
+  .btn-primary{background:var(--safety);color:var(--charcoal);}
   .btn-dark{background:var(--charcoal);color:#fff;}
   .btn-success{background:var(--success);color:#fff;}
   .btn-info{background:var(--info);color:#fff;}
   .btn-danger{background:var(--rust);color:#fff;}
-  .btn-sm{padding:8px 12px;font-size:12px;width:auto;box-shadow:0 2px 0 rgba(0,0,0,0.15);}
+  .btn-sm{padding:8px 16px;font-size:12px;width:auto;box-shadow:0 2px 0 rgba(0,0,0,0.1);}
 
-  .search-wrap{margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;}
-  .grid{display:grid;grid-template-columns:1fr;gap:12px;}
-  @media(min-width:600px){.grid{grid-template-columns:1fr 1fr;}}
+  .search-wrap{margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+  .search-wrap input{flex:2;min-width:180px;}
+  .search-wrap select{flex:1;min-width:140px;}
 
-  .tag{background:var(--paper);border:2px solid var(--steel-line);border-radius:var(--radius);padding:16px;position:relative;overflow-wrap:anywhere;box-shadow:0 3px 10px rgba(24,35,55,0.06);}
-  .tag.low{border-color:var(--rust);box-shadow:0 3px 10px rgba(232,72,44,0.15);}
-  .tag.highlight{border:2px solid var(--safety);box-shadow:0 0 14px rgba(255,176,32,0.55);}
-  .tag-header{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;}
-  .tag-header > div:first-child{min-width:0;flex:1;}
+  .grid{display:grid;grid-template-columns:1fr;gap:16px;}
+  @media(min-width:640px){.grid{grid-template-columns:1fr 1fr;}}
+
+  .tag{background:var(--paper);border:1px solid var(--steel-line);border-radius:var(--radius);padding:18px;position:relative;overflow-wrap:anywhere;box-shadow:var(--shadow);transition:transform .15s ease, box-shadow .15s;}
+  .tag:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(15,23,42,0.1);}
+  .tag.low{border-color:var(--rust);box-shadow:0 4px 16px rgba(239,68,68,0.15);}
+  .tag.highlight{border:2px solid var(--safety);box-shadow:0 0 0 4px rgba(245,158,11,0.3);}
+  .tag-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;}
   .tag-title{font-weight:800;font-size:16px;overflow-wrap:anywhere;color:var(--charcoal);}
-  .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--steel);word-break:break-all;overflow-wrap:anywhere;line-height:1.6;font-weight:600;}
-  
-  .qr-box-mini{display:flex;justify-content:center;margin:10px 0;padding:6px;background:#fff;border:1px dashed var(--steel-line);width:80px;height:80px;margin-left:auto;margin-right:auto;}
+  .tag-code{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--steel);word-break:break-all;line-height:1.6;font-weight:500;}
+
+  .qr-box-mini{display:flex;justify-content:center;margin:10px auto;padding:6px;background:#fff;border:1px dashed var(--steel-line);width:80px;height:80px;}
   .qr-box-mini img{width:100%!important;height:100%!important;}
   .qr-box-mini.hidden{display:none;}
 
-  .product-photo{
-    width:100%; height:120px; border-radius:3px; overflow:hidden; margin-bottom:8px;
-    background:var(--concrete); display:flex; align-items:center; justify-content:center;
-    border:1px solid var(--steel-line);
-  }
-  .product-photo img{width:100%; height:100%; object-fit:cover; display:block; cursor:pointer;}
-  .product-photo .photo-placeholder{font-size:26px; color:var(--steel-line);}
-  .qr-toggle-link{display:block; text-align:center; font-size:11px; color:var(--info); text-decoration:underline; background:none; border:none; cursor:pointer; width:100%; padding:4px 0;}
+  .product-photo{width:100%;height:120px;border-radius:6px;overflow:hidden;margin-bottom:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;border:1px solid var(--steel-line);}
+  .product-photo img{width:100%;height:100%;object-fit:cover;display:block;cursor:pointer;}
+  .product-photo .photo-placeholder{font-size:28px;color:var(--steel-line);}
+  .qr-toggle-link{display:block;text-align:center;font-size:11px;color:var(--info);text-decoration:underline;background:none;border:none;cursor:pointer;width:100%;padding:4px 0;}
 
-  .edit-photo-row{display:flex; gap:12px; align-items:center; margin-bottom:12px; background:#F7F5F0; padding:10px; border-radius:3px;}
-  .edit-photo-preview{width:64px; height:64px; border-radius:3px; overflow:hidden; background:var(--concrete); flex-shrink:0; display:flex; align-items:center; justify-content:center; border:1px solid var(--steel-line);}
-  .edit-photo-preview img{width:100%; height:100%; object-fit:cover; cursor:pointer;}
-  .edit-photo-preview .photo-placeholder{font-size:22px; color:var(--steel-line);}
+  .edit-photo-row{display:flex;gap:14px;align-items:center;margin-bottom:16px;background:#F1F5F9;padding:12px;border-radius:8px;}
+  .edit-photo-preview{width:72px;height:72px;border-radius:6px;overflow:hidden;background:var(--bg);flex-shrink:0;display:flex;align-items:center;justify-content:center;border:1px solid var(--steel-line);}
+  .edit-photo-preview img{width:100%;height:100%;object-fit:cover;cursor:pointer;}
+  .edit-photo-preview .photo-placeholder{font-size:24px;color:var(--steel-line);}
 
-  .layout-canvas{
-    position:relative; width:100%; aspect-ratio:4/3; min-height:280px;
-    background-color:#E4DFD3;
-    background-image:
-      linear-gradient(rgba(34,38,42,0.12) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(34,38,42,0.12) 1px, transparent 1px);
-    background-size:10% 10%;
-    border:2px solid var(--charcoal); border-radius:var(--radius);
-    overflow:hidden; touch-action:none;
-  }
-  .stand-box{
-    position:absolute; background:var(--paper); border:2px solid var(--charcoal); border-radius:3px;
-    padding:6px 4px; text-align:center; cursor:grab; box-sizing:border-box;
-    display:flex; flex-direction:column; justify-content:center; align-items:center;
-    transition:box-shadow .15s; user-select:none; overflow:hidden;
-  }
+  .layout-canvas{position:relative;width:100%;aspect-ratio:4/3;min-height:280px;background-color:#E4DFD3;background-image:linear-gradient(rgba(34,38,42,0.08) 1px, transparent 1px),linear-gradient(90deg, rgba(34,38,42,0.08) 1px, transparent 1px);background-size:10% 10%;border:2px solid var(--charcoal);border-radius:var(--radius);overflow:hidden;touch-action:none;}
+  .stand-box{position:absolute;background:var(--paper);border:2px solid var(--charcoal);border-radius:4px;padding:6px 4px;text-align:center;cursor:grab;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;transition:box-shadow .15s;user-select:none;overflow:hidden;}
   .stand-box:active{cursor:grabbing;}
-  .layout-canvas.view-only .stand-box{cursor:pointer;}
-  .stand-box.dragging{box-shadow:0 8px 20px rgba(0,0,0,0.35); z-index:60; opacity:0.92;}
-  .stand-box.has-items{border-color:var(--success); background:#EAF7EC;}
-  .stand-box.empty-stand{border-style:dashed; border-color:var(--steel-line); background:#FAFAF8;}
-  .stand-status-dot{position:absolute; top:4px; left:4px; font-size:9px; line-height:1;}
-  .stand-letter{font-family:'Oswald',sans-serif; font-size:20px; font-weight:700; line-height:1;}
-  .stand-label{font-size:8.5px; color:var(--steel); margin-top:2px; line-height:1.15; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:100%;}
-  .stand-count{font-size:9.5px; font-family:'IBM Plex Mono'; margin-top:3px; color:var(--info); font-weight:600;}
-  .stand-del{position:absolute; top:2px; right:4px; font-size:10px; color:var(--rust); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
-  .stand-rotate{position:absolute; top:2px; right:18px; font-size:11px; color:var(--info); background:none; border:none; cursor:pointer; padding:2px; z-index:5;}
-  .stand-resize-handle{
-    position:absolute; right:0; bottom:0; width:16px; height:16px; cursor:nwse-resize; z-index:6;
-    background:linear-gradient(135deg, transparent 0 50%, var(--safety) 50% 60%, transparent 60% 70%, var(--safety) 70% 80%, transparent 80% 100%);
-    border-bottom-right-radius:3px;
-  }
-  .stand-box.highlight{
-    border-color:var(--safety); box-shadow:0 0 0 4px rgba(245,183,0,0.45); z-index:40;
-    animation:standPulse 1s ease-in-out 3;
-  }
-  @keyframes standPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.06); } }
-  .location-badge{
-    display:inline-block; font-size:10px; font-family:'IBM Plex Mono'; font-weight:600;
-    background:var(--charcoal); color:#fff; padding:2px 7px; border-radius:10px; margin-left:6px; cursor:pointer;
-  }
-  .slot-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(60px,1fr)); gap:6px; margin-top:10px;}
-  .slot-cell{border:1px solid var(--steel-line); border-radius:3px; padding:6px 4px; text-align:center; font-size:11px; min-height:44px;}
-  .slot-cell.filled{background:#FFF7E0; border-color:var(--safety);}
-  .slot-num{font-family:'IBM Plex Mono'; font-weight:700; font-size:12px;}
-  .slot-item{font-size:9px; color:var(--charcoal-soft, var(--charcoal)); line-height:1.2; margin-top:2px; word-break:break-word;}
+  .stand-box.dragging{box-shadow:0 8px 30px rgba(0,0,0,0.35);z-index:60;opacity:0.92;}
+  .stand-box.has-items{border-color:var(--success);background:#ECFDF5;}
+  .stand-box.empty-stand{border-style:dashed;border-color:var(--steel-line);background:#FAFAFA;}
+  .stand-status-dot{position:absolute;top:4px;left:4px;font-size:10px;line-height:1;}
+  .stand-letter{font-family:'Oswald',sans-serif;font-size:20px;font-weight:700;line-height:1;}
+  .stand-label{font-size:9px;color:var(--steel);margin-top:2px;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;}
+  .stand-count{font-size:9.5px;font-family:'IBM Plex Mono';margin-top:3px;color:var(--info);font-weight:600;}
+  .stand-del{position:absolute;top:2px;right:4px;font-size:12px;color:var(--rust);background:none;border:none;cursor:pointer;padding:2px;z-index:5;}
+  .stand-rotate{position:absolute;top:2px;right:18px;font-size:12px;color:var(--info);background:none;border:none;cursor:pointer;padding:2px;z-index:5;}
+  .stand-resize-handle{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;z-index:6;background:linear-gradient(135deg, transparent 0 50%, var(--safety) 50% 60%, transparent 60% 70%, var(--safety) 70% 80%, transparent 80% 100%);border-bottom-right-radius:3px;}
+  .stand-box.highlight{border-color:var(--safety);box-shadow:0 0 0 4px rgba(245,158,11,0.45);z-index:40;animation:standPulse 1s ease-in-out 3;}
+  @keyframes standPulse{0%,100%{transform:scale(1);}50%{transform:scale(1.06);}}
+  .location-badge{display:inline-block;font-size:10px;font-family:'IBM Plex Mono';font-weight:600;background:var(--charcoal);color:#fff;padding:2px 8px;border-radius:12px;margin-left:6px;cursor:pointer;}
+  .slot-grid{display:grid;grid-template-columns:repeat(auto-fill, minmax(60px,1fr));gap:6px;margin-top:10px;}
+  .slot-cell{border:1px solid var(--steel-line);border-radius:4px;padding:6px 4px;text-align:center;font-size:11px;min-height:44px;}
+  .slot-cell.filled{background:#FFF7E0;border-color:var(--safety);}
+  .slot-num{font-family:'IBM Plex Mono';font-weight:700;font-size:12px;}
+  .slot-item{font-size:9px;color:var(--charcoal);line-height:1.2;margin-top:2px;word-break:break-word;}
 
-  .cost-calc-box{
-    margin-top:6px; padding:8px 10px; background:#F7F5F0; border:1px dashed var(--steel-line);
-    border-radius:3px; font-size:11px; color:var(--steel); line-height:1.6; display:none;
-  }
+  .cost-calc-box{margin-top:6px;padding:8px 12px;background:#F1F5F9;border:1px dashed var(--steel-line);border-radius:4px;font-size:11px;color:var(--steel);line-height:1.6;display:none;}
   .cost-calc-box.active{display:block;}
-  .cost-calc-box b{color:var(--charcoal); font-family:'IBM Plex Mono';}
-  .duplicate-warning-box{
-    margin-top:8px; padding:10px; background:#FFF6E9; border:1px solid #E8C27A;
-    border-radius:3px; font-size:11px; color:var(--charcoal); line-height:1.5; display:none;
-  }
-  .recent-update-row{
-    display:flex; justify-content:space-between; align-items:center; padding:8px 0;
-    border-top:1px solid var(--steel-line); font-size:12px;
-  }
-  .recent-update-row .ru-time{font-size:13px; color:var(--charcoal); font-weight:600; font-family:'IBM Plex Mono'; margin-top:2px;}
-  .last-update-note{
-    font-size:13px; color:var(--charcoal); font-weight:600; font-family:'IBM Plex Mono';
-    background:#FFF7E0; border:1px solid var(--safety); border-radius:3px;
-    padding:8px 10px; margin:2px 0 12px;
-  }
-  
-  .price-info-box{font-size:11px;color:var(--steel);margin-top:6px;background:#F7F5F0;padding:6px 8px;border-radius:3px;display:flex;justify-content:space-between;align-items:center;}
+  .cost-calc-box b{color:var(--charcoal);font-family:'IBM Plex Mono';}
+  .duplicate-warning-box{margin-top:8px;padding:10px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:4px;font-size:11px;color:var(--charcoal);line-height:1.5;display:none;}
+  .recent-update-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--steel-line);font-size:12px;}
+  .recent-update-row .ru-time{font-size:13px;color:var(--charcoal);font-weight:600;font-family:'IBM Plex Mono';margin-top:2px;}
+  .last-update-note{font-size:13px;color:var(--charcoal);font-weight:600;font-family:'IBM Plex Mono';background:#FEF3C7;border:1px solid var(--safety);border-radius:4px;padding:8px 12px;margin:2px 0 12px;}
 
-  .qty-control{display:flex;align-items:center;justify-content:space-between;margin-top:10px;background:var(--concrete);padding:6px 10px;border-radius:var(--radius);}
-  .qty-btn{width:32px;height:32px;border:1px solid var(--steel-line);background:#fff;font-weight:bold;cursor:pointer;}
-  .qty-val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:16px;}
-  
+  .price-info-box{font-size:11px;color:var(--steel);margin-top:8px;background:#F1F5F9;padding:8px 12px;border-radius:6px;display:flex;justify-content:space-between;align-items:center;}
+  .qty-control{display:flex;align-items:center;justify-content:space-between;margin-top:12px;background:var(--bg);padding:8px 14px;border-radius:var(--radius);}
+  .qty-btn{width:34px;height:34px;border:1px solid var(--steel-line);background:#fff;border-radius:6px;font-weight:bold;font-size:18px;cursor:pointer;transition:background .15s;}
+  .qty-btn:hover{background:var(--steel-line);}
+  .qty-val{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:18px;}
+
   .sm-btn{background:none;border:none;color:var(--steel);font-size:11px;text-decoration:underline;cursor:pointer;font-weight:600;}
+  .sm-btn:hover{color:var(--charcoal);}
 
   #reader{width:100%;max-width:500px;margin:0 auto;border:2px dashed var(--steel-line);border-radius:var(--radius);}
   #scan-result{margin-top:16px;}
 
-  .toast{
-    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-    background:var(--charcoal);color:#fff;padding:12px 22px;border-radius:24px;
-    font-size:13px;font-weight:600;z-index:100;display:none;box-shadow:0 6px 18px rgba(0,0,0,0.3);
-  }
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--charcoal);color:#fff;padding:14px 28px;border-radius:30px;font-size:14px;font-weight:600;z-index:100;display:none;box-shadow:0 8px 30px rgba(0,0,0,0.3);}
   .disabled-action{opacity:0.4;pointer-events:none;}
 
-  .report-box { background:var(--paper); border:2px solid var(--steel-line); padding:18px; border-radius:var(--radius); text-align:center; box-shadow:0 3px 10px rgba(24,35,55,0.06); }
-  .report-box h3 { margin-top:0; font-family:'Oswald'; color:var(--glass); }
-  .report-box p { font-size:13px; color:var(--steel); margin-bottom:16px; }
+  .report-box{background:var(--paper);border:1px solid var(--steel-line);padding:20px;border-radius:var(--radius);text-align:center;box-shadow:var(--shadow);}
+  .report-box h3{margin-top:0;font-family:'Oswald';color:var(--glass);}
+  .report-box p{font-size:13px;color:var(--steel);margin-bottom:16px;}
 
-  .balance-box { background:linear-gradient(135deg,#F3F6FB,#EAF1FF); padding:12px; border-radius:var(--radius); margin-top:10px; text-align:center; font-family:'IBM Plex Mono'; font-size:19px; font-weight:800; border:2px solid var(--steel-line);}
-  .balance-negative { color:var(--rust); }
-  .balance-positive { color:var(--success); }
-  .action-grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-top:10px; }
+  .balance-box{background:linear-gradient(135deg,#F1F5F9,#E2E8F0);padding:14px;border-radius:var(--radius);margin-top:12px;text-align:center;font-family:'IBM Plex Mono';font-size:20px;font-weight:800;border:2px solid var(--steel-line);}
+  .balance-negative{color:var(--rust);}
+  .balance-positive{color:var(--success);}
+  .action-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px;}
 
-  .day-badge { display:inline-block; background:var(--info); color:#fff; padding:3px 8px; border-radius:12px; font-size:10.5px; margin-top:4px; font-weight:700;}
+  .day-badge{display:inline-block;background:var(--info);color:#fff;padding:3px 10px;border-radius:14px;font-size:10.5px;margin-top:4px;font-weight:700;}
 
-  .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.72); z-index:1000; align-items:center; justify-content:center;}
-  .modal-content { background:var(--paper); width:90%; max-width:500px; border-radius:calc(var(--radius) + 4px); padding:22px; max-height:85vh; overflow-y:auto; position:relative; box-shadow:0 20px 50px rgba(0,0,0,0.35); }
-  .modal-close { position:absolute; top:15px; right:15px; background:var(--concrete); border:none; width:28px; height:28px; border-radius:50%; font-size:16px; cursor:pointer; font-weight:bold; color:var(--rust); }
-  
+  .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.75);z-index:1000;align-items:center;justify-content:center;}
+  .modal-content{background:var(--paper);width:92%;max-width:540px;border-radius:calc(var(--radius)+4px);padding:24px;max-height:85vh;overflow-y:auto;position:relative;box-shadow:0 20px 60px rgba(0,0,0,0.4);}
+  .modal-close{position:absolute;top:12px;right:12px;background:var(--bg);border:none;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer;font-weight:bold;color:var(--rust);transition:background .15s;}
+  .modal-close:hover{background:var(--steel-line);}
 
-  #print-area { display: none; }
-  #thermal-print-area { display: none; }
+  #print-area{display:none;}
+  #thermal-print-area{display:none;}
 
-  @page {
-    size: 58mm auto;
-    margin: 0;
-  }
+  @page{size:58mm auto;margin:0;}
+  @media print{
+    body *{visibility:hidden;}
+    body.printing-label .app, body.printing-barcode-label .app, body.printing-receipt .app{display:none !important;}
+    body.printing-label #print-area, body.printing-label #print-area *{visibility:visible;}
+    body.printing-label #print-area{display:flex !important;flex-wrap:wrap;gap:4mm;position:absolute;left:0;top:0;width:100%;background:#fff;}
+    .sticker-label{width:50mm;height:30mm;border:1px dashed #000;padding:2mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:space-between;page-break-inside:avoid;text-align:center;}
+    .sticker-title{font-size:9px;font-weight:bold;font-family:sans-serif;height:12px;overflow:hidden;}
+    .sticker-qr{width:18mm;height:18mm;display:flex;justify-content:center;align-items:center;overflow:hidden;}
+    .sticker-qr img, .sticker-qr canvas{width:100% !important;height:100% !important;max-width:100%;max-height:100%;}
+    .sticker-footer{font-size:8px;font-family:monospace;font-weight:bold;width:100%;display:flex;justify-content:space-between;}
 
-  @media print {
-    body * { visibility: hidden; }
+    body.printing-barcode-label #print-area, body.printing-barcode-label #print-area *{visibility:visible;}
+    body.printing-barcode-label #print-area{display:block !important;position:absolute;left:0;top:0;width:100mm;background:#fff;overflow:hidden;}
+    .barcode-strip-page{width:100mm;height:40mm;max-width:100mm;max-height:40mm;box-sizing:border-box;display:flex;flex-direction:row;page-break-after:always;page-break-inside:avoid;overflow:hidden;}
+    .barcode-strip-page:last-child{page-break-after:auto;}
+    .barcode-strip-page .bl-cell{width:20mm;height:40mm;max-width:20mm;max-height:40mm;flex-shrink:0;padding:0.5mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;}
+    .barcode-strip-page .bl-cell .bl-qr{width:16mm;height:16mm;max-width:16mm;max-height:16mm;flex-shrink:0;display:flex;justify-content:center;align-items:center;overflow:hidden;}
+    .barcode-strip-page .bl-cell .bl-qr img, .barcode-strip-page .bl-cell .bl-qr canvas{width:100% !important;height:100% !important;max-width:100% !important;max-height:100% !important;image-rendering:pixelated;}
+    .barcode-strip-page .bl-cell .bl-name{font-size:6px;font-weight:bold;font-family:sans-serif;line-height:1.05;max-height:12px;overflow:hidden;margin-top:0.8mm;}
+    .barcode-strip-page .bl-cell .bl-code{font-size:5.5px;font-family:monospace;font-weight:bold;margin-top:0.5mm;word-break:break-all;}
 
-    body.printing-label .app,
-    body.printing-barcode-label .app,
-    body.printing-receipt .app { display: none !important; }
-    
-    body.printing-label #print-area, body.printing-label #print-area * { visibility: visible; }
-    body.printing-label #print-area { display: flex !important; flex-wrap: wrap; gap: 4mm; position: absolute; left: 0; top: 0; width: 100%; background: #fff; }
-    .sticker-label { width: 50mm; height: 30mm; border: 1px dashed #000; padding: 2mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: space-between; page-break-inside: avoid; text-align: center; }
-    .sticker-title { font-size: 9px; font-weight: bold; font-family: sans-serif; height: 12px; overflow: hidden; }
-    .sticker-qr { width: 18mm; height: 18mm; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-    .sticker-qr img, .sticker-qr canvas { width: 100% !important; height: 100% !important; max-width: 100%; max-height: 100%; }
-    .sticker-footer { font-size: 8px; font-family: monospace; font-weight: bold; width: 100%; display: flex; justify-content: space-between; }
-
-    body.printing-barcode-label #print-area, body.printing-barcode-label #print-area * { visibility: visible; }
-    body.printing-barcode-label #print-area { display: block !important; position: absolute; left: 0; top: 0; width: 100mm; background: #fff; overflow: hidden; }
-    .barcode-strip-page { width: 100mm; height: 40mm; max-width: 100mm; max-height: 40mm; box-sizing: border-box; display: flex; flex-direction: row; page-break-after: always; page-break-inside: avoid; overflow: hidden; }
-    .barcode-strip-page:last-child { page-break-after: auto; }
-    .barcode-strip-page .bl-cell { width: 20mm; height: 40mm; max-width: 20mm; max-height: 40mm; flex-shrink: 0; padding: 0.5mm; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; }
-    .barcode-strip-page .bl-cell .bl-qr { width: 16mm; height: 16mm; max-width: 16mm; max-height: 16mm; flex-shrink: 0; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-    .barcode-strip-page .bl-cell .bl-qr img, .barcode-strip-page .bl-cell .bl-qr canvas { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important; image-rendering: pixelated; }
-    .barcode-strip-page .bl-cell .bl-name { font-size: 6px; font-weight: bold; font-family: sans-serif; line-height: 1.05; max-height: 12px; overflow: hidden; margin-top: 0.8mm; }
-    .barcode-strip-page .bl-cell .bl-code { font-size: 5.5px; font-family: monospace; font-weight: bold; margin-top: 0.5mm; word-break: break-all; }
-
-    body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area * { visibility: visible; }
-    body.printing-receipt #thermal-print-area { 
-      display: block !important; 
-      position: absolute; 
-      left: 0; 
-      top: 0; 
-      width: 56mm; 
-      margin: 0; 
-      padding: 0;
-      page-break-after: avoid;
-    }
+    body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area *{visibility:visible;}
+    body.printing-receipt #thermal-print-area{display:block !important;position:absolute;left:0;top:0;width:56mm;margin:0;padding:0;page-break-after:avoid;}
   }
 </style>
 </head>
@@ -302,13 +247,22 @@
         <div class="card"><div class="num" id="sum-value">***</div><div class="lbl">Envanter Değeri (Maliyet)</div></div>
       </div>
       <div class="search-wrap">
-        <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:1;">
+        <input type="text" id="search" placeholder="Ürün adı, sınıfı veya QR koda göre ara..." oninput="renderGrid()" style="flex:2;">
+        <select id="sort-select" onchange="renderGrid()" style="flex:1; min-width:160px;">
+          <option value="name-asc">Ürün Adı (A-Z)</option>
+          <option value="name-desc">Ürün Adı (Z-A)</option>
+          <option value="price-asc">Fiyat (En Düşük)</option>
+          <option value="price-desc">Fiyat (En Yüksek)</option>
+          <option value="qty-desc">Miktar (Çoktan Aza)</option>
+          <option value="qty-asc">Miktar (Azdan Çoğa)</option>
+          <option value="category-asc">Kategori (A-Z)</option>
+        </select>
         <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
         <button class="btn btn-info btn-sm disabled-action" id="auto-update-btn" onclick="enableAutoStockUpdate()" title="Her stok giriş/çıkışında bu klasördeki dosyayı otomatik günceller">🔄 Otomatik Güncellemeyi Aç</button>
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
       </div>
       <div id="grid" class="grid"></div>
-      <div id="grid-load-more-wrap" style="text-align:center; margin-top:16px;"></div>
+      <div id="grid-load-more-wrap" style="text-align:center; margin-top:20px;"></div>
     </div>
 
     <!-- ÜRÜN EKLE TABI -->
@@ -316,9 +270,9 @@
       <div class="form-card disabled-action" id="add-form-card">
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Ürün Ekle</h3>
 
-        <div style="background:#F7F5F0; border:1px dashed var(--steel-line); border-radius:4px; padding:12px; margin-bottom:16px;">
+        <div style="background:#F1F5F9; border:1px dashed var(--steel-line); border-radius:6px; padding:14px; margin-bottom:18px;">
           <label style="margin-bottom:4px;">📦 Ürünün Kendi Barkodunu Okutarak İsmi Otomatik Doldur <span style="text-transform:none; color:var(--steel); font-size:9px;">(opsiyonel)</span></label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <input type="text" id="f-barcode-lookup" placeholder="Barkod numarasını yazın..." style="flex:1; min-width:140px;">
             <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="lookupBarcode()">🔎 Bul</button>
             <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openBarcodeLookupScanner()">📷 Kamerayla Okut</button>
@@ -362,24 +316,18 @@
             <select id="f-brand" onchange="updateCostCalc('f')"></select>
           </div>
         </div>
-        <div class="form-row" style="grid-template-columns: 1fr;">
+        <div class="form-row" style="grid-template-columns:1fr;">
           <div>
             <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— maliyet, satış fiyatından farklı</span></label>
             <input type="number" id="f-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('f'); updateAddProfit();">
             <div class="cost-calc-box" id="f-cost-calc"></div>
           </div>
         </div>
-        <div class="form-row" style="grid-template-columns: 1fr 1fr;">
-          <div>
-            <label>KDV Oranı (%)</label>
-            <input type="number" id="f-vat" step="0.01" placeholder="0" oninput="updateAddProfit()">
-          </div>
-          <div>
-            <label>Hedef Kâr (%)</label>
-            <input type="number" id="f-profit" step="0.01" placeholder="Örn: 25" oninput="updateAddProfit()">
-          </div>
+        <div class="form-row" style="grid-template-columns:1fr 1fr;">
+          <div><label>KDV Oranı (%)</label><input type="number" id="f-vat" step="0.01" placeholder="0" oninput="updateAddProfit()"></div>
+          <div><label>Hedef Kâr (%)</label><input type="number" id="f-profit" step="0.01" placeholder="Örn: 25" oninput="updateAddProfit()"></div>
         </div>
-        <div class="form-row" style="grid-template-columns: 1fr; margin-bottom:10px;">
+        <div class="form-row" style="grid-template-columns:1fr; margin-bottom:10px;">
           <div>
             <label>Önerilen Satış Fiyatı</label>
             <input type="text" id="f-suggested-price" readonly placeholder="Geliş fiyatı ve kâr girin" style="background:#e9ecef; font-weight:bold;">
@@ -401,7 +349,7 @@
           <label>Excel/CSV Dosyanızı Seçin (Aktif Pos dahil, herhangi bir format)</label>
           <input type="file" accept=".xlsx,.xls,.csv" id="bulk-import-file">
         </div>
-        <div id="import-mapping-section" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-top:12px;"></div>
+        <div id="import-mapping-section" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-top:12px;"></div>
         <div id="bulk-import-preview"></div>
         <div id="bulk-import-status" style="font-size:12px; margin-top:8px;"></div>
         <button class="btn btn-success" id="bulk-import-start-btn" onclick="analyzeImportConflicts()" style="display:none; margin-top:10px;">🔍 Çakışmaları Kontrol Et ve Devam Et</button>
@@ -415,7 +363,7 @@
           <label>Barkod İçeren Excel/CSV Dosyanızı Seçin</label>
           <input type="file" accept=".xlsx,.xls,.csv" id="barcode-fix-file">
         </div>
-        <div id="barcode-fix-mapping" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-top:12px;"></div>
+        <div id="barcode-fix-mapping" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-top:12px;"></div>
         <div id="barcode-fix-status" style="font-size:12px; margin-top:8px;"></div>
         <button class="btn btn-success" id="barcode-fix-analyze-btn" onclick="analyzeBarcodeFix()" style="display:none; margin-top:10px;">🔍 Eşleşmeleri Bul</button>
         <div id="barcode-fix-review" style="display:none;"></div>
@@ -446,10 +394,10 @@
     <!-- GÜNLÜK GÖREVLER TABI -->
     <div id="tab-gorevler" class="tab-content">
       <div id="manager-task-section" style="display:none;">
-        <div class="form-card" style="border-left: 4px solid var(--safety);">
+        <div class="form-card" style="border-left:4px solid var(--safety);">
           <h3 style="margin-top:0;font-family:'Oswald'; display:flex; justify-content:space-between; align-items:center;">
             <span>📥 Toptancı / Ürün Giriş Bildirimleri</span>
-            <span id="notif-badge" style="background:var(--rust); color:#fff; font-size:11px; padding:2px 8px; border-radius:10px; display:none;">0 Yeni</span>
+            <span id="notif-badge" style="background:var(--rust); color:#fff; font-size:11px; padding:2px 10px; border-radius:12px; display:none;">0 Yeni</span>
           </h3>
           <p style="font-size:12px; color:var(--steel); margin-top:-4px; margin-bottom:12px;">Dükkana eklenen ürünler buraya bildirim olarak düşer. İstediğiniz bildirimi çalışana görev olarak atayabilirsiniz.</p>
           <div id="notifications-list">
@@ -479,7 +427,7 @@
         <h3 style="margin-top:0;font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:8px;">📋 Günlük İş / Görev Listesi &amp; Takibi</h3>
         <p style="font-size:12px; color:var(--steel); margin-bottom:12px;">Çalışanlar düzenlemeler bittikten sonra <strong>Yeşil Tik</strong> ile görevi işaretleyebilir, yönetici anlık olarak durumunu görebilir.</p>
         
-        <div id="bulk-task-actions" style="display:none; justify-content:space-between; align-items:center; background:#F7F5F0; padding:8px 12px; border:1px solid var(--steel-line); border-radius:3px; margin-bottom:10px;">
+        <div id="bulk-task-actions" style="display:none; justify-content:space-between; align-items:center; background:#F1F5F9; padding:8px 14px; border:1px solid var(--steel-line); border-radius:6px; margin-bottom:12px;">
           <span style="font-size:12px; font-weight:600; color:var(--charcoal);" id="selected-task-count">0 görev seçildi</span>
           <button class="btn btn-danger btn-sm" id="bulk-del-btn" onclick="deleteSelectedTasks()" style="display:none;">🗑️ Seçilen Görevleri Sil</button>
         </div>
@@ -602,9 +550,9 @@
         <h3 style="margin-top:0;font-family:'Oswald';">Yeni Malzeme Fişi (Toptancıdan Mal Girişi)</h3>
         <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Toptancıdan gelen malzemeleri buraya işleyin: hangi toptancıdan hangi malzeme, ne kadar geldiğini kaydedin. Onayladığınızda ilgili ürünlerin stoğu otomatik artırılır ve fiş arşivlenir.</p>
 
-        <div style="background:#F7F5F0; border:1px dashed var(--steel-line); border-radius:4px; padding:12px; margin-bottom:16px;">
+        <div style="background:#F1F5F9; border:1px dashed var(--steel-line); border-radius:6px; padding:14px; margin-bottom:18px;">
           <label style="margin-bottom:4px;">📦 Malzemenin Barkodunu Okutarak Bul / Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bazı ürünler barkodlu geliyorsa kullanın, opsiyonel)</span></label>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <input type="text" id="fis-barcode-lookup" placeholder="Barkod numarasını yazın..." style="flex:1; min-width:140px;">
             <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="lookupFisBarcode()">🔎 Bul</button>
             <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Kamerayla Okut</button>
@@ -629,16 +577,16 @@
           <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any"></div>
           <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit()"></div>
         </div>
-        <div id="fis-new-fields" style="display:none; background:#F7F5F0; padding:10px; border-radius:3px; margin-bottom:10px;">
+        <div id="fis-new-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
           <p style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;">ℹ️ Bu malzeme sistemde bulunamadı, YENİ ÜRÜN olarak stoğa eklenecek. Lütfen aşağıdaki bilgileri de girin:</p>
           <div style="margin-bottom:10px;">
             <label>Barkod Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bu ürünün üzerindeki barkodu okutun veya elle girin — boş bırakılırsa sistem otomatik kod atar)</span></label>
-            <div style="display:flex; gap:8px;">
+            <div style="display:flex; gap:10px;">
               <input type="text" id="fis-new-barcode" placeholder="Barkod numarası..." style="flex:1;" oninput="document.getElementById('fis-barcode-pending-code').value = this.value.trim();">
               <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Okut</button>
             </div>
           </div>
-          <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+          <div class="form-row" style="grid-template-columns:1fr 1fr;">
             <div><label>Ölçü Birimi</label>
               <select id="fis-unit">
                 <option value="Adet">Adet</option>
@@ -662,18 +610,18 @@
               </select>
             </div>
           </div>
-          <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+          <div class="form-row" style="grid-template-columns:1fr 1fr;">
             <div><label>KDV Oranı (%)</label><input type="number" id="fis-vat" step="0.01" placeholder="0" oninput="updateFisProfit()"></div>
             <div><label>Hedef Kâr (%)</label><input type="number" id="fis-profit" step="0.01" placeholder="Örn: 25" oninput="updateFisProfit()"></div>
           </div>
-          <div class="form-row" style="grid-template-columns: 1fr; margin-bottom:0;">
+          <div class="form-row" style="grid-template-columns:1fr; margin-bottom:0;">
             <div>
               <label>Önerilen Satış Fiyatı</label>
               <input type="text" id="fis-suggested-price" readonly placeholder="Geliş fiyatı, KDV ve kâr girin" style="background:#e9ecef; font-weight:bold;">
               <button type="button" class="sm-btn" onclick="applySuggestedPrice('fis')" style="margin-top:6px;">↳ Bu Fiyatı Satış Fiyatına Uygula</button>
             </div>
           </div>
-          <div class="form-row" style="grid-template-columns: 1fr; margin-bottom:0; margin-top:10px;">
+          <div class="form-row" style="grid-template-columns:1fr; margin-bottom:0; margin-top:10px;">
             <div><label>Satış Fiyatı (₺)</label><input type="number" id="fis-price" step="0.01" placeholder="0.00"></div>
           </div>
           <div style="display:flex; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
@@ -711,10 +659,10 @@
         <button class="btn btn-success" style="margin-top:10px;" onclick="completeGoodsReceipt()">✅ Fişi Onayla ve Stoğa İşle</button>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-bottom: 1px solid var(--steel-line); padding-bottom: 5px;">
-        <h3 style="font-family:'Oswald'; margin: 0;">Geçmiş Malzeme Fişleri</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">
+        <h3 style="font-family:'Oswald'; margin:0;">Geçmiş Malzeme Fişleri</h3>
       </div>
-      <div id="past-receipts-list" style="margin-top: 10px;"></div>
+      <div id="past-receipts-list" style="margin-top:10px;"></div>
     </div>
 
     <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
@@ -742,7 +690,7 @@
       <div id="cart-container" class="form-card" style="display:none; padding:12px;">
         <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Sepetteki Ürünler</h3>
         <div style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width: 400px;" id="cart-table">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:400px;" id="cart-table">
              <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
                <th style="padding-bottom:5px;">Ürün Bilgisi</th>
                <th>B.Fiyat</th>
@@ -759,17 +707,17 @@
         <button class="btn btn-success" style="margin-top:15px;" onclick="completeOrder()">Satışı Tamamla &amp; Fiş / Excel İşlemi</button>
       </div>
 
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; border-bottom: 1px solid var(--steel-line); padding-bottom: 5px;">
-        <h3 style="font-family:'Oswald'; margin: 0;">Geçmiş Satış / Sipariş Listeleri (Son 40 Gün)</h3>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">
+        <h3 style="font-family:'Oswald'; margin:0;">Geçmiş Satış / Sipariş Listeleri (Son 40 Gün)</h3>
         <button class="btn btn-danger btn-sm" onclick="clearSalesHistory()">🗑️ Satış Geçmişini Temizle</button>
       </div>
-      <div id="past-orders-list" style="margin-top: 10px;"></div>
+      <div id="past-orders-list" style="margin-top:10px;"></div>
     </div>
 
     <!-- YERLEŞİM (KROKİ) TABI -->
     <div id="tab-yerlesim" class="tab-content">
       <div class="form-card" style="padding-bottom:14px;">
-        <div style="display:flex; gap:8px; align-items:flex-end;">
+        <div style="display:flex; gap:10px; align-items:flex-end;">
           <div style="flex:1;">
             <label>Kroki</label>
             <select id="plan-select" onchange="switchPlan()"></select>
@@ -818,7 +766,7 @@
         <button class="btn btn-dark" onclick="addStand()">Standı Krokiye Ekle</button>
       </div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
         <h3 style="font-family:'Oswald'; margin:0; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex:1;">Mağaza Krokisi</h3>
         <button class="btn btn-dark btn-sm" id="edit-mode-toggle-btn" onclick="toggleLayoutEditMode()" style="width:auto; display:none;">✏️ Düzenle Modu: Kapalı</button>
         <button class="btn btn-primary btn-sm" id="toggle-stand-form-btn" onclick="toggleStandForm()" style="width:auto; margin-left:10px; display:none;">+ Stand Ekle</button>
@@ -833,6 +781,7 @@
           <button class="modal-close" onclick="closeStandDetail()">X</button>
           <h3 style="margin-top:0; font-family:'Oswald';" id="stand-detail-title"></h3>
           <div id="stand-detail-body"></div>
+          <button class="btn btn-primary btn-sm" style="margin-top:12px; width:auto;" onclick="editStandLabel()">✏️ Stand Adını Değiştir</button>
         </div>
       </div>
     </div>
@@ -902,7 +851,7 @@
       <div id="borc-cart-container" class="form-card" style="display:none; padding:12px;">
         <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">🧾 Müşteri Sepeti / Borç Kalemleri</h3>
         <div style="overflow-x:auto;">
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width: 400px;" id="borc-cart-table">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:400px;" id="borc-cart-table">
             <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
               <th style="padding-bottom:5px;">Ürün Bilgisi</th>
               <th>Fiyat</th>
@@ -945,25 +894,25 @@
 
 <!-- TERMAL FİŞ ŞABLONU -->
 <div id="thermal-print-area">
-  <div style="width: 54mm; font-family: 'Courier New', Courier, monospace; font-size: 10px; color: #000; padding: 2mm; background: #fff; margin: 0 auto;">
-    <div style="text-align: center;">
-      <h3 style="font-size: 13px; margin: 0 0 3px 0; font-weight: bold;">REYHANİ CAM HIRDAVAT</h3>
-      <p style="margin: 2px 0; font-size: 9px;">Satış Fişi</p>
-      <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
+  <div style="width:54mm;font-family:'Courier New',Courier,monospace;font-size:10px;color:#000;padding:2mm;background:#fff;margin:0 auto;">
+    <div style="text-align:center;">
+      <h3 style="font-size:13px;margin:0 0 3px 0;font-weight:bold;">REYHANİ CAM HIRDAVAT</h3>
+      <p style="margin:2px 0;font-size:9px;">Satış Fişi</p>
+      <div style="border-bottom:1px dashed #000;margin:4px 0;"></div>
     </div>
-    <div style="margin-bottom: 4px; font-size: 9px;">
-      <p style="margin: 2px 0;"><strong>Tarih:</strong> <span id="t-date"></span></p>
-      <p style="margin: 2px 0;"><strong>Saat:</strong> <span id="t-time"></span></p>
+    <div style="margin-bottom:4px;font-size:9px;">
+      <p style="margin:2px 0;"><strong>Tarih:</strong> <span id="t-date"></span></p>
+      <p style="margin:2px 0;"><strong>Saat:</strong> <span id="t-time"></span></p>
     </div>
-    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-    <div id="t-items-list" style="margin-bottom: 4px;"></div>
-    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-    <div style="text-align: right; margin-top: 3px; font-weight: bold; font-size: 11px;">
+    <div style="border-bottom:1px dashed #000;margin:4px 0;"></div>
+    <div id="t-items-list" style="margin-bottom:4px;"></div>
+    <div style="border-bottom:1px dashed #000;margin:4px 0;"></div>
+    <div style="text-align:right;margin-top:3px;font-weight:bold;font-size:11px;">
       TOPLAM: <span id="t-total"></span>
     </div>
-    <div style="border-bottom: 1px dashed #000; margin: 4px 0;"></div>
-    <div style="text-align: center; margin-top: 5px;">
-      <p style="margin: 2px 0; font-size: 9px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
+    <div style="border-bottom:1px dashed #000;margin:4px 0;"></div>
+    <div style="text-align:center;margin-top:5px;">
+      <p style="margin:2px 0;font-size:9px;">Bizi tercih ettiğiniz için teşekkür ederiz!</p>
     </div>
   </div>
 </div>
@@ -1094,7 +1043,7 @@
         </select>
       </div>
     </div>
-    <div class="form-row" style="grid-template-columns: 1fr;">
+    <div class="form-row" style="grid-template-columns:1fr;">
       <div><label>Ürün Sınıfı</label>
         <select id="edit-category">
           <option value="Banyo">Banyo</option>
@@ -1112,20 +1061,20 @@
       </div>
     </div>
     <div id="edit-cost-section" style="display:none;">
-      <div class="form-row" style="grid-template-columns: 1fr;">
+      <div class="form-row" style="grid-template-columns:1fr;">
         <div>
           <label>Marka / Katalog Grubu <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici</span></label>
           <select id="edit-brand" onchange="updateCostCalc('edit')"></select>
         </div>
       </div>
-      <div class="form-row" style="grid-template-columns: 1fr;">
+      <div class="form-row" style="grid-template-columns:1fr;">
         <div>
           <label>Geliş Fiyatı (₺) <span style="text-transform:none; color:var(--steel); font-size:9px;">— sadece yönetici, satış fiyatından farklı</span></label>
           <input type="number" id="edit-cost-price" step="0.01" placeholder="0.00" oninput="updateCostCalc('edit'); updateEditProfit();">
           <div class="cost-calc-box" id="edit-cost-calc"></div>
         </div>
       </div>
-      <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+      <div class="form-row" style="grid-template-columns:1fr 1fr;">
         <div>
           <label>KDV Oranı (%)</label>
           <input type="number" id="edit-vat" step="0.01" placeholder="0" oninput="updateEditProfit()">
@@ -1135,7 +1084,7 @@
           <input type="number" id="edit-profit" step="0.01" placeholder="Örn: 25" oninput="updateEditProfit()">
         </div>
       </div>
-      <div class="form-row" style="grid-template-columns: 1fr;">
+      <div class="form-row" style="grid-template-columns:1fr;">
         <div>
           <label>Önerilen Satış Fiyatı</label>
           <input type="text" id="edit-suggested-price" readonly placeholder="Geliş fiyatı ve kâr girin" style="background:#e9ecef; font-weight:bold;">
@@ -1144,7 +1093,7 @@
       </div>
       <div id="edit-last-update-note" class="last-update-note"></div>
     </div>
-    <div class="form-row" style="grid-template-columns: 1fr 1fr;">
+    <div class="form-row" style="grid-template-columns:1fr 1fr;">
       <div><label>Konum — Stand</label>
         <select id="edit-stand" onchange="updateSlotMax()">
           <option value="">Atanmamış</option>
@@ -1153,6 +1102,48 @@
       <div><label>Bölme No</label><input type="number" id="edit-slot" min="1" placeholder="örn: 3"></div>
     </div>
     <button class="btn btn-primary" onclick="saveEditProduct()">Değişiklikleri Kaydet</button>
+  </div>
+</div>
+
+<!-- BORÇ DÜZENLEME MODALI (YENİ) -->
+<div class="modal-overlay" id="borc-edit-modal" style="display:none;">
+  <div class="modal-content" style="max-width:700px;">
+    <button class="modal-close" onclick="closeBorcEditModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">Borç Düzenle</h3>
+    <input type="hidden" id="borc-edit-key">
+    <div style="margin-bottom:12px;">
+      <label>Müşteri</label>
+      <input type="text" id="borc-edit-customer" placeholder="Müşteri adı">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>Telefon</label>
+      <input type="text" id="borc-edit-phone" placeholder="Telefon">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>Not</label>
+      <input type="text" id="borc-edit-note" placeholder="Not">
+    </div>
+    <hr style="border-color:var(--steel-line);">
+    <h4 style="font-family:'Oswald';">Sepet Ürünleri</h4>
+    <div id="borc-edit-items-container"></div>
+    <div class="form-row" style="grid-template-columns:2fr 1fr auto; gap:8px; margin:12px 0;">
+      <div>
+        <label>Ürün Ara</label>
+        <input list="borc-edit-product-list" id="borc-edit-product" placeholder="Ürün adı veya kodu...">
+        <datalist id="borc-edit-product-list"></datalist>
+      </div>
+      <div>
+        <label>Miktar</label>
+        <input type="number" id="borc-edit-qty" value="1" min="0.1" step="any">
+      </div>
+      <div style="display:flex; align-items:flex-end;">
+        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="addItemToBorcEdit()">Ekle</button>
+      </div>
+    </div>
+    <div style="text-align:right; font-weight:bold; font-size:16px; margin:10px 0;">
+      Yeni Toplam: <span id="borc-edit-new-total">₺0,00</span>
+    </div>
+    <button class="btn btn-success" onclick="saveBorcEdit()">Değişiklikleri Kaydet</button>
   </div>
 </div>
 
@@ -1177,7 +1168,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- GÖRSEL BÜYÜTME MODALI -->
-<div class="modal-overlay" id="image-modal" style="display:none; z-index: 2000;" onclick="closeImageModal()">
+<div class="modal-overlay" id="image-modal" style="display:none; z-index:2000;" onclick="closeImageModal()">
   <div style="position:relative; max-width:90%; max-height:90%; margin:auto; top:50%; transform:translateY(-50%); text-align:center;">
     <button style="position:absolute; top:-15px; right:-15px; background:var(--rust); color:#fff; border:none; border-radius:50%; width:30px; height:30px; font-weight:bold; cursor:pointer;" onclick="closeImageModal()">X</button>
     <img id="enlarged-image" src="" style="max-width:100%; max-height:85vh; border-radius:8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
@@ -1757,7 +1748,6 @@ function updateAuthUI() {
 
 let borcCart = [];
 
-// Borç sepeti için ürün listesini güncelle
 function updateBorcOrderProductList() {
   const dl = document.getElementById('borc-order-product-list');
   if (!dl) return;
@@ -1769,7 +1759,6 @@ function updateBorcOrderProductList() {
   });
 }
 
-// Borç sepetine ürün ekle
 function addToBorcCart() {
   if (currentRole !== 'admin' && currentRole !== 'staff') {
     alert("Bu işlem için yetkiniz yok!");
@@ -1792,7 +1781,6 @@ function addToBorcCart() {
     return;
   }
   
-  // Stok kontrolü
   if (p.qty < qty) {
     alert(`Yetersiz stok! Mevcut: ${p.qty} ${p.unit || 'Adet'}`);
     return;
@@ -1825,7 +1813,6 @@ function addToBorcCart() {
   showToast("Ürün sepete eklendi!");
 }
 
-// Borç sepetini görüntüle
 function renderBorcCart() {
   const container = document.getElementById('borc-cart-container');
   const tbody = document.getElementById('borc-cart-items');
@@ -1858,13 +1845,11 @@ function renderBorcCart() {
   document.getElementById('borc-cart-total').textContent = "₺" + formatMoney(grandTotal);
 }
 
-// Borç sepetinden ürün çıkar
 function removeFromBorcCart(index) {
   borcCart.splice(index, 1);
   renderBorcCart();
 }
 
-// Borç sepetini temizle
 function clearBorcCart() {
   if (borcCart.length === 0) return;
   if (!confirm("Sepeti temizlemek istediğinize emin misiniz?")) return;
@@ -1873,7 +1858,6 @@ function clearBorcCart() {
   showToast("Sepet temizlendi.");
 }
 
-// Borç satışı tamamla (FATURA BAĞLANTISI BURADA)
 function completeBorcSale() {
   if (currentRole !== 'admin') {
     alert("Bu işlem için yönetici yetkisi gerekir!");
@@ -1898,7 +1882,6 @@ function completeBorcSale() {
   let grandTotal = 0;
   borcCart.forEach(item => grandTotal += item.total);
   
-  // Stok kontrolü
   let stockError = false;
   borcCart.forEach(item => {
     if (!productsData[item.code]) return;
@@ -1910,7 +1893,6 @@ function completeBorcSale() {
   });
   if (stockError) return;
   
-  // Stok güncelle
   borcCart.forEach(item => {
     db.child(item.code).child('qty').transaction((currentQty) => {
       const cur = Number(currentQty || 0);
@@ -1923,7 +1905,6 @@ function completeBorcSale() {
     });
   });
   
-  // Borç kaydı oluştur
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10);
   const timeStr = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
@@ -1962,7 +1943,6 @@ function completeBorcSale() {
   
   dbCustomerDebts.push(debtData, (err) => {
     if (!err) {
-      // ---- FATURA BAĞLANTISI ----
       const faturaData = {
         musteriAdi: customer,
         telefon: phone,
@@ -1982,7 +1962,6 @@ function completeBorcSale() {
       };
       localStorage.setItem('guncelSiparis', JSON.stringify(faturaData));
       window.open('fatura.html', '_blank');
-      // -------------------------
       
       showToast(`Satış tamamlandı! ${customer} için ${formatMoney(grandTotal)}₺ borç oluşturuldu. Fatura açılıyor...`);
       
@@ -2000,7 +1979,7 @@ function completeBorcSale() {
 }
 
 // ============================================================
-// MÜŞTERİ BORÇ YÖNETİMİ
+// MÜŞTERİ BORÇ YÖNETİMİ (Güncellendi: Düzenleme ile sepet düzenleme)
 // ============================================================
 
 function addCustomerDebt() {
@@ -2109,7 +2088,7 @@ function renderCustomerDebts() {
             <div style="text-align:right; display:flex; flex-direction:column; gap:4px;">
               ${currentRole === 'admin' ? `
                 <button class="btn btn-success btn-sm" onclick="payDebt('${key}', ${d.amount})" style="width:auto;">💰 Ödeme Al</button>
-                <button class="btn btn-info btn-sm" onclick="editCustomerDebt('${key}')" style="width:auto;">✏️ Düzenle</button>
+                <button class="btn btn-info btn-sm" onclick="openBorcEditModal('${key}')" style="width:auto;">✏️ Düzenle</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteCustomerDebt('${key}')" style="width:auto;">🗑️ Sil</button>
                 <button class="btn btn-dark btn-sm" onclick="printDebtSlip('${key}')" style="width:auto;">🖨️ Borç Fişi</button>
               ` : ''}
@@ -2188,24 +2167,151 @@ function deleteCustomerDebt(key) {
   });
 }
 
-function editCustomerDebt(key) {
+// --- YENİ: Borç Düzenleme Modalı (Sepet düzenleme) ---
+let borcEditItems = [];
+let borcEditKey = null;
+
+function openBorcEditModal(key) {
   dbCustomerDebts.child(key).once('value', (snap) => {
     const d = snap.val();
     if (!d) return;
+    borcEditKey = key;
+    borcEditItems = (d.items || []).map(item => ({ ...item }));
+    document.getElementById('borc-edit-customer').value = d.customer || '';
+    document.getElementById('borc-edit-phone').value = d.phone || '';
+    document.getElementById('borc-edit-note').value = d.note || '';
 
-    const newDesc = prompt("Açıklamayı düzenle:", d.description);
-    if (newDesc === null) return;
-    const newNote = prompt("Notu düzenle:", d.note || '');
-    if (newNote === null) return;
+    // Ürün listesini doldur
+    const dl = document.getElementById('borc-edit-product-list');
+    dl.innerHTML = '';
+    Object.values(productsData).forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = `${p.code} - ${p.name}`;
+      dl.appendChild(opt);
+    });
 
-    dbCustomerDebts.child(key).update({
-      description: newDesc.trim(),
-      note: newNote.trim(),
-      lastUpdatedBy: 'Yönetici'
+    renderBorcEditItems();
+    document.getElementById('borc-edit-modal').style.display = 'flex';
+  });
+}
+
+function closeBorcEditModal() {
+  document.getElementById('borc-edit-modal').style.display = 'none';
+  borcEditItems = [];
+  borcEditKey = null;
+}
+
+function renderBorcEditItems() {
+  const container = document.getElementById('borc-edit-items-container');
+  let html = '';
+  let total = 0;
+  borcEditItems.forEach((item, idx) => {
+    total += item.total || (item.price * item.qty);
+    html += `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px solid var(--steel-line);">
+        <span><strong>${item.name}</strong> (${item.qty} ${item.unit || 'Adet'}) - ₺${formatMoney(item.price)}</span>
+        <span style="font-weight:bold;">₺${formatMoney(item.total || item.price * item.qty)}</span>
+        <button class="btn btn-dark btn-sm" onclick="removeBorcEditItem(${idx})">Çıkar</button>
+      </div>
+    `;
+  });
+  if (borcEditItems.length === 0) html = '<p style="color:var(--steel); font-size:12px;">Sepet boş.</p>';
+  container.innerHTML = html;
+  document.getElementById('borc-edit-new-total').textContent = '₺' + formatMoney(total);
+}
+
+function removeBorcEditItem(idx) {
+  borcEditItems.splice(idx, 1);
+  renderBorcEditItems();
+}
+
+function addItemToBorcEdit() {
+  const inputVal = document.getElementById('borc-edit-product').value;
+  const qty = parseFloat(document.getElementById('borc-edit-qty').value);
+  if (!inputVal || isNaN(qty) || qty <= 0) { alert("Geçerli ürün ve miktar girin."); return; }
+  const code = inputVal.split(' - ')[0].trim();
+  const p = productsData[code];
+  if (!p) { alert("Ürün bulunamadı!"); return; }
+  // Stok kontrolü: mevcut borçtaki miktarı da hesaba kat
+  const existing = borcEditItems.find(it => it.code === code);
+  const currentInCart = existing ? existing.qty : 0;
+  const totalQty = currentInCart + qty;
+  if (p.qty < totalQty) {
+    alert(`Yetersiz stok! Mevcut: ${p.qty}, İstenen: ${totalQty}`);
+    return;
+  }
+  if (existing) {
+    existing.qty = totalQty;
+    existing.total = existing.qty * existing.price;
+  } else {
+    borcEditItems.push({
+      code: p.code,
+      name: p.name,
+      price: Number(p.price || 0),
+      qty: qty,
+      unit: p.unit || 'Adet',
+      total: qty * Number(p.price || 0)
+    });
+  }
+  document.getElementById('borc-edit-product').value = '';
+  document.getElementById('borc-edit-qty').value = '1';
+  renderBorcEditItems();
+}
+
+function saveBorcEdit() {
+  if (!borcEditKey) return;
+  const customer = document.getElementById('borc-edit-customer').value.trim();
+  const phone = document.getElementById('borc-edit-phone').value.trim();
+  const note = document.getElementById('borc-edit-note').value.trim();
+  if (!customer) { alert("Müşteri adı boş olamaz."); return; }
+
+  let grandTotal = 0;
+  borcEditItems.forEach(item => grandTotal += (item.total || item.price * item.qty));
+
+  // Stok güncellemeleri: önce eski ürünleri geri ekle, sonra yenileri düş
+  dbCustomerDebts.child(borcEditKey).once('value', (snap) => {
+    const oldData = snap.val();
+    if (!oldData) return;
+    const oldItems = oldData.items || [];
+
+    // Eski ürünleri stoklara geri ekle
+    oldItems.forEach(item => {
+      db.child(item.code).child('qty').transaction(cur => Number(cur || 0) + Number(item.qty));
+    });
+
+    // Yeni ürünleri stoktan düş
+    borcEditItems.forEach(item => {
+      db.child(item.code).child('qty').transaction(cur => Math.max(0, Number(cur || 0) - Number(item.qty)));
+    });
+
+    // Borç kaydını güncelle
+    const dueDate = oldData.dueDate || null;
+    const term = oldData.term || 'Belirsiz';
+    const status = grandTotal > 0 ? 'Açık' : 'Kapalı';
+    dbCustomerDebts.child(borcEditKey).update({
+      customer,
+      phone,
+      note,
+      items: borcEditItems.map(item => ({
+        code: item.code,
+        name: item.name,
+        price: item.price,
+        qty: item.qty,
+        unit: item.unit || 'Adet',
+        total: item.total || item.price * item.qty
+      })),
+      amount: grandTotal,
+      remaining: grandTotal,
+      status: status,
+      lastUpdatedBy: 'Yönetici (Düzenlendi)'
     }, (err) => {
       if (!err) {
-        showToast("Borç güncellendi!");
+        showToast("Borç güncellendi, stoklar düzeltildi.");
+        closeBorcEditModal();
         renderCustomerDebts();
+        renderGrid();
+      } else {
+        alert("Güncelleme hatası: " + err.message);
       }
     });
   });
@@ -2289,7 +2395,7 @@ function exportCustomerDebts() {
 }
 
 // ============================================================
-// DİĞER FONKSİYONLAR (mevcut kodun devamı)
+// DİĞER FONKSİYONLAR
 // ============================================================
 
 function toggleStandForm() {
@@ -2702,6 +2808,25 @@ function closeStandDetail() {
   document.getElementById('stand-detail-modal').style.display = 'none';
 }
 
+// Stand adını değiştirme (Yerleşim sekmesi)
+function editStandLabel() {
+  const modal = document.getElementById('stand-detail-modal');
+  const titleEl = document.getElementById('stand-detail-title');
+  const currentText = titleEl.textContent;
+  const letter = currentText.split(' ')[1]; // "Stand A — ..." -> A
+  if (!letter) return;
+  const s = layoutData.stands[letter];
+  if (!s) return;
+  const newLabel = prompt("Stand için yeni açıklama girin:", s.label || '');
+  if (newLabel === null) return;
+  dbLayout.child('stands').child(letter).update({ label: newLabel.trim() }, (err) => {
+    if (!err) {
+      showToast("Stand adı güncellendi.");
+      closeStandDetail();
+    }
+  });
+}
+
 function findProductLocation() {
   const q = document.getElementById('layout-search').value.trim().toLowerCase();
   const resultBox = document.getElementById('layout-search-result');
@@ -3059,7 +3184,7 @@ function renderNotifications() {
   keys.reverse().forEach(key => {
     const n = notificationsData[key];
     listDiv.innerHTML += `
-      <div style="background:#F7F5F0; border:1px solid var(--steel-line); padding:10px; border-radius:3px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+      <div style="background:#F1F5F9; border:1px solid var(--steel-line); padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
          <div>
             <div style="font-size:12px; font-weight:bold; color:var(--charcoal);">📥 ${n.text}</div>
             <div style="font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';">🕒 ${n.time}</div>
@@ -3918,6 +4043,7 @@ function saveWholesalerEdit() {
 function renderGrid() {
   const grid = document.getElementById('grid');
   const search = document.getElementById('search').value.toLowerCase();
+  const sortBy = document.getElementById('sort-select').value;
 
   if (search !== lastGridSearch) {
     gridCurrentPage = 1;
@@ -3927,8 +4053,8 @@ function renderGrid() {
   let count = 0, units = 0, value = 0;
   const canEdit = (currentRole === 'admin' || currentRole === 'staff');
   const isAdmin = (currentRole === 'admin');
-  const matchedProducts = [];
 
+  let matchedProducts = [];
   Object.values(productsData).forEach(p => {
     const pName = p.name ? p.name.toLowerCase() : '';
     const pCat = p.category ? p.category.toLowerCase() : '';
@@ -3939,13 +4065,23 @@ function renderGrid() {
     if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
       count++;
       units += parseFloat(p.qty || 0);
-
       const itemCost = p.costPrice != null ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
       value += parseFloat(p.qty || 0) * itemCost;
-
       matchedProducts.push(p);
     }
   });
+
+  // Sıralama
+  switch(sortBy) {
+    case 'name-asc': matchedProducts.sort((a,b) => (a.name || '').localeCompare(b.name || '', 'tr')); break;
+    case 'name-desc': matchedProducts.sort((a,b) => (b.name || '').localeCompare(a.name || '', 'tr')); break;
+    case 'price-asc': matchedProducts.sort((a,b) => (a.price || 0) - (b.price || 0)); break;
+    case 'price-desc': matchedProducts.sort((a,b) => (b.price || 0) - (a.price || 0)); break;
+    case 'qty-asc': matchedProducts.sort((a,b) => (a.qty || 0) - (b.qty || 0)); break;
+    case 'qty-desc': matchedProducts.sort((a,b) => (b.qty || 0) - (a.qty || 0)); break;
+    case 'category-asc': matchedProducts.sort((a,b) => (a.category || '').localeCompare(b.category || '', 'tr')); break;
+    default: break;
+  }
 
   const visibleCount = Math.min(matchedProducts.length, gridCurrentPage * GRID_PAGE_SIZE);
   const pageProducts = matchedProducts.slice(0, visibleCount);
@@ -4069,7 +4205,7 @@ function renderImportMapping(headers) {
     `;
   });
   html += `</div>`;
-  html += `<div id="import-barcode-warning" style="display:none; margin-top:10px; padding:8px; background:#FFF6E9; border:1px solid #E8C27A; border-radius:3px; font-size:11px; color:var(--charcoal);">⚠️ <b>Barkod sütunu seçilmedi!</b> Dosyanızdaki gerçek barkodlar kaydedilmeyecek, tüm ürünlere sistem tarafından rastgele kod atanacak. Barkodlarınız varsa yukarıdan "Barkod / Stok Kodu" alanı için doğru sütunu seçin.</div>`;
+  html += `<div id="import-barcode-warning" style="display:none; margin-top:10px; padding:8px; background:#FEF3C7; border:1px solid #F59E0B; border-radius:4px; font-size:11px; color:var(--charcoal);">⚠️ <b>Barkod sütunu seçilmedi!</b> Dosyanızdaki gerçek barkodlar kaydedilmeyecek, tüm ürünlere sistem tarafından rastgele kod atanacak. Barkodlarınız varsa yukarıdan "Barkod / Stok Kodu" alanı için doğru sütunu seçin.</div>`;
   box.innerHTML = html;
   box.style.display = 'block';
   onImportMappingChange();
@@ -4147,7 +4283,7 @@ function renderImportPreview(rows) {
   const box = document.getElementById('bulk-import-preview');
   const preview = rows.slice(0, 5);
   let html = `<div style="overflow-x:auto; margin-top:10px;"><table style="width:100%; font-size:11px; border-collapse:collapse; min-width:400px;">
-    <tr style="background:var(--concrete); text-align:left;"><th style="padding:5px;">Ürün Adı</th><th style="padding:5px;">Barkod</th><th style="padding:5px;">Miktar</th><th style="padding:5px;">Fiyat</th><th style="padding:5px;">Kategori</th></tr>`;
+    <tr style="background:var(--bg); text-align:left;"><th style="padding:5px;">Ürün Adı</th><th style="padding:5px;">Barkod</th><th style="padding:5px;">Miktar</th><th style="padding:5px;">Fiyat</th><th style="padding:5px;">Kategori</th></tr>`;
   preview.forEach(r => {
     const name = getMappedValue(r, 'name') || '<span style="color:var(--rust);">BOŞ</span>';
     const barcode = getMappedValue(r, 'barcode') || '-';
@@ -4235,7 +4371,7 @@ function renderImportConflictReview() {
   const barcodeConflicts = importRowPlans.filter(p => p.status === 'barcode_conflict');
   const nameConflicts = importRowPlans.filter(p => p.status === 'name_conflict');
 
-  let html = `<div style="background:#F7F5F0; border:1px solid var(--steel-line); border-radius:4px; padding:12px; margin-top:12px;">`;
+  let html = `<div style="background:#F1F5F9; border:1px solid var(--steel-line); border-radius:6px; padding:14px; margin-top:12px;">`;
   html += `<h4 style="margin:0 0 8px; font-family:'Oswald';">📋 Ön Kontrol Sonucu</h4>`;
   html += `<p style="font-size:12px; margin:2px 0;">✅ <b>${newRows.length}</b> satır tamamen yeni ürün olarak eklenecek.</p>`;
   if (invalidRows.length) html += `<p style="font-size:12px; margin:2px 0; color:var(--rust);">⛔ <b>${invalidRows.length}</b> satır atlanacak (isim boş veya dosya içinde tekrar eden barkod).</p>`;
@@ -4509,7 +4645,7 @@ function renderBarcodeFixReview() {
     return;
   }
 
-  let html = `<div style="background:#F7F5F0; border:1px solid var(--steel-line); border-radius:4px; padding:12px; margin-top:12px;">`;
+  let html = `<div style="background:#F1F5F9; border:1px solid var(--steel-line); border-radius:6px; padding:14px; margin-top:12px;">`;
   html += `<p style="font-size:12px; font-weight:600; margin-bottom:8px;">🔗 ${barcodeFixPlans.length} ürün için eşleşme bulundu. Onaylamak istemediklerinizin işaretini kaldırın:</p>`;
   html += `<div style="max-height:280px; overflow-y:auto;">`;
   barcodeFixPlans.forEach((p, i) => {
@@ -5450,7 +5586,7 @@ function loadHistory(key) {
     const isAdmin = currentRole === 'admin';
 
     let html = isAdmin ? `
-      <div style="margin-bottom:15px; background:var(--concrete); padding:10px; border-radius:4px;">
+      <div style="margin-bottom:15px; background:var(--bg); padding:10px; border-radius:6px;">
          <label>İşlem Açıklaması</label>
          <input type="text" id="h-desc" placeholder="Örn: Mal Alımı / Yapılan Ödeme" style="margin-bottom:8px;">
          <div class="form-row" style="margin-bottom:8px;">
