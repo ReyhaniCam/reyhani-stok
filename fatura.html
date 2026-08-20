@@ -1,9 +1,11 @@
+
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reyhani Cam - Müşteri Fişi</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -93,6 +95,34 @@
             border-top: 1px solid #ddd;
             padding-top: 8px;
         }
+        .belge-no-satiri {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #555;
+            margin-bottom: 6px;
+        }
+        .ikrar-metni {
+            font-size: 12px;
+            line-height: 1.6;
+            margin-top: 16px;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background: #fafafa;
+            text-align: justify;
+        }
+        .kimlik-satiri {
+            font-size: 12px;
+            margin-top: 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .kimlik-satiri span {
+            border-bottom: 1px dotted #999;
+            padding-bottom: 2px;
+            flex: 1;
+        }
         .imza-alani {
             display: flex;
             justify-content: space-between;
@@ -116,6 +146,22 @@
             color: #555;
             margin-top: 2px;
         }
+        .pdf-btn-alani {
+            text-align: center;
+            margin-bottom: 14px;
+        }
+        .pdf-btn {
+            background: #0EA5E9;
+            color: #fff;
+            border: none;
+            padding: 12px 22px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 0 4px;
+        }
+        .pdf-btn.yazdir { background: #182337; }
         @media print {
             body { padding: 0; }
             .container { border: none; padding: 5mm; }
@@ -124,7 +170,15 @@
     </style>
 </head>
 <body>
+    <div class="no-print pdf-btn-alani">
+        <button class="pdf-btn yazdir" onclick="window.print()">🖨️ Yazdır</button>
+        <button class="pdf-btn" onclick="pdfIndir()">⬇️ PDF Olarak İndir</button>
+    </div>
     <div class="container" id="faturaContainer">
+        <div class="belge-no-satiri">
+            <span>Belge No: <b id="belgeNoGoster"></b></span>
+            <span>Düzenleme Tarihi: <b id="duzenlemeTarihi"></b></span>
+        </div>
         <div class="baslik">
             <h1>REYHANİ CAM HIRDAVAT</h1>
             <p>Satış Fişi / Borç Dekontu</p>
@@ -157,6 +211,9 @@
         <div class="toplam-alani">
             GENEL TOPLAM: <span id="genelToplam"></span> ₺
         </div>
+        <div style="font-size:11px; color:#555; text-align:right; margin-top:2px;">
+            (Yalnız: <span id="genelToplamYazi"></span>)
+        </div>
 
         <!-- Cari Hesap Tablosu (borç/alacak) -->
         <div class="cari-bilgi">
@@ -180,10 +237,17 @@
             </div>
         </div>
 
+        <div class="ikrar-metni" id="ikrarMetni"></div>
+
+        <div class="kimlik-satiri">
+            <span>T.C. Kimlik No: ..............................</span>
+            <span>Adres: ..............................</span>
+        </div>
+
         <!-- Müşteri ve Satıcı İmza Alanı -->
         <div class="imza-alani">
             <div class="imza-kutusu">
-                <div class="imza-cizgi">Müşteri İmzası</div>
+                <div class="imza-cizgi">Müşteri (Borçlu) İmzası</div>
                 <div class="imza-alt-bilgi" id="musteriImzaAd"></div>
             </div>
             <div class="imza-kutusu">
@@ -193,12 +257,74 @@
         </div>
 
         <div class="footer">
-            Bu belge, Reyhani Cam Hırdavat tarafından düzenlenmiştir.<br>
+            Bu belge, Reyhani Cam Hırdavat tarafından iki (2) nüsha olarak düzenlenmiştir; bir nüshası müşteride, bir nüshası işletmede kalır.<br>
             Ödeme son tarihine uymanız rica olunur.
         </div>
     </div>
 
     <script>
+        // Türkçe sayıyı yazıya çeviren yardımcı fonksiyon (borç ikrarı metninde kullanılır)
+        function sayiyiYaziyaCevir(sayi) {
+            const birler = ['', 'bir', 'iki', 'üç', 'dört', 'beş', 'altı', 'yedi', 'sekiz', 'dokuz'];
+            const onlar = ['', 'on', 'yirmi', 'otuz', 'kırk', 'elli', 'altmış', 'yetmiş', 'seksen', 'doksan'];
+            const binler = ['', 'bin', 'milyon', 'milyar'];
+
+            function ucBasamak(n) {
+                let s = '';
+                const yuz = Math.floor(n / 100);
+                const kalan = n % 100;
+                const on = Math.floor(kalan / 10);
+                const bir = kalan % 10;
+                if (yuz > 0) s += (yuz === 1 ? '' : birler[yuz] + ' ') + 'yüz ';
+                if (on > 0) s += onlar[on] + ' ';
+                if (bir > 0) s += birler[bir] + ' ';
+                return s.trim();
+            }
+
+            if (sayi === 0) return 'sıfır';
+            let grup = [];
+            let n = Math.floor(sayi);
+            while (n > 0) {
+                grup.push(n % 1000);
+                n = Math.floor(n / 1000);
+            }
+            let sonuc = '';
+            for (let i = grup.length - 1; i >= 0; i--) {
+                if (grup[i] === 0) continue;
+                let parca = ucBasamak(grup[i]);
+                if (i === 1 && grup[i] === 1) {
+                    sonuc += 'bin ';
+                } else if (i > 0) {
+                    sonuc += parca + ' ' + binler[i] + ' ';
+                } else {
+                    sonuc += parca + ' ';
+                }
+            }
+            return sonuc.trim();
+        }
+
+        function tutariYaziyaCevir(tutar) {
+            const lira = Math.floor(tutar);
+            const kurus = Math.round((tutar - lira) * 100);
+            let yazi = sayiyiYaziyaCevir(lira).replace(/^./, c => c.toUpperCase()) + ' Türk Lirası';
+            if (kurus > 0) {
+                yazi += ', ' + sayiyiYaziyaCevir(kurus) + ' kuruş';
+            }
+            return yazi;
+        }
+
+        function pdfIndir() {
+            const el = document.getElementById('faturaContainer');
+            const dosyaAdi = 'Reyhani_Fis_' + (document.getElementById('belgeNoGoster').textContent || Date.now()) + '.pdf';
+            html2pdf().set({
+                margin: 5,
+                filename: dosyaAdi,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2 },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            }).from(el).save();
+        }
+
         (function() {
             // 1. localStorage'dan sipariş verisini al
             const kayitliVeri = localStorage.getItem("guncelSiparis");
@@ -218,6 +344,7 @@
             document.getElementById("vadeSuresi").textContent = siparis.vadeSuresi || 'Belirsiz';
             document.getElementById("vadeTarihi").textContent = siparis.vadeTarihi || '-';
             document.getElementById("genelToplam").textContent = siparis.genelToplam.toFixed(2);
+            document.getElementById("genelToplamYazi").textContent = tutariYaziyaCevir(siparis.genelToplam);
 
             // 3. Ürün listesini oluştur
             const tbody = document.getElementById("urunListesi");
@@ -245,6 +372,9 @@
             const aciklama = siparis.islemTipi || 'Borç Satış';
             const borcTutar = siparis.genelToplam;
 
+            document.getElementById("belgeNoGoster").textContent = belgeNo;
+            document.getElementById("duzenlemeTarihi").textContent = bugun;
+
             cariTbody.innerHTML = `
                 <tr>
                     <td>${bugun}</td>
@@ -255,6 +385,15 @@
                 </tr>
             `;
             document.getElementById("kalanBorc").textContent = borcTutar.toFixed(2);
+
+            // 4b. Borç ikrarı (kabul beyanı) metnini doldur — imzalanınca senet niteliğini güçlendirir
+            document.getElementById("ikrarMetni").innerHTML =
+                `İşbu belge ile <b>${siparis.musteriAdi || 'yukarıda kimliği belirtilen müşteri'}</b>, yukarıda dökümü ve toplamı ` +
+                `belirtilen mal/malzemeyi <b>${bugun}</b> tarihinde eksiksiz ve kusursuz olarak teslim aldığını; toplam ` +
+                `<b>${borcTutar.toFixed(2)} ₺ (${tutariYaziyaCevir(borcTutar)})</b> tutarındaki bedeli ` +
+                `<b>${siparis.vadeSuresi || 'belirtilen vade'}</b> içinde, en geç <b>${siparis.vadeTarihi || '-'}</b> tarihine kadar ` +
+                `Reyhani Cam Hırdavat'a nakden ve defaten ödemeyi gayrikabili rücu kabul, beyan ve taahhüt eder. ` +
+                `Belirtilen vadede ödeme yapılmadığı takdirde Reyhani Cam Hırdavat'ın yasal yollara (icra takibi dahil) başvurma hakkı saklıdır.`;
 
             // 5. Sayfa yüklendiğinde otomatik yazdır
             window.onload = function() {
