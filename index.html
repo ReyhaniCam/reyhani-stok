@@ -19,7 +19,6 @@
 <!-- Firebase CDNs (v8) -->
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 
 <style>
   :root{
@@ -919,14 +918,6 @@
 </div>
 
 <!-- HESAP EKSTRESİ MODALI -->
-<div class="modal-overlay" id="receipt-detail-modal" style="display:none;">
-  <div class="modal-content">
-    <button class="modal-close" onclick="closeReceiptDetail()">X</button>
-    <h3 style="margin-top:0; font-family:'Oswald';">📄 Malzeme Fişi Detayı</h3>
-    <div id="receipt-detail-body"></div>
-  </div>
-</div>
-
 <div class="modal-overlay" id="wholesaler-edit-modal" style="display:none;">
   <div class="modal-content">
     <button class="modal-close" onclick="closeWholesalerEdit()">X</button>
@@ -1188,14 +1179,6 @@
 // FIREBASE BAĞLANTISI
 const firebaseConfig = { databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/" };
 firebase.initializeApp(firebaseConfig);
-
-// GÜVENLİK: Veritabanına erişimin, siteyi ziyaret eden herkesin doğrudan veritabanı
-// adresine (URL) istek atarak tüm veriyi çekmesini/değiştirmesini engellemek için
-// önce "anonim oturum" açılıyor. Bu, Firebase Console > Realtime Database > Rules
-// bölümünde "auth != null" kuralı ile eşleştirilmelidir (aşağıdaki not bölümüne bakın).
-firebase.auth().signInAnonymously().catch((err) => {
-  console.error("Anonim oturum açılamadı:", err);
-});
 
 const dbRoot = firebase.database().ref();
 const db = dbRoot.child('products');
@@ -1465,7 +1448,6 @@ dbGoodsReceipts.on('value', snapshot => {
               </div>
               <div style="text-align:right;">
                  <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--charcoal);">₺${formatMoney(rec.total)}</div>
-                 <button class="btn btn-primary btn-sm" onclick="viewReceiptDetail('${receiptId}')" style="margin-bottom:4px;">👁️ Detay Gör</button>
                  <button class="btn btn-info btn-sm" onclick="downloadReceiptById('${receiptId}')">İndir (Excel)</button>
               </div>
            </div>
@@ -4001,50 +3983,6 @@ async function downloadReceiptById(receiptId) {
   } else {
     alert("Bu fişin detayları bulunamadı.");
   }
-}
-
-function viewReceiptDetail(receiptId) {
-  const target = globalPastReceipts[receiptId];
-  if(!target) { alert("Bu fişin detayları bulunamadı."); return; }
-  const rec = target.receiptData;
-
-  const rows = (rec.items || []).map(it => `
-    <tr>
-      <td style="padding:6px 8px; border-bottom:1px solid var(--steel-line);">${it.name}${it.code ? ` <span style="color:var(--steel); font-size:10px;">(${it.code})</span>` : ''}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid var(--steel-line); text-align:center;">${it.qty} ${it.unit || 'Adet'}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid var(--steel-line); text-align:right;">${it.cost != null ? '₺' + formatMoney(it.cost) : '-'}</td>
-      <td style="padding:6px 8px; border-bottom:1px solid var(--steel-line); text-align:right;">${it.price != null ? '₺' + formatMoney(it.price) : '-'}</td>
-    </tr>
-  `).join('');
-
-  document.getElementById('receipt-detail-body').innerHTML = `
-    <div style="margin-bottom:12px; font-size:13px; line-height:1.7;">
-      <div><b>Toptancı:</b> ${rec.wholesalerName || 'Bilinmeyen'}</div>
-      <div><b>Tarih:</b> ${target.date} ${rec.time || ''}</div>
-      ${rec.fisNo ? `<div><b>Fiş No:</b> ${rec.fisNo}</div>` : ''}
-      ${rec.note ? `<div><b>Not:</b> ${rec.note}</div>` : ''}
-      <div><b>Toptancı Cari Hesabına İşlendi mi:</b> ${rec.addedToDebt ? 'Evet (borç eklendi)' : 'Hayır'}</div>
-    </div>
-    <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-      <thead>
-        <tr style="background:var(--concrete);">
-          <th style="padding:6px 8px; text-align:left;">Malzeme</th>
-          <th style="padding:6px 8px; text-align:center;">Miktar</th>
-          <th style="padding:6px 8px; text-align:right;">Maliyet (Alış)</th>
-          <th style="padding:6px 8px; text-align:right;">Satış Fiyatı</th>
-        </tr>
-      </thead>
-      <tbody>${rows || '<tr><td colspan="4" style="padding:10px; text-align:center; color:var(--steel);">Kalem bulunamadı.</td></tr>'}</tbody>
-    </table>
-    <div style="text-align:right; margin-top:12px; font-size:16px; font-weight:800; font-family:'IBM Plex Mono';">
-      GENEL TOPLAM: ₺${formatMoney(rec.total)}
-    </div>
-  `;
-  document.getElementById('receipt-detail-modal').style.display = 'flex';
-}
-
-function closeReceiptDetail() {
-  document.getElementById('receipt-detail-modal').style.display = 'none';
 }
 
 function openWholesalerEdit(key) {
