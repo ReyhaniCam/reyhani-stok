@@ -681,37 +681,42 @@
           <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit()"></div>
         </div>
         <div id="fis-new-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
-          <p style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;">ℹ️ Bu malzeme sistemde bulunamadı, YENİ ÜRÜN olarak stoğa eklenecek. Lütfen aşağıdaki bilgileri de girin:</p>
-          <div style="margin-bottom:10px;">
-            <label>Barkod Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bu ürünün üzerindeki barkodu okutun veya elle girin — boş bırakılırsa sistem otomatik kod atar)</span></label>
-            <div style="display:flex; gap:10px;">
-              <input type="text" id="fis-new-barcode" placeholder="Barkod numarası..." style="flex:1;" oninput="document.getElementById('fis-barcode-pending-code').value = this.value.trim();">
-              <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Okut</button>
+          <p id="fis-fields-info" style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;">ℹ️ Bu malzeme sistemde bulunamadı, YENİ ÜRÜN olarak stoğa eklenecek. Lütfen aşağıdaki bilgileri de girin:</p>
+          <div id="fis-new-only-fields">
+            <div style="margin-bottom:10px;">
+              <label>Barkod Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bu ürünün üzerindeki barkodu okutun veya elle girin — boş bırakılırsa sistem otomatik kod atar)</span></label>
+              <div style="display:flex; gap:10px;">
+                <input type="text" id="fis-new-barcode" placeholder="Barkod numarası..." style="flex:1;" oninput="document.getElementById('fis-barcode-pending-code').value = this.value.trim();">
+                <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Okut</button>
+              </div>
+            </div>
+            <div class="form-row" style="grid-template-columns:1fr 1fr;">
+              <div><label>Ölçü Birimi</label>
+                <select id="fis-unit">
+                  <option value="Adet">Adet</option>
+                  <option value="Kilogram">Kilogram</option>
+                  <option value="Metre">Metre</option>
+                </select>
+              </div>
+              <div><label>Ürün Sınıfı</label>
+                <select id="fis-category">
+                  <option value="Banyo">Banyo</option>
+                  <option value="Bahçe">Bahçe</option>
+                  <option value="Mutfak">Mutfak</option>
+                  <option value="Boya">Boya</option>
+                  <option value="Toz Grubu">Toz Grubu</option>
+                  <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
+                  <option value="Cam & Aksesuar">Cam & Aksesuar</option>
+                  <option value="Silikon & Mastik">Silikon & Mastik</option>
+                  <option value="Vida & Civata">Vida & Civata</option>
+                  <option value="El Aletleri">El Aletleri</option>
+                  <option value="Diğer" selected>Diğer</option>
+                </select>
+              </div>
             </div>
           </div>
-          <div class="form-row" style="grid-template-columns:1fr 1fr;">
-            <div><label>Ölçü Birimi</label>
-              <select id="fis-unit">
-                <option value="Adet">Adet</option>
-                <option value="Kilogram">Kilogram</option>
-                <option value="Metre">Metre</option>
-              </select>
-            </div>
-            <div><label>Ürün Sınıfı</label>
-              <select id="fis-category">
-                <option value="Banyo">Banyo</option>
-                <option value="Bahçe">Bahçe</option>
-                <option value="Mutfak">Mutfak</option>
-                <option value="Boya">Boya</option>
-                <option value="Toz Grubu">Toz Grubu</option>
-                <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
-                <option value="Cam & Aksesuar">Cam & Aksesuar</option>
-                <option value="Silikon & Mastik">Silikon & Mastik</option>
-                <option value="Vida & Civata">Vida & Civata</option>
-                <option value="El Aletleri">El Aletleri</option>
-                <option value="Diğer" selected>Diğer</option>
-              </select>
-            </div>
+          <div id="fis-existing-note" style="display:none; font-size:11px; color:var(--steel); margin:0 0 10px 0; line-height:1.5;">
+            Bu ürün sistemde kayıtlı. Piyasa fiyatları değiştiği için isterseniz <b>geliş fiyatını, KDV / kâr oranını ve satış fiyatını</b> aşağıdan güncelleyebilirsiniz — fişi onayladığınızda stoktaki kayıt bu yeni değerlerle güncellenecektir. Değiştirmek istemediğiniz alanı olduğu gibi bırakabilirsiniz.
           </div>
           <div class="form-row" style="grid-template-columns:1fr 1fr;">
             <div><label>KDV Oranı (%)</label><input type="number" id="fis-vat" step="0.01" placeholder="0" oninput="updateFisProfit()"></div>
@@ -727,7 +732,7 @@
           <div class="form-row" style="grid-template-columns:1fr; margin-bottom:0; margin-top:10px;">
             <div><label>Satış Fiyatı (₺)</label><input type="number" id="fis-price" step="0.01" placeholder="0.00"></div>
           </div>
-          <div style="display:flex; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
+          <div id="fis-create-now-row" style="display:flex; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
             <input type="checkbox" id="fis-create-now" checked style="width:auto; margin-top:2px;">
             <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünü fişe eklerken <b>hemen stok listesine düşür</b> <span style="color:var(--steel); font-weight:normal;">— böylece fişi yarıda bırakıp silseniz bile ürün tanımı (isim, fiyat, barkod vb.) kaybolmaz, sadece o fişten gelecek stok miktarı işlenmemiş olur.</span></label>
           </div>
@@ -3784,15 +3789,41 @@ async function downloadOrderById(orderId) {
 function checkFisProductMatch() {
   const inputVal = document.getElementById('fis-product').value.trim();
   const possibleCode = inputVal.split(' - ')[0].trim();
-  const exists = !!productsData[possibleCode];
+  const p = productsData[possibleCode];
+  const exists = !!p;
   const newFields = document.getElementById('fis-new-fields');
+  const newOnly = document.getElementById('fis-new-only-fields');
+  const existingNote = document.getElementById('fis-existing-note');
+  const infoText = document.getElementById('fis-fields-info');
+  const createNowRow = document.getElementById('fis-create-now-row');
+
   if(newFields) {
-    const shouldShow = inputVal && !exists;
+    // Show the shared price/profit block whenever a product name is typed —
+    // for brand new products AND for existing ones (so geliş fiyatı / kâr / satış fiyatı
+    // can be refreshed each time new stock comes in at a different market price).
+    const shouldShow = !!inputVal;
     newFields.style.display = shouldShow ? 'block' : 'none';
+
     if(shouldShow) {
-      const nb = document.getElementById('fis-new-barcode');
-      const pending = document.getElementById('fis-barcode-pending-code').value;
-      if(nb && !nb.value && pending) nb.value = pending;
+      if(newOnly) newOnly.style.display = exists ? 'none' : 'block';
+      if(createNowRow) createNowRow.style.display = exists ? 'none' : 'flex';
+      if(existingNote) existingNote.style.display = exists ? 'block' : 'none';
+      if(infoText) infoText.style.display = exists ? 'none' : 'block';
+
+      if(exists) {
+        // Pre-fill with the product's current pricing so the user can see what's
+        // stored and only needs to change what actually moved.
+        document.getElementById('fis-vat').value = p.vat || '';
+        document.getElementById('fis-profit').value = (p.targetProfit != null) ? p.targetProfit : '';
+        document.getElementById('fis-price').value = p.price || '';
+        const costField = document.getElementById('fis-cost');
+        if(costField && !costField.value) costField.value = p.costPrice || '';
+        updateFisProfit();
+      } else {
+        const nb = document.getElementById('fis-new-barcode');
+        const pending = document.getElementById('fis-barcode-pending-code').value;
+        if(nb && !nb.value && pending) nb.value = pending;
+      }
     }
   }
 
@@ -3871,7 +3902,13 @@ async function addToGoodsReceipt() {
   let item;
   if(p) {
     const cost = (costEntered !== null && !isNaN(costEntered)) ? costEntered : Number(p.costPrice || 0);
-    item = { code: p.code, name: p.name, unit: p.unit || 'Adet', qty: qty, cost: cost, isNew: false };
+    const vatRaw = document.getElementById('fis-vat').value;
+    const profitRaw = document.getElementById('fis-profit').value;
+    const priceRaw = document.getElementById('fis-price').value;
+    const vat = vatRaw === '' ? (p.vat || 0) : (parseFloat(vatRaw) || 0);
+    const targetProfit = profitRaw === '' ? (p.targetProfit != null ? p.targetProfit : null) : (parseFloat(profitRaw) || 0);
+    const price = priceRaw === '' ? Number(p.price || 0) : (parseFloat(priceRaw) || 0);
+    item = { code: p.code, name: p.name, unit: p.unit || 'Adet', qty: qty, cost: cost, isNew: false, vat: vat, targetProfit: targetProfit, price: price };
   } else {
     const cost = (costEntered !== null && !isNaN(costEntered)) ? costEntered : 0;
     const salePriceRaw = document.getElementById('fis-price').value;
@@ -3942,6 +3979,7 @@ function renderGoodsReceiptCart() {
           <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}<br>
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
           ${(item.isNew || item.justCreated) && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
+          ${(!item.isNew && !item.justCreated && item.price) ? `<br><small style="color:var(--success);">↻ Fiyat/kâr güncellenecek — Satış: ₺${formatMoney(item.price)}${item.targetProfit != null && item.targetProfit !== '' ? ', Kâr %' + item.targetProfit : ''}</small>` : ''}
         </td>
         <td>₺${formatMoney(item.cost)}</td>
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
@@ -3983,6 +4021,12 @@ function editFisItem(index) {
     document.getElementById('fis-profit').value = item.targetProfit || '';
     updateFisProfit();
     setFisPendingBarcode(item.code || '');
+  } else {
+    // Restore the pricing values the user had adjusted for this existing product.
+    document.getElementById('fis-vat').value = (item.vat != null) ? item.vat : '';
+    document.getElementById('fis-profit').value = (item.targetProfit != null) ? item.targetProfit : '';
+    document.getElementById('fis-price').value = (item.price != null) ? item.price : '';
+    updateFisProfit();
   }
 
   document.getElementById('fis-product').scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4058,8 +4102,20 @@ async function completeGoodsReceipt() {
         logMovement(item.code, item.name, item.qty, 'TOPTANCI MAL GİRİŞİ: ' + wholesaler.name);
       }
     });
-    if(item.cost && item.cost > 0) {
-      db.child(item.code).child('costPrice').set(item.cost);
+    // Update the product's stored pricing to reflect what was entered on this receipt
+    // (market/geliş fiyatı changes constantly, so each new fiş can refresh it).
+    const priceUpdates = {};
+    if(item.cost && item.cost > 0) priceUpdates.costPrice = item.cost;
+    if(!item.isNew) {
+      if(item.price != null && !isNaN(item.price)) priceUpdates.price = item.price;
+      if(item.vat != null && !isNaN(item.vat)) priceUpdates.vat = item.vat;
+      if(item.targetProfit != null && !isNaN(item.targetProfit)) priceUpdates.targetProfit = item.targetProfit;
+    }
+    if(Object.keys(priceUpdates).length) {
+      priceUpdates.lastPriceUpdate = new Date().toISOString();
+      priceUpdates.lastUpdatedBy = 'Malzeme Fişi (' + wholesaler.name + ')';
+      db.child(item.code).update(priceUpdates);
+      if(productsData[item.code]) Object.assign(productsData[item.code], priceUpdates);
     }
   });
 
