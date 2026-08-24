@@ -5071,6 +5071,35 @@ function setFisPendingBarcode(code) {
   if (visible) visible.value = code || '';
 }
 
+// UPCItemDB'nin trial endpoint'i sadece 8/12/13/14 haneli sayısal GTIN kabul ediyor;
+// format uymazsa (boşluk, tire, harf, eksik/fazla hane vb.) dış servis HTTP 400 ile
+// reddediyor. Bunu göndermeden önce yakalayıp kullanıcıyı boşuna bekletmemek için.
+function sanitizeBarcodeForLookup(code) {
+  return (code || '').replace(/[^0-9]/g, '');
+}
+function isLikelyGtin(code) {
+  return /^\d{8}$|^\d{12,14}$/.test(code);
+}
+
+// Açık, ücretsiz ve dünya genelinde (Türkiye dahil) barkod kapsaması daha geniş olan
+// Open Food Facts veritabanı — UPCItemDB'nin bulamadığı/400 döndürdüğü barkodlar için
+// ikinci bir kaynak olarak deniyoruz.
+async function fetchOpenFoodFacts(code) {
+  try {
+    const resp = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    if (data && data.status === 1 && data.product) {
+      const title = data.product.product_name || data.product.product_name_tr || data.product.generic_name || null;
+      if (!title) return null;
+      return { title, brand: data.product.brands || null };
+    }
+    return null;
+  } catch (e) {
+    return null;
+  }
+}
+
 async function fetchUpcItemDb(code) {
   const directUrl = `https://api.upcitemdb.com/prod/trial/lookup?upc=${encodeURIComponent(code)}`;
   const attempts = [
@@ -5132,8 +5161,34 @@ async function lookupFisBarcode() {
     }
   } catch (e) { /* sessizce dış API'ye geç */ }
 
+  const numericCode = sanitizeBarcodeForLookup(code);
+
+  // Open Food Facts, dünya genelinde (Türkiye dahil) daha geniş barkod kapsaması
+  // sunuyor ve format konusunda UPCItemDB kadar katı değil — önce onu deniyoruz.
+  if (numericCode) {
+    const off = await fetchOpenFoodFacts(numericCode);
+    if (off && off.title) {
+      setFisPendingBarcode(code);
+      document.getElementById('fis-product').value = off.title;
+      checkFisProductMatch();
+      dbBarcodeCache.child(code).set({ name: off.title, source: 'openfoodfacts', savedAt: new Date().toISOString() });
+      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${off.title}"${off.brand ? ' — ' + off.brand : ''}.</span> YENİ ÜRÜN bilgilerini kontrol edip fişe ekleyin. Barkod (${code}) ürün kodu olarak kullanılacak.`;
+      return;
+    }
+  }
+
+  // UPCItemDB'nin trial endpoint'i sadece standart 8/12/13/14 haneli GTIN kabul
+  // ediyor; format uymuyorsa (harf, eksik/fazla hane, boşluk vb.) HTTP 400 döndürüyor.
+  // Böyle bir barkodu göndermek zaten başarısız olacağından, boşuna denemiyoruz.
+  if (!isLikelyGtin(numericCode)) {
+    setFisPendingBarcode(code);
+    checkFisProductMatch();
+    statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod ("${code}") standart bir ürün barkodu (8/12/13/14 haneli) formatında görünmüyor, dış veritabanlarında aranamadı. Malzeme adını elle girip fişe ekleyin — barkod yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
+    return;
+  }
+
   try {
-    const resp = await fetchUpcItemDb(code);
+    const resp = await fetchUpcItemDb(numericCode);
 
     if (resp.status === 429) {
       setFisPendingBarcode(code);
@@ -5144,7 +5199,10 @@ async function lookupFisBarcode() {
     if (!resp.ok) {
       setFisPendingBarcode(code);
       checkFisProductMatch();
-      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Malzeme adını elle girin, barkod (${code}) yine de kaydedilecek.`;
+      const reason = resp.status === 400
+        ? 'Dış veritabanı bu barkodu geçersiz/tanınmayan formatta buldu (muhtemelen yerel/özel bir barkod).'
+        : `Dış servis hata döndürdü (HTTP ${resp.status}).`;
+      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ ${reason}</span> Malzeme adını elle girin, barkod (${code}) yine de kaydedilecek.`;
       return;
     }
 
@@ -5190,8 +5248,30 @@ async function lookupBarcode() {
     }
   } catch (e) { /* hafıza okunamadıysa sessizce dış API'ye geç */ }
 
+  const numericCode = sanitizeBarcodeForLookup(code);
+
+  // Open Food Facts, dünya genelinde (Türkiye dahil) daha geniş barkod kapsaması
+  // sunuyor ve format konusunda UPCItemDB kadar katı değil — önce onu deniyoruz.
+  if (numericCode) {
+    const off = await fetchOpenFoodFacts(numericCode);
+    if (off && off.title) {
+      document.getElementById('f-name').value = off.title;
+      dbBarcodeCache.child(code).set({ name: off.title, source: 'openfoodfacts', savedAt: new Date().toISOString() });
+      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${off.title}"${off.brand ? ' — ' + off.brand : ''}.</span> Kontrol edip fiyat/miktar/kategori girin. (Bu barkod artık kendi hafızamıza da kaydedildi.)`;
+      return;
+    }
+  }
+
+  // UPCItemDB'nin trial endpoint'i sadece standart 8/12/13/14 haneli GTIN kabul
+  // ediyor; format uymuyorsa (harf, eksik/fazla hane, boşluk vb.) HTTP 400 döndürüyor.
+  // Böyle bir barkodu göndermek zaten başarısız olacağından, boşuna denemiyoruz.
+  if (!isLikelyGtin(numericCode)) {
+    statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod ("${code}") standart bir ürün barkodu (8/12/13/14 haneli) formatında görünmüyor, dış veritabanlarında aranamadı. Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
+    return;
+  }
+
   try {
-    const resp = await fetchUpcItemDb(code);
+    const resp = await fetchUpcItemDb(numericCode);
 
     if (resp.status === 429) {
       statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkın (100) dolmuş.</span> Barkod numarası dolduruldu — ürün adını elle girip kaydet, <b>kendi hafızamıza kaydedilecek ve bir dahaki sefere hiç sorgu harcamadan tanınacak.</b> Dış sorgu hakkı ertesi gün yeniden açılıyor.`;
@@ -5200,7 +5280,10 @@ async function lookupBarcode() {
 
     if (!resp.ok) {
       const rawText = await resp.text().catch(() => '(okunamadı)');
-      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Dış servis hata döndürdü (HTTP ${resp.status}).</span> Barkod numarası dolduruldu, ürün adını elle girin.
+      const reason = resp.status === 400
+        ? 'Dış veritabanı bu barkodu geçersiz/tanınmayan formatta buldu (muhtemelen yerel/özel bir barkod).'
+        : `Dış servis hata döndürdü (HTTP ${resp.status}).`;
+      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ ${reason}</span> Barkod numarası dolduruldu, ürün adını elle girin.
         <details style="margin-top:6px; font-size:10px; color:var(--steel);"><summary style="cursor:pointer;">Teknik detay (ekran görüntüsü alıp gönderebilirsin)</summary>${String(rawText).slice(0,300)}</details>`;
       return;
     }
