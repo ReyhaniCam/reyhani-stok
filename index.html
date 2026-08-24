@@ -3559,6 +3559,20 @@ function normalizeTr(str) {
     .trim();
 }
 
+// Folds Turkish-specific letters to their closest ASCII equivalent (ş→s, ı→i, ö→o,
+// ü→u, ç→c, ğ→g) so "Musluk Bataryasi" and "Musluk Bataryası" — or any other
+// typo that swaps a Turkish letter for its plain counterpart — are still recognized
+// as the same product when scanning for duplicates.
+function foldTr(str) {
+  return normalizeTr(str)
+    .replace(/ş/g, 's')
+    .replace(/ı/g, 'i')
+    .replace(/ö/g, 'o')
+    .replace(/ü/g, 'u')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g');
+}
+
 function levenshteinDistance(a, b) {
   const m = a.length, n = b.length;
   if (m === 0) return n;
@@ -3583,56 +3597,96 @@ function similarityRatio(a, b) {
   return 1 - (levenshteinDistance(a, b) / maxLen);
 }
 
+// Cache each product's normalized/folded name + token set so we don't redo that
+// work (and re-run Levenshtein prep) on every single keystroke — this is what was
+// making name search feel slow once the product list grew large.
+let _prodMatchCache = {};
+function getProductMatchMeta(p) {
+  const cached = _prodMatchCache[p.code];
+  if (cached && cached.name === p.name) return cached;
+  const norm = normalizeTr(p.name || '');
+  const fold = foldTr(p.name || '');
+  const tokens = new Set(fold.split(' ').filter(t => t.length > 2));
+  const meta = { name: p.name, norm, fold, tokens };
+  _prodMatchCache[p.code] = meta;
+  return meta;
+}
+
 function findSimilarProducts(inputName, limit) {
   limit = limit || 4;
   const norm = normalizeTr(inputName);
   if (!norm || norm.length < 4) return [];
-  
+
   const inputTokens = norm.split(' ').filter(Boolean);
   if (inputTokens.length === 1 && inputTokens[0].length < 4) return [];
 
-  const scored = Object.values(productsData).map(p => {
-    const pn = normalizeTr(p.name || '');
-    if (!pn) return { product: p, score: 0 };
-    if (pn.length < 3) return { product: p, score: 0 };
-    
-    let score = similarityRatio(norm, pn);
-    if (pn.includes(norm) || norm.includes(pn)) score = Math.max(score, 0.85);
-    
-    const pnTokens = pn.split(' ').filter(Boolean);
+  const foldInput = foldTr(inputName);
+  const foldInputTokens = new Set(foldInput.split(' ').filter(t => t.length > 2));
+
+  const scored = [];
+  const allProducts = Object.values(productsData);
+  for (let idx = 0; idx < allProducts.length; idx++) {
+    const p = allProducts[idx];
+    const meta = getProductMatchMeta(p);
+    if (!meta.norm || meta.norm.length < 3) continue;
+
+    // Cheap pre-filter before running Levenshtein: only bother comparing names
+    // that already look at least loosely related (shared word, one contains the
+    // other, or similar length). This is what keeps large product lists fast.
+    const substringHit = meta.fold.includes(foldInput) || foldInput.includes(meta.fold);
+    let foldedOverlapCount = 0;
+    foldInputTokens.forEach(t => { if (meta.tokens.has(t)) foldedOverlapCount++; });
+    const lengthClose = Math.abs(meta.norm.length - norm.length) <= Math.max(4, Math.ceil(norm.length * 0.4));
+    if (!substringHit && foldedOverlapCount === 0 && !lengthClose) continue;
+
+    let score = Math.max(similarityRatio(norm, meta.norm), similarityRatio(foldInput, meta.fold));
+    if (substringHit || meta.norm.includes(norm) || norm.includes(meta.norm)) score = Math.max(score, 0.85);
+
+    const pnTokens = meta.norm.split(' ').filter(Boolean);
     if (inputTokens.length > 0 && pnTokens.length > 0) {
       const overlap = inputTokens.filter(t => t.length > 2 && pnTokens.includes(t)).length;
-      if (inputTokens.length > 0) {
-        score = Math.max(score, (overlap / inputTokens.length) * 0.9);
-      }
+      score = Math.max(score, (overlap / inputTokens.length) * 0.9);
     }
-    return { product: p, score };
-  });
+    if (foldInputTokens.size > 0 && foldedOverlapCount > 0) {
+      score = Math.max(score, (foldedOverlapCount / foldInputTokens.size) * 0.9);
+    }
 
-  return scored.filter(s => s.score >= 0.70 && s.score < 0.999).sort((a, b) => b.score - a.score).slice(0, limit);
+    // No upper cap here: if what's typed matches an existing product's name exactly
+    // (just with/without Turkish-specific letters, e.g. "Bataryasi" vs "Bataryası"),
+    // that's precisely the duplicate we want to catch and surface as a suggestion.
+    if (score >= 0.70) scored.push({ product: p, score });
+  }
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit);
 }
 
+let _nameDupDebounce = null;
 function checkNameDuplicate() {
   const nameInput = document.getElementById('f-name');
   const warnBox = document.getElementById('f-name-duplicate-warning');
   if (!nameInput || !warnBox) return;
   const val = nameInput.value.trim();
 
+  if (_nameDupDebounce) clearTimeout(_nameDupDebounce);
   if (!val) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
 
-  const matches = findSimilarProducts(val);
-  if (matches.length === 0) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+  // Debounce the fuzzy search itself so it runs once after the user pauses typing,
+  // not on every keystroke — this is what was making the search feel slow/laggy.
+  _nameDupDebounce = setTimeout(() => {
+    const matches = findSimilarProducts(val);
+    if (matches.length === 0) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
 
-  warnBox.style.display = 'block';
-  warnBox.innerHTML = `
-    <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu ürünü mü arıyordunuz? Sistemde benzer isimli ürün(ler) var, mükerrer kayıt oluşturmamak için kontrol edin:</div>
-    ${matches.map(m => `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
-        <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
-        <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="openEditModal('${m.product.code}')">Bu Ürünü Düzenle</button>
-      </div>
-    `).join('')}
-  `;
+    warnBox.style.display = 'block';
+    warnBox.innerHTML = `
+      <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu ürün sistemde zaten kayıtlı olabilir. Yeni ürün olarak mı devam edelim, yoksa aşağıdakinin üstüne mi ekleyelim?</div>
+      ${matches.map(m => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
+          <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
+          <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="openEditModal('${m.product.code}')">Üstüne Ekle / Düzenle</button>
+        </div>
+      `).join('')}
+    `;
+  }, 250);
 }
 
 function renderFisWholesalerOptions() {
@@ -3786,6 +3840,7 @@ async function downloadOrderById(orderId) {
   }
 }
 
+let _fisMatchDebounce = null;
 function checkFisProductMatch() {
   const inputVal = document.getElementById('fis-product').value.trim();
   const possibleCode = inputVal.split(' - ')[0].trim();
@@ -3830,21 +3885,26 @@ function checkFisProductMatch() {
   const warnBox = document.getElementById('fis-duplicate-warning');
   if(!warnBox) return;
 
+  if(_fisMatchDebounce) clearTimeout(_fisMatchDebounce);
   if(!inputVal || exists) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
 
-  const matches = findSimilarProducts(inputVal);
-  if(matches.length === 0) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+  // Debounce the fuzzy search itself so it runs once after the user pauses typing,
+  // not on every keystroke — this is what was making name search feel slow.
+  _fisMatchDebounce = setTimeout(() => {
+    const matches = findSimilarProducts(inputVal);
+    if(matches.length === 0) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
 
-  warnBox.style.display = 'block';
-  warnBox.innerHTML = `
-    <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu malzemeyi mi arıyordunuz? Sistemde benzer isimli ürün(ler) var, mükerrer kayıt açmamak için kontrol edin:</div>
-    ${matches.map(m => `
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
-        <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
-        <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="selectFisSuggestion('${m.product.code}')">Bunu Seç</button>
-      </div>
-    `).join('')}
-  `;
+    warnBox.style.display = 'block';
+    warnBox.innerHTML = `
+      <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu malzeme sistemde zaten kayıtlı olabilir. Gerçekten yeni bir ürün mü, yoksa aşağıdakinin üstüne mi ekleyelim?</div>
+      ${matches.map(m => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
+          <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
+          <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="selectFisSuggestion('${m.product.code}')">Üstüne Ekle</button>
+        </div>
+      `).join('')}
+    `;
+  }, 250);
 }
 
 function selectFisSuggestion(code) {
