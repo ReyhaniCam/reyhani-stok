@@ -1440,6 +1440,47 @@ const actionCooldowns = {};
 const ADMIN_HASH = "50e65b1455800c98b480cec56db88524fabd630ddd992df1a58faf5a6edd2430";
 const STAFF_HASH = "2b084c9efd9150fb848e4efb0b5f03f455470f68b153814944e14a6204ec5b9a";
 
+// ============================================================
+// CİHAZ YETKİLENDİRME (Device Authorization)
+// Bu statik sitede sunucu tarafı IP/cihaz kısıtlaması yapılamaz — bunun yerine
+// tarayıcının kalıcı hafızasına (localStorage) bir "yetkili cihaz" damgası
+// yazılır. Bu damga olmayan bir cihazda, yönetici/çalışan şifresi doğru
+// girilse bile giriş denemesi başlamadan reddedilir; sadece ziyaretçi
+// paneli görünür kalır. Yeni bir cihazı yetkilendirmek için, o cihazda
+// siteyi bir defaya mahsus "?authorize_device=GİZLİ_KOD" bağlantısıyla açmak
+// yeterlidir — bağlantı doğrulandığında damga kalıcı olarak kaydedilir.
+// ============================================================
+const DEVICE_AUTH_HASH = "12a7d32afcd5140951fe6ea7b2c8ed7a9c2b196333190f28f899aaf85699c7e6";
+const DEVICE_AUTH_STORAGE_KEY = 'reyhani_device_authorized_v1';
+
+function isDeviceAuthorized() {
+  try { return localStorage.getItem(DEVICE_AUTH_STORAGE_KEY) === 'true'; }
+  catch (e) { return false; }
+}
+
+async function checkDeviceAuthorizationLink() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('authorize_device');
+  if (!code) return;
+
+  // URL'den kodu hemen temizle ki adres çubuğunda / geçmişte uzun süre görünmesin.
+  params.delete('authorize_device');
+  const cleanUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
+  window.history.replaceState({}, document.title, cleanUrl);
+
+  try {
+    const hash = await sha256Hex(code);
+    if (hash === DEVICE_AUTH_HASH) {
+      localStorage.setItem(DEVICE_AUTH_STORAGE_KEY, 'true');
+      alert("✅ Bu cihaz yönetici paneli için kalıcı olarak yetkilendirildi. Artık bu tarayıcıdan normal şekilde giriş yapabilirsiniz.");
+    } else {
+      alert("⚠️ Cihaz yetkilendirme kodu geçersiz.");
+    }
+  } catch (e) {
+    alert("Cihaz yetkilendirmesi bu bağlantıda çalışamadı. Sitenin https:// ile açıldığından emin olun.");
+  }
+}
+
 async function sha256Hex(text) {
   const enc = new TextEncoder().encode(text);
   const buf = await crypto.subtle.digest('SHA-256', enc);
@@ -1864,6 +1905,10 @@ async function autoUpdateStockExcel() {
 
 async function toggleAuth() {
   if(currentRole === 'guest') {
+    if (!isDeviceAuthorized()) {
+      alert("Bu cihazda yönetici paneli aktif değil.");
+      return;
+    }
     const p = prompt("Giriş Şifresini Giriniz:");
     if (p === null) return;
     let hash;
@@ -6560,6 +6605,7 @@ async function downloadZReportByDate(dateStr) {
 }
 
 // Initialize
+checkDeviceAuthorizationLink();
 updateAuthUI();
 </script>
 </body>
