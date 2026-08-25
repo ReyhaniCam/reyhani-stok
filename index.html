@@ -180,6 +180,7 @@
   .btn-success{background:var(--success);color:#fff;}
   .btn-info{background:var(--info);color:#fff;}
   .btn-danger{background:var(--rust);color:#fff;}
+  .btn-warning{background:var(--safety);color:var(--charcoal);}
   .btn-sm{padding:8px 16px;font-size:12px;width:auto;box-shadow:0 2px 0 rgba(0,0,0,0.1);}
 
   .search-wrap{margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
@@ -1112,6 +1113,30 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="receipt-edit-modal" style="display:none;">
+  <div class="modal-content" style="max-width:720px;">
+    <button class="modal-close" onclick="closeReceiptEditModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">✏️ Malzeme Fişini Düzenle</h3>
+    <p id="re-header" style="font-size:12px; color:var(--steel); margin-top:-6px; font-weight:600;"></p>
+    <p style="font-size:11px; color:var(--steel); background:#F1F5F9; padding:8px; border-radius:6px; line-height:1.5;">
+      Bu fişteki kalemlerin <b>miktar / alış fiyatını düzeltebilir</b>, hatalı bir kalemi <b>kaldırabilir</b> ya da unutulan bir malzemeyi <b>listeye ekleyebilirsiniz</b>. Kaydettiğinizde stok miktarları ve (varsa) toptancı bakiyesi eski/yeni fark üzerinden otomatik güncellenir. Not: Buradan sadece <b>sistemde zaten kayıtlı</b> ürünler eklenebilir — tamamen yeni bir ürünü önce "Ürün Ekle" ekranından tanımlayıp sonra buraya ekleyin.
+    </p>
+    <div id="re-items-list" style="margin:12px 0;"></div>
+    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; background:#F8FAFC; padding:10px; border-radius:6px; margin-bottom:14px;">
+      <div style="flex:2; min-width:180px;">
+        <label>Eklenecek Ürün</label>
+        <input list="receipt-edit-product-list" id="re-add-product" placeholder="Ürün kodu/adı yazın...">
+        <datalist id="receipt-edit-product-list"></datalist>
+      </div>
+      <div style="width:90px;"><label>Miktar</label><input type="number" id="re-add-qty" step="0.01" placeholder="0"></div>
+      <div style="width:120px;"><label>Alış Fiyatı</label><input type="number" id="re-add-cost" step="0.01" placeholder="Boş=mevcut"></div>
+      <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="addReceiptEditItem()">+ Listeye Ekle</button>
+    </div>
+    <div style="text-align:right; font-family:'IBM Plex Mono'; font-weight:bold; font-size:16px; margin-bottom:14px;">Yeni Toplam: ₺<span id="re-total">0.00</span></div>
+    <button class="btn btn-success" style="width:100%;" onclick="saveReceiptEdit()">✅ Değişiklikleri Kaydet</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="history-modal" style="display:none;">
   <div class="modal-content">
     <button class="modal-close" onclick="closeHistory()">X</button>
@@ -1571,7 +1596,11 @@ dbGoodsReceipts.on('value', snapshot => {
               </div>
               <div style="text-align:right;">
                  <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--charcoal);">₺${formatMoney(rec.total)}</div>
-                 <button class="btn btn-info btn-sm" onclick="downloadReceiptById('${receiptId}')">İndir (Excel)</button>
+                 <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+                   <button class="btn btn-warning btn-sm" style="width:auto;" onclick="openReceiptEditModal('${receiptId}')">✏️ Listeyi Düzenle</button>
+                   <button class="btn btn-info btn-sm" onclick="downloadReceiptById('${receiptId}')">İndir (Excel)</button>
+                 </div>
+                 ${rec.lastEditedAt ? `<div style="font-size:9px; color:var(--steel); margin-top:4px;">✏️ Düzenlendi (${rec.lastEditedBy || '-'})</div>` : ''}
               </div>
            </div>
            <div style="font-size:11px; color:var(--steel); margin-top:8px; line-height:1.4;">${itemsSummary}</div>
@@ -4252,6 +4281,241 @@ async function downloadReceiptById(receiptId) {
     await generateReceiptExcel(target.receiptData, receiptId, target.date);
   } else {
     alert("Bu fişin detayları bulunamadı.");
+  }
+}
+
+// ============================================================
+// KAYDEDİLMİŞ MALZEME FİŞİNİ SONRADAN DÜZENLEME
+// (eksik/hatalı eklenen kalemler için — fiş kapandıktan sonra da
+// miktar/fiyat düzeltme, kalem ekleme/çıkarma imkanı)
+// ============================================================
+let receiptEditItems = [];
+let receiptEditTarget = null;
+
+function openReceiptEditModal(receiptId) {
+  if(currentRole !== 'admin' && currentRole !== 'staff') return;
+  const target = globalPastReceipts[receiptId];
+  if(!target) { alert("Bu fişin detayları bulunamadı."); return; }
+
+  receiptEditTarget = { receiptId, date: target.date, original: target.receiptData };
+  receiptEditItems = (target.receiptData.items || []).map(it => Object.assign({}, it));
+
+  const header = document.getElementById('re-header');
+  if(header) {
+    header.textContent = `${target.receiptData.wholesalerName || 'Bilinmeyen Toptancı'} — ${target.date}${target.receiptData.fisNo ? ' (İrsaliye: ' + target.receiptData.fisNo + ')' : ''}`;
+  }
+
+  populateReceiptEditProductList();
+  renderReceiptEditItems();
+  document.getElementById('receipt-edit-modal').style.display = 'flex';
+}
+
+function closeReceiptEditModal() {
+  document.getElementById('receipt-edit-modal').style.display = 'none';
+  receiptEditItems = [];
+  receiptEditTarget = null;
+}
+
+function populateReceiptEditProductList() {
+  const dl = document.getElementById('receipt-edit-product-list');
+  if(!dl) return;
+  dl.innerHTML = '';
+  Object.values(productsData).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = `${p.code} - ${p.name}`;
+    dl.appendChild(opt);
+  });
+}
+
+function renderReceiptEditItems() {
+  const box = document.getElementById('re-items-list');
+  if(!box) return;
+
+  if(receiptEditItems.length === 0) {
+    box.innerHTML = '<p style="color:var(--steel); font-size:12px; text-align:center; padding:10px 0;">Listede hiç kalem yok. Aşağıdan ekleyebilirsiniz.</p>';
+  } else {
+    box.innerHTML = receiptEditItems.map((it, idx) => `
+      <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--steel-line); flex-wrap:wrap;">
+        <div style="flex:2; min-width:140px;">
+          <strong>${it.name}</strong><br>
+          <small style="color:var(--steel); font-family:'IBM Plex Mono';">${it.code || '-'} ${it.unit ? '· ' + it.unit : ''}</small>
+        </div>
+        <div style="width:90px;">
+          <label style="font-size:9px; text-transform:uppercase; color:var(--steel);">Miktar</label>
+          <input type="number" step="0.01" value="${it.qty}" oninput="updateReceiptEditItem(${idx}, 'qty', this.value)">
+        </div>
+        <div style="width:120px;">
+          <label style="font-size:9px; text-transform:uppercase; color:var(--steel);">Alış Fiyatı</label>
+          <input type="number" step="0.01" value="${it.cost || 0}" oninput="updateReceiptEditItem(${idx}, 'cost', this.value)">
+        </div>
+        <div id="re-line-total-${idx}" style="width:90px; text-align:right; font-family:'IBM Plex Mono'; font-weight:bold;">₺${formatMoney((Number(it.qty)||0) * (Number(it.cost)||0))}</div>
+        <button type="button" class="btn btn-danger btn-sm" style="width:auto; flex-shrink:0;" onclick="removeReceiptEditItem(${idx})">🗑</button>
+      </div>
+    `).join('');
+  }
+  updateReceiptEditTotal();
+}
+
+function updateReceiptEditItem(idx, field, val) {
+  if(!receiptEditItems[idx]) return;
+  receiptEditItems[idx][field] = parseFloat(val) || 0;
+  const lineTotal = (Number(receiptEditItems[idx].qty)||0) * (Number(receiptEditItems[idx].cost)||0);
+  receiptEditItems[idx].total = lineTotal;
+
+  // Sadece ilgili satırın toplamını güncelle — tüm listeyi yeniden çizmiyoruz
+  // ki kullanıcı yazarken input'un odağı (focus) kaybolmasın.
+  const cell = document.getElementById(`re-line-total-${idx}`);
+  if(cell) cell.textContent = '₺' + formatMoney(lineTotal);
+  updateReceiptEditTotal();
+}
+
+function addReceiptEditItem() {
+  const inputEl = document.getElementById('re-add-product');
+  const qtyEl = document.getElementById('re-add-qty');
+  const costEl = document.getElementById('re-add-cost');
+  const inputVal = inputEl.value.trim();
+  if(!inputVal) { alert("Lütfen eklenecek ürünü seçin/yazın."); return; }
+
+  const code = inputVal.split(' - ')[0].trim();
+  const p = productsData[code];
+  if(!p) {
+    alert('Bu ürün sistemde bulunamadı. Buradan sadece sistemde kayıtlı ürünler eklenebilir — önce "Ürün Ekle" ekranından tanımlayıp tekrar deneyin.');
+    return;
+  }
+
+  const qty = parseFloat(qtyEl.value);
+  if(!qty || qty <= 0) { alert("Lütfen geçerli bir miktar girin."); return; }
+
+  const costRaw = parseFloat(costEl.value);
+  const finalCost = (!isNaN(costRaw) && costRaw >= 0) ? costRaw : Number(p.costPrice || 0);
+
+  // Aynı üründen fişte zaten varsa ayrı satır açmak yerine miktarını artır.
+  const existingIdx = receiptEditItems.findIndex(it => it.code === code);
+  if(existingIdx > -1) {
+    receiptEditItems[existingIdx].qty = (Number(receiptEditItems[existingIdx].qty)||0) + qty;
+    receiptEditItems[existingIdx].total = receiptEditItems[existingIdx].qty * (Number(receiptEditItems[existingIdx].cost)||0);
+  } else {
+    receiptEditItems.push({ code, name: p.name, unit: p.unit || 'Adet', qty, cost: finalCost, total: qty * finalCost, isNew: false });
+  }
+
+  inputEl.value = '';
+  qtyEl.value = '';
+  costEl.value = '';
+  renderReceiptEditItems();
+}
+
+function removeReceiptEditItem(idx) {
+  if(!confirm("Bu kalemi fişten kaldırmak istediğinize emin misiniz? Kaydettiğinizde bu kadar miktar stoktan geri düşülecek.")) return;
+  receiptEditItems.splice(idx, 1);
+  renderReceiptEditItems();
+}
+
+function updateReceiptEditTotal() {
+  const total = receiptEditItems.reduce((sum, it) => sum + ((Number(it.qty)||0) * (Number(it.cost)||0)), 0);
+  const el = document.getElementById('re-total');
+  if(el) el.textContent = formatMoney(total);
+}
+
+async function saveReceiptEdit() {
+  if(currentRole !== 'admin' && currentRole !== 'staff') return;
+  if(!receiptEditTarget) return;
+
+  const { receiptId, date, original } = receiptEditTarget;
+
+  const newItems = receiptEditItems.map(it => ({
+    code: it.code,
+    name: it.name,
+    unit: it.unit || 'Adet',
+    qty: Number(it.qty) || 0,
+    cost: Number(it.cost) || 0,
+    total: (Number(it.qty)||0) * (Number(it.cost)||0)
+  })).filter(it => it.qty > 0 && it.code);
+
+  if(newItems.length === 0) {
+    if(!confirm("Listede hiç kalem kalmadı. Bu fişi tamamen boşaltmak (tüm ürünleri stoktan geri düşmek) istediğinize emin misiniz?")) return;
+  }
+
+  const oldItems = original.items || [];
+  const oldByCode = {};
+  oldItems.forEach(it => { if(it.code) oldByCode[it.code] = (oldByCode[it.code]||0) + (Number(it.qty)||0); });
+  const newByCode = {};
+  newItems.forEach(it => { newByCode[it.code] = (newByCode[it.code]||0) + (Number(it.qty)||0); });
+
+  const allCodes = new Set([...Object.keys(oldByCode), ...Object.keys(newByCode)]);
+  const deltas = [];
+  allCodes.forEach(code => {
+    const delta = (newByCode[code]||0) - (oldByCode[code]||0);
+    if(Math.abs(delta) > 0.0001) deltas.push({ code, delta });
+  });
+
+  // Kodlardan biri artık sistemde kayıtlı değilse (ürün silinmiş), stok
+  // düzeltmesi güvenli yapılamayacağından işlemi başlatmadan durduruyoruz.
+  for(const d of deltas) {
+    if(!productsData[d.code]) {
+      alert(`'${d.code}' kodlu ürün artık sistemde kayıtlı değil, stok düzeltmesi yapılamıyor. Değişikliği iptal edip tekrar deneyin.`);
+      return;
+    }
+  }
+
+  const newTotal = newItems.reduce((s,it) => s + it.total, 0);
+  const oldTotal = Number(original.total) || 0;
+  const totalDelta = newTotal - oldTotal;
+  const wholesalerName = original.wholesalerName || 'Bilinmeyen Toptancı';
+  const editedBy = (currentRole === 'admin' ? 'Yönetici' : 'Çalışan');
+
+  try {
+    // 1) Stok miktarlarını eski/yeni fark üzerinden güncelle + hareket kaydı düş.
+    for(const d of deltas) {
+      await new Promise((resolve, reject) => {
+        db.child(d.code).child('qty').transaction(cur => Number(cur||0) + d.delta, (error, committed) => {
+          if(error) { reject(error); return; }
+          if(committed) {
+            logMovement(d.code, productsData[d.code].name, d.delta, 'MALZEME FİŞİ DÜZENLEME: ' + wholesalerName);
+          }
+          resolve();
+        });
+      });
+    }
+
+    // 2) Değişen/eklenen alış fiyatlarını güncel maliyet olarak stoğa yansıt.
+    newItems.forEach(it => {
+      if(it.cost > 0) db.child(it.code).child('costPrice').set(it.cost);
+    });
+
+    // 3) Fiş kaydının kendisini güncelle.
+    await dbGoodsReceipts.child(date).child(receiptId).update({
+      items: newItems,
+      total: newTotal,
+      lastEditedAt: new Date().toISOString(),
+      lastEditedBy: editedBy
+    });
+
+    // 4) Bu fiş toptancı borcuna işlenmişse, toplam farkını bakiyeye de yansıt.
+    if(original.addedToDebt && Math.abs(totalDelta) > 0.0001 && original.wholesalerKey) {
+      await new Promise((resolve) => {
+        dbWholesalers.child(original.wholesalerKey).child('balance').transaction(cur => (cur||0) - totalDelta, (err2) => {
+          if(!err2) {
+            dbWholesalers.child(original.wholesalerKey).child('transactions').push({
+              desc: 'Malzeme Fişi Düzenleme: ' + (original.fisNo || receiptId),
+              amount: Math.abs(totalDelta),
+              type: totalDelta > 0 ? 'borc' : 'odeme',
+              date: new Date().toLocaleString('tr-TR')
+            });
+          }
+          resolve();
+        });
+      });
+    }
+
+    dbNotifications.push({
+      text: `Malzeme fişi düzenlendi: ${wholesalerName} (${date}) — ${editedBy} tarafından güncellendi.`,
+      time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+    });
+
+    showToast("Fiş güncellendi, stok ve bakiye farka göre düzeltildi!");
+    closeReceiptEditModal();
+  } catch(err) {
+    alert("Fiş güncellenirken hata oluştu: " + (err.message || err));
   }
 }
 
