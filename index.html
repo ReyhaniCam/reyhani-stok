@@ -359,6 +359,7 @@
           <option value="price-desc">Fiyat (En Yüksek)</option>
           <option value="qty-desc">Miktar (Çoktan Aza)</option>
           <option value="qty-asc">Miktar (Azdan Çoğa)</option>
+          <option value="value-desc">Envanter Değeri (Yüksekten Düşüğe)</option>
           <option value="category-asc">Kategori (A-Z)</option>
         </select>
         <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
@@ -4875,6 +4876,11 @@ function renderGrid() {
     case 'price-desc': matchedProducts.sort((a,b) => (b.price || 0) - (a.price || 0)); break;
     case 'qty-asc': matchedProducts.sort((a,b) => (a.qty || 0) - (b.qty || 0)); break;
     case 'qty-desc': matchedProducts.sort((a,b) => (b.qty || 0) - (a.qty || 0)); break;
+    case 'value-desc': matchedProducts.sort((a,b) => {
+      const aCost = a.costPrice != null ? parseFloat(a.costPrice) : parseFloat(a.price || 0);
+      const bCost = b.costPrice != null ? parseFloat(b.costPrice) : parseFloat(b.price || 0);
+      return ((b.qty || 0) * bCost) - ((a.qty || 0) * aCost);
+    }); break;
     case 'category-asc': matchedProducts.sort((a,b) => (a.category || '').localeCompare(b.category || '', 'tr')); break;
     default: break;
   }
@@ -4888,6 +4894,9 @@ function renderGrid() {
   pageProducts.forEach(p => {
     matchedCodes.push(p.code);
     const isLow = p.qty <= 5;
+    const hasCostPrice = p.costPrice != null && parseFloat(p.costPrice) > 0;
+    const effectiveCost = hasCostPrice ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
+    const itemInventoryValue = parseFloat(p.qty || 0) * effectiveCost;
 
     let editActions = '';
     if (canEdit) {
@@ -4921,6 +4930,11 @@ function renderGrid() {
            <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
            <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
         </div>
+        ${isAdmin ? `
+        <div style="font-size:10px; color:var(--steel); margin:-6px 0 8px; display:flex; justify-content:space-between; align-items:center;">
+          <span>Envanter Değeri: <b style="color:var(--charcoal);">₺${formatMoney(itemInventoryValue)}</b></span>
+          ${!hasCostPrice && p.qty > 0 ? `<span style="color:var(--rust); font-weight:600;" title="Bu üründe geliş/maliyet fiyatı girilmemiş, hesaplamada satış fiyatı kullanılıyor.">⚠️ Maliyet girilmemiş</span>` : ''}
+        </div>` : ''}
 
         <div class="qty-control">
           <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
