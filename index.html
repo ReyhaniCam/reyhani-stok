@@ -1114,25 +1114,89 @@
 </div>
 
 <div class="modal-overlay" id="receipt-edit-modal" style="display:none;">
-  <div class="modal-content" style="max-width:720px;">
+  <div class="modal-content" style="max-width:920px; max-height:88vh; overflow-y:auto;">
     <button class="modal-close" onclick="closeReceiptEditModal()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';">✏️ Malzeme Fişini Düzenle</h3>
     <p id="re-header" style="font-size:12px; color:var(--steel); margin-top:-6px; font-weight:600;"></p>
     <p style="font-size:11px; color:var(--steel); background:#F1F5F9; padding:8px; border-radius:6px; line-height:1.5;">
-      Bu fişteki kalemlerin <b>miktar / alış fiyatını düzeltebilir</b>, hatalı bir kalemi <b>kaldırabilir</b> ya da unutulan bir malzemeyi <b>listeye ekleyebilirsiniz</b>. Kaydettiğinizde stok miktarları ve (varsa) toptancı bakiyesi eski/yeni fark üzerinden otomatik güncellenir. Not: Buradan sadece <b>sistemde zaten kayıtlı</b> ürünler eklenebilir — tamamen yeni bir ürünü önce "Ürün Ekle" ekranından tanımlayıp sonra buraya ekleyin.
+      Bu fişteki kalemlerin <b>miktar / alış fiyatını düzeltebilir</b>, hatalı bir kalemi <b>kaldırabilir</b>, sistemde zaten kayıtlı bir malzemeyi <b>listeye ekleyebilir</b> — ya da o gün eklenmesi unutulmuş <b>tamamen yeni bir ürünü de aşağıdan tanımlayıp</b> doğrudan bu fişe işleyebilirsiniz. Kaydettiğinizde stok miktarları ve (varsa) toptancı bakiyesi eski/yeni fark üzerinden otomatik güncellenir.
     </p>
-    <div id="re-items-list" style="margin:12px 0;"></div>
-    <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; background:#F8FAFC; padding:10px; border-radius:6px; margin-bottom:14px;">
-      <div style="flex:2; min-width:180px;">
-        <label>Eklenecek Ürün</label>
-        <input list="receipt-edit-product-list" id="re-add-product" placeholder="Ürün kodu/adı yazın...">
+
+    <h4 style="font-family:'Oswald'; font-size:14px; margin:16px 0 8px; color:var(--charcoal); border-bottom:2px solid var(--steel-line); padding-bottom:6px;">Fiş Kalemleri</h4>
+    <div id="re-items-list" style="margin:0 0 20px;"></div>
+
+    <h4 style="font-family:'Oswald'; font-size:14px; margin:0 0 8px; color:var(--charcoal); border-bottom:2px solid var(--steel-line); padding-bottom:6px;">Kaleme Ekle</h4>
+    <div class="form-row" style="grid-template-columns: 2fr 1fr 1fr;">
+      <div>
+        <label>Malzeme Ara (Mevcut Ürün) veya Yeni Ad Yazın</label>
+        <input list="receipt-edit-product-list" id="re-add-product" placeholder="Ürün kodu/adı yazın veya yeni malzeme adı girin..." oninput="checkReceiptEditProductMatch()">
         <datalist id="receipt-edit-product-list"></datalist>
+        <div class="duplicate-warning-box" id="re-add-duplicate-warning"></div>
       </div>
-      <div style="width:90px;"><label>Miktar</label><input type="number" id="re-add-qty" step="0.01" placeholder="0"></div>
-      <div style="width:120px;"><label>Alış Fiyatı</label><input type="number" id="re-add-cost" step="0.01" placeholder="Boş=mevcut"></div>
-      <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="addReceiptEditItem()">+ Listeye Ekle</button>
+      <div><label>Miktar</label><input type="number" id="re-add-qty" placeholder="1" min="0.1" step="any"></div>
+      <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="re-add-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit('re-add')"></div>
     </div>
-    <div style="text-align:right; font-family:'IBM Plex Mono'; font-weight:bold; font-size:16px; margin-bottom:14px;">Yeni Toplam: ₺<span id="re-total">0.00</span></div>
+
+    <div id="re-add-price-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
+      <p id="re-add-price-note" style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;"></p>
+      <div class="form-row" style="grid-template-columns:1fr 1fr;">
+        <div><label>KDV Oranı (%)</label><input type="number" id="re-add-vat" step="0.01" placeholder="0" oninput="updateFisProfit('re-add')"></div>
+        <div><label>Hedef Kâr (%)</label><input type="number" id="re-add-profit" step="0.01" placeholder="Örn: 25" oninput="updateFisProfit('re-add')"></div>
+      </div>
+      <div class="form-row" style="grid-template-columns:1fr; margin-bottom:0;">
+        <div>
+          <label>Önerilen Satış Fiyatı</label>
+          <input type="text" id="re-add-suggested-price" readonly placeholder="Geliş fiyatı, KDV ve kâr girin" style="background:#e9ecef; font-weight:bold;">
+          <button type="button" class="sm-btn" onclick="applySuggestedPrice('re-add')" style="margin-top:6px;">↳ Bu Fiyatı Satış Fiyatına Uygula</button>
+        </div>
+      </div>
+      <div class="form-row" style="grid-template-columns:1fr; margin-bottom:0; margin-top:10px;">
+        <div><label>Satış Fiyatı (₺)</label><input type="number" id="re-add-price" step="0.01" placeholder="0.00"></div>
+      </div>
+      <div id="re-add-existing-update-check-wrap" style="display:none; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
+        <input type="checkbox" id="re-add-update-existing-price" checked style="width:auto; margin-top:2px;">
+        <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünün <b>geliş fiyatını, KDV/kâr oranını ve satış fiyatını stokta güncelle</b> <span style="color:var(--steel); font-weight:normal;">— işaretli değilse sadece geliş fiyatı (maliyet) güncellenir, satış fiyatına dokunulmaz.</span></label>
+      </div>
+    </div>
+
+    <div id="re-add-new-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
+      <div style="margin-bottom:10px;">
+        <label>Barkod Tanımla <span style="text-transform:none; color:var(--steel); font-size:9px;">(bu ürünün üzerindeki barkodu okutun veya elle girin — boş bırakılırsa sistem otomatik kod atar)</span></label>
+        <div style="display:flex; gap:10px;">
+          <input type="text" id="re-add-barcode" placeholder="Barkod numarası..." style="flex:1;" oninput="document.getElementById('re-add-barcode-pending').value = this.value.trim();">
+          <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner('re-add')">📷 Okut</button>
+        </div>
+        <input type="hidden" id="re-add-barcode-pending">
+      </div>
+      <div class="form-row" style="grid-template-columns:1fr 1fr;">
+        <div><label>Ölçü Birimi</label>
+          <select id="re-add-unit">
+            <option value="Adet">Adet</option>
+            <option value="Kilogram">Kilogram</option>
+            <option value="Metre">Metre</option>
+          </select>
+        </div>
+        <div><label>Ürün Sınıfı</label>
+          <select id="re-add-category">
+            <option value="Banyo">Banyo</option>
+            <option value="Bahçe">Bahçe</option>
+            <option value="Mutfak">Mutfak</option>
+            <option value="Boya">Boya</option>
+            <option value="Toz Grubu">Toz Grubu</option>
+            <option value="Kapı Kolu Grubu">Kapı Kolu Grubu</option>
+            <option value="Cam & Aksesuar">Cam & Aksesuar</option>
+            <option value="Silikon & Mastik">Silikon & Mastik</option>
+            <option value="Vida & Civata">Vida & Civata</option>
+            <option value="El Aletleri">El Aletleri</option>
+            <option value="Diğer" selected>Diğer</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <button type="button" class="btn btn-primary" style="width:100%;" onclick="addReceiptEditItem()">+ Listeye Ekle</button>
+
+    <div style="text-align:right; font-family:'IBM Plex Mono'; font-weight:bold; font-size:16px; margin:18px 0 14px;">Yeni Toplam: ₺<span id="re-total">0.00</span></div>
     <button class="btn btn-success" style="width:100%;" onclick="saveReceiptEdit()">✅ Değişiklikleri Kaydet</button>
   </div>
 </div>
@@ -3228,12 +3292,13 @@ function updateEditProfit() {
   }
 }
 
-function updateFisProfit() {
-  const suggestedInput = document.getElementById('fis-suggested-price');
+function updateFisProfit(prefix) {
+  prefix = prefix || 'fis';
+  const suggestedInput = document.getElementById(`${prefix}-suggested-price`);
   if(!suggestedInput) return;
-  const cost = parseFloat(document.getElementById('fis-cost').value);
-  const vat = parseFloat(document.getElementById('fis-vat').value) || 0;
-  const profit = parseFloat(document.getElementById('fis-profit').value) || 0;
+  const cost = parseFloat(document.getElementById(`${prefix}-cost`).value);
+  const vat = parseFloat(document.getElementById(`${prefix}-vat`).value) || 0;
+  const profit = parseFloat(document.getElementById(`${prefix}-profit`).value) || 0;
 
   if(!isNaN(cost) && cost > 0) {
     const costWithVat = cost * (1 + (vat / 100));
@@ -4287,10 +4352,12 @@ async function downloadReceiptById(receiptId) {
 // ============================================================
 // KAYDEDİLMİŞ MALZEME FİŞİNİ SONRADAN DÜZENLEME
 // (eksik/hatalı eklenen kalemler için — fiş kapandıktan sonra da
-// miktar/fiyat düzeltme, kalem ekleme/çıkarma imkanı)
+// miktar/fiyat düzeltme, kalem ekleme/çıkarma, hatta o gün eklenmesi
+// unutulmuş TAMAMEN YENİ bir ürünü tanımlayıp fişe işleme imkanı)
 // ============================================================
 let receiptEditItems = [];
 let receiptEditTarget = null;
+let _reAddMatchDebounce = null;
 
 function openReceiptEditModal(receiptId) {
   if(currentRole !== 'admin' && currentRole !== 'staff') return;
@@ -4305,6 +4372,7 @@ function openReceiptEditModal(receiptId) {
     header.textContent = `${target.receiptData.wholesalerName || 'Bilinmeyen Toptancı'} — ${target.date}${target.receiptData.fisNo ? ' (İrsaliye: ' + target.receiptData.fisNo + ')' : ''}`;
   }
 
+  resetReceiptAddForm();
   populateReceiptEditProductList();
   renderReceiptEditItems();
   document.getElementById('receipt-edit-modal').style.display = 'flex';
@@ -4327,6 +4395,84 @@ function populateReceiptEditProductList() {
   });
 }
 
+function resetReceiptAddForm() {
+  ['re-add-product','re-add-qty','re-add-cost','re-add-vat','re-add-profit','re-add-price','re-add-suggested-price','re-add-barcode','re-add-barcode-pending'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.value = '';
+  });
+  const unitEl = document.getElementById('re-add-unit'); if(unitEl) unitEl.value = 'Adet';
+  const catEl = document.getElementById('re-add-category'); if(catEl) catEl.value = 'Diğer';
+  const priceFields = document.getElementById('re-add-price-fields'); if(priceFields) priceFields.style.display = 'none';
+  const newFields = document.getElementById('re-add-new-fields'); if(newFields) newFields.style.display = 'none';
+  const warnBox = document.getElementById('re-add-duplicate-warning'); if(warnBox) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; }
+}
+
+// checkFisProductMatch'in aynısı — sadece 're-add-' alanlarına ve bu modalın
+// kendi tekrarlama uyarı kutusuna hitap edecek şekilde uyarlanmış hali.
+function checkReceiptEditProductMatch() {
+  const inputVal = document.getElementById('re-add-product').value.trim();
+  const possibleCode = inputVal.split(' - ')[0].trim();
+  const p = productsData[possibleCode];
+  const exists = !!p;
+
+  const priceFields = document.getElementById('re-add-price-fields');
+  const priceNote = document.getElementById('re-add-price-note');
+  const newFields = document.getElementById('re-add-new-fields');
+  const existingUpdateWrap = document.getElementById('re-add-existing-update-check-wrap');
+
+  if(!inputVal) {
+    if(priceFields) priceFields.style.display = 'none';
+    if(newFields) newFields.style.display = 'none';
+    if(existingUpdateWrap) existingUpdateWrap.style.display = 'none';
+  } else if(exists) {
+    if(priceFields) priceFields.style.display = 'block';
+    if(newFields) newFields.style.display = 'none';
+    if(existingUpdateWrap) existingUpdateWrap.style.display = 'flex';
+    if(priceNote) {
+      priceNote.innerHTML = `✏️ Bu ürün stokta kayıtlı — şu anki: Geliş ₺${formatMoney(p.costPrice||0)} · Satış ₺${formatMoney(p.price||0)}${p.vat!=null?' · KDV %'+p.vat:''}${p.targetProfit!=null?' · Kâr %'+p.targetProfit:''}. Piyasa fiyatı değiştiyse KDV/kâr oranını girip güncelleyebilirsiniz.`;
+    }
+    const vatInput = document.getElementById('re-add-vat');
+    const profitInput = document.getElementById('re-add-profit');
+    const priceInput = document.getElementById('re-add-price');
+    if(vatInput && !vatInput.value && p.vat != null) vatInput.value = p.vat;
+    if(profitInput && !profitInput.value && p.targetProfit != null) profitInput.value = p.targetProfit;
+    if(priceInput && !priceInput.value) priceInput.value = p.price != null ? p.price : '';
+    updateFisProfit('re-add');
+  } else {
+    if(priceFields) priceFields.style.display = 'block';
+    if(existingUpdateWrap) existingUpdateWrap.style.display = 'none';
+    if(priceNote) priceNote.innerHTML = `ℹ️ Bu malzeme sistemde bulunamadı, <b>YENİ ÜRÜN</b> olarak sisteme kaydedilip bu fişe işlenecek. Barkod/birim/kategori bilgilerini de girin, satış fiyatını belirleyin:`;
+    if(newFields) newFields.style.display = 'block';
+  }
+
+  const warnBox = document.getElementById('re-add-duplicate-warning');
+  if(!warnBox) return;
+  if(_reAddMatchDebounce) clearTimeout(_reAddMatchDebounce);
+  if(!inputVal || exists) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+
+  _reAddMatchDebounce = setTimeout(() => {
+    const matches = findSimilarProducts(inputVal);
+    if(matches.length === 0) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; return; }
+    warnBox.style.display = 'block';
+    warnBox.innerHTML = `
+      <div style="font-weight:600; margin-bottom:6px;">⚠️ Bu malzeme sistemde zaten kayıtlı olabilir. Gerçekten yeni bir ürün mü, yoksa aşağıdakinin üstüne mi ekleyelim?</div>
+      ${matches.map(m => `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-top:1px dashed var(--steel-line);">
+          <span>${m.product.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${m.product.code}, stok: ${m.product.qty ?? 0})</small></span>
+          <button type="button" class="sm-btn" style="flex-shrink:0;" onclick="selectReceiptEditSuggestion('${m.product.code}')">Üstüne Ekle</button>
+        </div>
+      `).join('')}
+    `;
+  }, 250);
+}
+
+function selectReceiptEditSuggestion(code) {
+  const p = productsData[code];
+  if(!p) return;
+  document.getElementById('re-add-product').value = `${p.code} - ${p.name}`;
+  checkReceiptEditProductMatch();
+}
+
 function renderReceiptEditItems() {
   const box = document.getElementById('re-items-list');
   if(!box) return;
@@ -4336,9 +4482,11 @@ function renderReceiptEditItems() {
   } else {
     box.innerHTML = receiptEditItems.map((it, idx) => `
       <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--steel-line); flex-wrap:wrap;">
-        <div style="flex:2; min-width:140px;">
-          <strong>${it.name}</strong><br>
-          <small style="color:var(--steel); font-family:'IBM Plex Mono';">${it.code || '-'} ${it.unit ? '· ' + it.unit : ''}</small>
+        <div style="flex:2; min-width:160px;">
+          <strong>${it.name}</strong>${it.isNew ? ' <span style="color:var(--info); font-size:10px; font-weight:600;">(YENİ ÜRÜN' + (it.category ? ' — ' + it.category : '') + ')</span>' : ''}<br>
+          <small style="color:var(--steel); font-family:'IBM Plex Mono';">${it.isNew ? (it.code || 'Kod otomatik atanacak') : (it.code || '-')} ${it.unit ? '· ' + it.unit : ''}</small>
+          ${it.isNew && it.price ? `<br><small style="color:var(--steel);">Satış: ₺${formatMoney(it.price)}${it.vat?' · KDV %'+it.vat:''}${it.targetProfit!=null && it.targetProfit!==''?' · Kâr %'+it.targetProfit:''}</small>` : ''}
+          ${!it.isNew && it.updatePrices ? `<br><small style="color:var(--success);">↻ Fiyat/kâr stokta güncellenecek</small>` : ''}
         </div>
         <div style="width:90px;">
           <label style="font-size:9px; text-transform:uppercase; color:var(--steel);">Miktar</label>
@@ -4371,36 +4519,71 @@ function updateReceiptEditItem(idx, field, val) {
 
 function addReceiptEditItem() {
   const inputEl = document.getElementById('re-add-product');
-  const qtyEl = document.getElementById('re-add-qty');
-  const costEl = document.getElementById('re-add-cost');
   const inputVal = inputEl.value.trim();
-  if(!inputVal) { alert("Lütfen eklenecek ürünü seçin/yazın."); return; }
+  const qty = parseFloat(document.getElementById('re-add-qty').value);
+  const costRaw = document.getElementById('re-add-cost').value;
+  const costEntered = costRaw === '' ? null : parseFloat(costRaw);
 
-  const code = inputVal.split(' - ')[0].trim();
-  const p = productsData[code];
-  if(!p) {
-    alert('Bu ürün sistemde bulunamadı. Buradan sadece sistemde kayıtlı ürünler eklenebilir — önce "Ürün Ekle" ekranından tanımlayıp tekrar deneyin.');
+  if(!inputVal || isNaN(qty) || qty <= 0) {
+    alert("Lütfen geçerli bir malzeme adı/kodu ve miktar girin.");
     return;
   }
 
-  const qty = parseFloat(qtyEl.value);
-  if(!qty || qty <= 0) { alert("Lütfen geçerli bir miktar girin."); return; }
+  const possibleCode = inputVal.split(' - ')[0].trim();
+  const p = productsData[possibleCode];
 
-  const costRaw = parseFloat(costEl.value);
-  const finalCost = (!isNaN(costRaw) && costRaw >= 0) ? costRaw : Number(p.costPrice || 0);
+  let newEntry;
+  if(p) {
+    // Mevcut ürün
+    const cost = (costEntered !== null && !isNaN(costEntered)) ? costEntered : Number(p.costPrice || 0);
+    const updateCheckbox = document.getElementById('re-add-update-existing-price');
+    const updatePrices = updateCheckbox ? updateCheckbox.checked : false;
+    const vatRaw = document.getElementById('re-add-vat').value;
+    const profitRaw = document.getElementById('re-add-profit').value;
+    const newPriceRaw = document.getElementById('re-add-price').value;
 
-  // Aynı üründen fişte zaten varsa ayrı satır açmak yerine miktarını artır.
-  const existingIdx = receiptEditItems.findIndex(it => it.code === code);
-  if(existingIdx > -1) {
-    receiptEditItems[existingIdx].qty = (Number(receiptEditItems[existingIdx].qty)||0) + qty;
-    receiptEditItems[existingIdx].total = receiptEditItems[existingIdx].qty * (Number(receiptEditItems[existingIdx].cost)||0);
+    newEntry = { code: p.code, name: p.name, unit: p.unit || 'Adet', qty, cost, isNew: false };
+    if(updatePrices) {
+      newEntry.updatePrices = true;
+      if(vatRaw !== '') newEntry.vat = parseFloat(vatRaw) || 0;
+      if(profitRaw !== '') newEntry.targetProfit = parseFloat(profitRaw) || 0;
+      if(newPriceRaw !== '') newEntry.newPrice = Math.max(0, parseFloat(newPriceRaw) || 0);
+    }
+
+    // Aynı mevcut üründen fişte zaten varsa ayrı satır açmak yerine miktarını artır.
+    const existingIdx = receiptEditItems.findIndex(it => !it.isNew && it.code === p.code);
+    if(existingIdx > -1) {
+      receiptEditItems[existingIdx].qty = (Number(receiptEditItems[existingIdx].qty)||0) + qty;
+      if(updatePrices) Object.assign(receiptEditItems[existingIdx], newEntry, { qty: receiptEditItems[existingIdx].qty });
+      resetReceiptAddForm();
+      renderReceiptEditItems();
+      return;
+    }
   } else {
-    receiptEditItems.push({ code, name: p.name, unit: p.unit || 'Adet', qty, cost: finalCost, total: qty * finalCost, isNew: false });
+    // Tamamen yeni ürün — kaydedildiğinde sisteme tanımlanıp bu fişe işlenecek.
+    const cost = (costEntered !== null && !isNaN(costEntered)) ? costEntered : 0;
+    const rawBarcode = document.getElementById('re-add-barcode').value.trim();
+    const vat = parseFloat(document.getElementById('re-add-vat').value) || 0;
+    const profit = parseFloat(document.getElementById('re-add-profit').value) || 0;
+    const price = parseFloat(document.getElementById('re-add-price').value) || 0;
+    const unit = document.getElementById('re-add-unit').value;
+    const category = document.getElementById('re-add-category').value;
+
+    if(rawBarcode) {
+      if(productsData[rawBarcode] || receiptEditItems.some(it => it.code === rawBarcode)) {
+        alert(`'${rawBarcode}' barkodu zaten kullanılıyor. Lütfen kontrol edin.`);
+        return;
+      }
+    }
+
+    newEntry = {
+      code: rawBarcode || null, name: inputVal, unit, category,
+      qty, cost, vat, targetProfit: profit, price, isNew: true
+    };
   }
 
-  inputEl.value = '';
-  qtyEl.value = '';
-  costEl.value = '';
+  receiptEditItems.push(newEntry);
+  resetReceiptAddForm();
   renderReceiptEditItems();
 }
 
@@ -4421,15 +4604,35 @@ async function saveReceiptEdit() {
   if(!receiptEditTarget) return;
 
   const { receiptId, date, original } = receiptEditTarget;
+  const wholesalerName = original.wholesalerName || 'Bilinmeyen Toptancı';
+  const editedBy = (currentRole === 'admin' ? 'Yönetici' : 'Çalışan');
 
-  const newItems = receiptEditItems.map(it => ({
-    code: it.code,
-    name: it.name,
-    unit: it.unit || 'Adet',
-    qty: Number(it.qty) || 0,
-    cost: Number(it.cost) || 0,
-    total: (Number(it.qty)||0) * (Number(it.cost)||0)
-  })).filter(it => it.qty > 0 && it.code);
+  // 0) Listede "YENİ ÜRÜN" olarak eklenmiş kalemler varsa, önce bunları
+  // gerçekten sisteme kaydet (barkod/kod çakışması varsa burada durur).
+  const usedCodes = new Set(receiptEditItems.filter(it => it.code).map(it => it.code));
+  const resolvedItems = [];
+  try {
+    for(const it of receiptEditItems) {
+      if(it.isNew) {
+        const code = await createNewProductRecord(it, editedBy + ' (Fiş Düzenleme: ' + wholesalerName + ')', usedCodes);
+        usedCodes.add(code);
+        resolvedItems.push(Object.assign({}, it, { code, isNew: false }));
+      } else {
+        resolvedItems.push(it);
+      }
+    }
+  } catch(err) {
+    alert("Yeni malzeme(ler) sisteme kaydedilirken hata oluştu: " + (err.message || err));
+    return;
+  }
+
+  const newItems = resolvedItems.map(it => {
+    const clean = Object.assign({}, it);
+    clean.qty = Number(it.qty) || 0;
+    clean.cost = Number(it.cost) || 0;
+    clean.total = clean.qty * clean.cost;
+    return clean;
+  }).filter(it => it.qty > 0 && it.code);
 
   if(newItems.length === 0) {
     if(!confirm("Listede hiç kalem kalmadı. Bu fişi tamamen boşaltmak (tüm ürünleri stoktan geri düşmek) istediğinize emin misiniz?")) return;
@@ -4460,8 +4663,6 @@ async function saveReceiptEdit() {
   const newTotal = newItems.reduce((s,it) => s + it.total, 0);
   const oldTotal = Number(original.total) || 0;
   const totalDelta = newTotal - oldTotal;
-  const wholesalerName = original.wholesalerName || 'Bilinmeyen Toptancı';
-  const editedBy = (currentRole === 'admin' ? 'Yönetici' : 'Çalışan');
 
   try {
     // 1) Stok miktarlarını eski/yeni fark üzerinden güncelle + hareket kaydı düş.
@@ -4480,6 +4681,21 @@ async function saveReceiptEdit() {
     // 2) Değişen/eklenen alış fiyatlarını güncel maliyet olarak stoğa yansıt.
     newItems.forEach(it => {
       if(it.cost > 0) db.child(it.code).child('costPrice').set(it.cost);
+    });
+
+    // 2b) "Fiyat/kâr güncelle" işaretlenmiş mevcut ürünler için KDV/kâr/satış fiyatını da stoğa yansıt.
+    newItems.forEach(item => {
+      if(item.updatePrices) {
+        const priceUpdates = {
+          lastPriceUpdate: new Date().toISOString(),
+          lastUpdatedBy: editedBy + ' (Fiş Düzenleme: ' + wholesalerName + ')'
+        };
+        let hasChange = false;
+        if(item.vat !== undefined) { priceUpdates.vat = item.vat; hasChange = true; }
+        if(item.targetProfit !== undefined) { priceUpdates.targetProfit = item.targetProfit; hasChange = true; }
+        if(item.newPrice !== undefined) { priceUpdates.price = item.newPrice; hasChange = true; }
+        if(hasChange) db.child(item.code).update(priceUpdates);
+      }
     });
 
     // 3) Fiş kaydının kendisini güncelle.
@@ -4518,6 +4734,7 @@ async function saveReceiptEdit() {
     alert("Fiş güncellenirken hata oluştu: " + (err.message || err));
   }
 }
+
 
 function openWholesalerEdit(key) {
   if(currentRole !== 'admin') return;
@@ -5291,7 +5508,9 @@ function closeBarcodeLookupScanner() {
 
 let fisBarcodeScanner = null;
 
-function openFisBarcodeScanner() {
+let _barcodeScanTarget = 'fis';
+function openFisBarcodeScanner(target) {
+  _barcodeScanTarget = target || 'fis';
   document.getElementById('fis-barcode-modal').style.display = 'flex';
   if (fisBarcodeScanner) return;
   fisBarcodeScanner = new Html5Qrcode("fis-barcode-reader");
@@ -5309,9 +5528,14 @@ function openFisBarcodeScanner() {
       ]
     },
     (decodedText) => {
-      document.getElementById('fis-barcode-lookup').value = decodedText;
       closeFisBarcodeScanner();
-      lookupFisBarcode();
+      if (_barcodeScanTarget === 're-add') {
+        document.getElementById('re-add-barcode').value = decodedText;
+        document.getElementById('re-add-barcode-pending').value = decodedText;
+      } else {
+        document.getElementById('fis-barcode-lookup').value = decodedText;
+        lookupFisBarcode();
+      }
     },
     () => {}
   ).catch((err) => {
