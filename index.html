@@ -281,6 +281,8 @@
 
   @page{size:58mm auto;margin:0;}
   @media print{
+    body::before{display:none !important;content:none !important;}
+    #splash-screen{display:none !important;}
     body *{visibility:hidden;}
     body.printing-label .app, body.printing-barcode-label .app, body.printing-receipt .app{display:none !important;}
     body.printing-label #print-area, body.printing-label #print-area *{visibility:visible;}
