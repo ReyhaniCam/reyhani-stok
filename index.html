@@ -6911,7 +6911,9 @@ ${inventoryContext}`;
     { role: 'user', parts: [{ text: systemPrompt }] },
     { role: 'model', parts: [{ text: '{"action":"none","reply":"Anladım, yardımcı olmaya hazırım."}' }] }
   ];
-  aiChatHistory.forEach(h => {
+  // Hız için: tüm geçmişi değil, sadece son 10 mesajı gönder (istek boyutu küçülsün, model daha hızlı cevap versin)
+  const recentHistory = aiChatHistory.slice(-10);
+  recentHistory.forEach(h => {
     contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] });
   });
 
@@ -6936,7 +6938,17 @@ ${inventoryContext}`;
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents })
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          // Gemini 3.6 Flash varsayılan olarak "medium" seviyede düşünüyor; bu basit
+          // stok/fiyat/yönlendirme sınıflandırması için gereğinden fazla ve yavaş.
+          // "low" ile gecikmeyi büyük ölçüde azaltıyoruz. Hâlâ yavaş geliyorsa "minimal" deneyin.
+          thinkingConfig: { thinkingLevel: "low" },
+          // Cevaplar zaten kısa JSON, gereksiz uzun çıktı üretilmesini engelleyip hızlandırıyoruz
+          maxOutputTokens: 400
+        }
+      })
     });
 
     const data = await response.json();
