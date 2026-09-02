@@ -306,6 +306,40 @@
     body.printing-receipt #thermal-print-area, body.printing-receipt #thermal-print-area *{visibility:visible;}
     body.printing-receipt #thermal-print-area{display:block !important;position:absolute;left:0;top:0;width:56mm;margin:0;padding:0;page-break-after:avoid;}
   }
+/* ============ AI SOHBET ASİSTANI ============ */
+#ai-chat-fab{
+  position:fixed; right:18px; bottom:18px; z-index:3000;
+  width:58px; height:58px; border-radius:50%;
+  background:var(--gradient-header); color:#fff; border:none;
+  box-shadow:var(--shadow-hover); font-size:26px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+}
+#ai-chat-fab:active{ transform:scale(0.94); }
+#ai-chat-panel{
+  position:fixed; right:18px; bottom:88px; z-index:3000;
+  width:min(370px, calc(100vw - 36px)); height:min(520px, calc(100vh - 140px));
+  background:var(--paper); border-radius:var(--radius); box-shadow:var(--shadow-hover);
+  display:none; flex-direction:column; overflow:hidden; border:1px solid var(--steel-line);
+}
+#ai-chat-panel.open{ display:flex; }
+#ai-chat-header{
+  background:var(--gradient-header); color:#fff; padding:14px 16px;
+  display:flex; align-items:center; justify-content:space-between;
+  font-family:'Oswald',sans-serif; letter-spacing:0.3px;
+}
+#ai-chat-header .sub{ font-size:11px; font-weight:500; font-family:'Inter'; color:#CBD5E1; margin-top:2px; }
+#ai-chat-close{ background:none; border:none; color:#fff; font-size:20px; cursor:pointer; line-height:1; }
+#ai-chat-messages{ flex:1; overflow-y:auto; padding:14px; background:var(--bg); display:flex; flex-direction:column; gap:10px; }
+.ai-msg{ max-width:85%; padding:9px 12px; border-radius:14px; font-size:14px; line-height:1.4; white-space:pre-wrap; word-break:break-word; }
+.ai-msg.user{ align-self:flex-end; background:var(--info); color:#fff; border-bottom-right-radius:3px; }
+.ai-msg.bot{ align-self:flex-start; background:#fff; color:var(--charcoal); border:1px solid var(--steel-line); border-bottom-left-radius:3px; }
+.ai-msg.bot.error{ border-color:var(--rust); color:var(--rust); }
+.ai-msg.thinking{ align-self:flex-start; background:#fff; border:1px solid var(--steel-line); color:var(--steel); font-style:italic; }
+#ai-chat-inputrow{ display:flex; gap:8px; padding:10px; border-top:1px solid var(--steel-line); background:#fff; }
+#ai-chat-input{ flex:1; border:1px solid var(--steel-line); border-radius:20px; padding:9px 14px; font-size:14px; font-family:'Inter'; resize:none; }
+#ai-chat-send{ background:var(--info); color:#fff; border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:16px; flex-shrink:0; }
+#ai-chat-key-row{ padding:8px 12px; font-size:11px; color:var(--steel); text-align:center; border-top:1px solid var(--steel-line); background:#F8FAFC; }
+#ai-chat-key-row a{ color:var(--info); cursor:pointer; font-weight:600; }
 </style>
 </head>
 <body>
@@ -1405,6 +1439,24 @@
     <button style="position:absolute; top:-15px; right:-15px; background:var(--rust); color:#fff; border:none; border-radius:50%; width:30px; height:30px; font-weight:bold; cursor:pointer;" onclick="closeImageModal()">X</button>
     <img id="enlarged-image" src="" style="max-width:100%; max-height:85vh; border-radius:8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
   </div>
+</div>
+
+<!-- ============ AI SOHBET ASİSTANI ============ -->
+<button id="ai-chat-fab" onclick="toggleAIChat()" title="Yapay Zeka Asistanı">🤖</button>
+<div id="ai-chat-panel">
+  <div id="ai-chat-header">
+    <div>
+      <div>🤖 Reyhani Asistan</div>
+      <div class="sub">Stok, fiyat ve ürün sorularınızı sorun</div>
+    </div>
+    <button id="ai-chat-close" onclick="toggleAIChat()">✕</button>
+  </div>
+  <div id="ai-chat-messages"></div>
+  <div id="ai-chat-inputrow">
+    <textarea id="ai-chat-input" rows="1" placeholder="Örn: 25lik dirsek stoğu ne kadar?" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendAIChatMessage();}"></textarea>
+    <button id="ai-chat-send" onclick="sendAIChatMessage()">➤</button>
+  </div>
+  <div id="ai-chat-key-row">Google Gemini API kullanır. <a onclick="promptGeminiApiKey()">API Anahtarını Ayarla</a></div>
 </div>
 
 <script>
@@ -6690,7 +6742,7 @@ async function processReceiptWithAI(event) {
     });
     const pureBase64 = base64Data.split(',')[1];
 
-    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -6750,6 +6802,164 @@ async function processReceiptWithAI(event) {
     alert("Hata: " + err.message);
   } finally {
     event.target.value = '';
+  }
+}
+
+// ============================================================
+// AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
+// ============================================================
+let aiChatHistory = []; // {role:'user'|'model', text:'...'}
+let aiChatBusy = false;
+
+function toggleAIChat() {
+  const panel = document.getElementById('ai-chat-panel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && aiChatHistory.length === 0) {
+    addAIChatBubble('bot', 'Merhaba! Ben Reyhani deposu asistanınızım. Ürün stoğu, fiyatı hakkında soru sorabilir; "25lik dirsekten 10 adet stok ekle" veya "silikon fiyatını 65 yap" gibi komutlar verebilirsiniz. Yazdıklarınızı önce size onaylatırım, onayınız olmadan hiçbir şeyi değiştirmem.');
+    setTimeout(() => document.getElementById('ai-chat-input').focus(), 200);
+  }
+}
+
+function addAIChatBubble(role, text, extraClass) {
+  const wrap = document.getElementById('ai-chat-messages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg ' + (role === 'user' ? 'user' : 'bot') + (extraClass ? ' ' + extraClass : '');
+  div.textContent = text;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return div;
+}
+
+// Envanterden AI'nin kullanabileceği kısa, hafif bir özet çıkarır (çok büyük stok listelerinde token tasarrufu için kısaltılır)
+function buildInventoryContextForAI() {
+  const all = Object.values(productsData || {});
+  const trimmed = all.slice(0, 400).map(p => ({
+    kod: p.code, ad: p.name, stok: p.qty, birim: p.unit, fiyat: p.price
+  }));
+  let note = '';
+  if (all.length > 400) note = `\n(Not: Envanterde toplam ${all.length} ürün var, ilk 400 tanesi listelendi. Kullanıcı listede olmayan bir ürün sorarsa, tam adını/kodunu sorup emin olun.)`;
+  return JSON.stringify(trimmed) + note;
+}
+
+async function sendAIChatMessage() {
+  if (aiChatBusy) return;
+  const input = document.getElementById('ai-chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Sohbet asistanını kullanmak için Google API Anahtarınızı girin:");
+    if (!apiKey) return;
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  input.value = '';
+  addAIChatBubble('user', text);
+  aiChatHistory.push({ role: 'user', text });
+  const thinkingBubble = addAIChatBubble('bot', 'Yazıyor...', 'thinking');
+  aiChatBusy = true;
+
+  const systemPrompt = `Sen "Reyhani Cam Hırdavat" adlı hırdavat/vidalama deposu için çalışan bir mağaza içi yapay zeka asistanısın. Kullanıcı sana ürün stoğu, fiyatı hakkında sorular sorar veya stok/fiyat değiştirme komutu verir. Sana JSON formatında güncel ürün listesi (kod, ad, stok, birim, fiyat) verilecek. SADECE bu listeye ve kullanıcının söylediklerine dayanarak cevap ver, uydurma bilgi verme.
+
+Cevabını HER ZAMAN şu JSON formatında, başka hiçbir metin eklemeden ver:
+{"action": "none", "reply": "kullanıcıya gösterilecek doğal, kısa ve Türkçe cevap"}
+veya kullanıcı bir ürünün stoğunu artırmak/azaltmak istiyorsa:
+{"action": "update_stock", "code": "ÜRÜN_KODU", "change": sayı (pozitif=ekleme, negatif=azaltma), "reply": "kullanıcıya onay için gösterilecek kısa açıklama, örn: 25lik dirsek stoğuna 10 adet eklemek istiyorsunuz, onaylıyor musunuz?"}
+veya kullanıcı bir ürünün fiyatını değiştirmek istiyorsa:
+{"action": "update_price", "code": "ÜRÜN_KODU", "price": sayı, "reply": "kullanıcıya onay için gösterilecek kısa açıklama"}
+
+Kurallar:
+- update_stock veya update_price önerirken, "code" alanı MUTLAKA sana verilen ürün listesindeki gerçek bir "kod" değeri olmalı. Ürünü isimden bulup doğru kodu kullan.
+- Ürünü listede net şekilde bulamıyorsan veya birden fazla eşleşme varsa, action:"none" dön ve kullanıcıya hangi ürünü kastettiğini sor.
+- Genel sohbet, selamlaşma veya envanterle ilgisi olmayan sorularda kısaca ve nazikçe cevap ver, action:"none" kullan.
+- Asla JSON dışında metin yazma, kod bloğu (\`\`\`) kullanma.
+
+Güncel ürün listesi (JSON):
+${buildInventoryContextForAI()}`;
+
+  try {
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
+
+    const contents = [
+      { role: 'user', parts: [{ text: systemPrompt }] },
+      { role: 'model', parts: [{ text: '{"action":"none","reply":"Anladım, yardımcı olmaya hazırım."}' }] }
+    ];
+    aiChatHistory.forEach(h => {
+      contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] });
+    });
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zekadan cevap alınamadı.");
+    }
+
+    let raw = data.candidates[0].content.parts[0].text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      parsed = { action: 'none', reply: raw };
+    }
+
+    aiChatHistory.push({ role: 'model', text: raw });
+    thinkingBubble.remove();
+
+    if (parsed.action === 'update_stock' && parsed.code) {
+      addAIChatBubble('bot', parsed.reply || 'Stok değişikliği yapmak istiyorum, onaylıyor musunuz?');
+      handleAIChatConfirmAction(parsed);
+    } else if (parsed.action === 'update_price' && parsed.code) {
+      addAIChatBubble('bot', parsed.reply || 'Fiyat değişikliği yapmak istiyorum, onaylıyor musunuz?');
+      handleAIChatConfirmAction(parsed);
+    } else {
+      addAIChatBubble('bot', parsed.reply || raw);
+    }
+  } catch (err) {
+    thinkingBubble.remove();
+    addAIChatBubble('bot', '❌ Hata: ' + err.message, 'error');
+  } finally {
+    aiChatBusy = false;
+  }
+}
+
+// Yazma işlemleri (stok/fiyat değişimi) için kullanıcıdan native confirm() ile onay ister,
+// ardından mevcut updateQty/updatePrice fonksiyonlarını kullanarak Firebase'e yazar.
+function handleAIChatConfirmAction(parsed) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') {
+    addAIChatBubble('bot', 'Bu işlemi yapabilmeniz için yönetici veya çalışan girişi yapmanız gerekiyor.', 'error');
+    return;
+  }
+  const p = productsData[parsed.code];
+  if (!p) {
+    addAIChatBubble('bot', 'Bu ürün kodunu envanterde bulamadım: ' + parsed.code, 'error');
+    return;
+  }
+
+  if (parsed.action === 'update_stock') {
+    const ok = confirm(`${p.name} (${parsed.code})\nMevcut stok: ${p.qty} ${p.unit}\nDeğişim: ${parsed.change > 0 ? '+' : ''}${parsed.change}\n\nOnaylıyor musunuz?`);
+    if (ok) {
+      updateQty(parsed.code, parsed.change);
+      addAIChatBubble('bot', '✅ Stok güncellendi: ' + p.name);
+    } else {
+      addAIChatBubble('bot', 'İşlem iptal edildi.');
+    }
+  } else if (parsed.action === 'update_price') {
+    const ok = confirm(`${p.name} (${parsed.code})\nMevcut fiyat: ₺${p.price}\nYeni fiyat: ₺${parsed.price}\n\nOnaylıyor musunuz?`);
+    if (ok) {
+      db.child(parsed.code).update({ price: parseFloat(parsed.price), lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'AI Asistan' }, (err) => {
+        if (!err) addAIChatBubble('bot', '✅ Fiyat güncellendi: ' + p.name);
+        else addAIChatBubble('bot', '❌ Fiyat güncellenemedi: ' + err.message, 'error');
+      });
+    } else {
+      addAIChatBubble('bot', 'İşlem iptal edildi.');
+    }
   }
 }
 </script>
