@@ -6731,6 +6731,18 @@ function getGeminiApiKey() {
   return localStorage.getItem('gemini_api_key') || ''; 
 }
 
+// API hatasını (özellikle kota/rate-limit hatalarını) kullanıcıya anlaşılır Türkçe mesaja çevirir
+function friendlyAIErrorMessage(err) {
+  const msg = (err && err.message) || String(err);
+  if (/quota|rate.?limit|resource_exhausted|429/i.test(msg)) {
+    return '⏳ Google\'ın ücretsiz kullanım sınırına ulaşıldı (dakikada belirli sayıda mesaj hakkı var). Birkaç saniye bekleyip tekrar deneyin. Sık sık bu hatayı alıyorsanız, Google AI Studio\'da (aistudio.google.com) projenizde faturalandırmayı etkinleştirerek bu sınırı büyük ölçüde yükseltebilirsiniz — ücretsiz kotayı aşmadıkça ücret yansımaz.';
+  }
+  if (/api key not valid|api_key_invalid/i.test(msg)) {
+    return '🔑 API Anahtarı geçersiz görünüyor. Sağ üstteki "🔑 API Key" butonuyla anahtarınızı kontrol edin.';
+  }
+  return '❌ Hata: ' + msg;
+}
+
 function promptGeminiApiKey() {
   const currentKey = getGeminiApiKey();
   const newKey = prompt("Google'dan aldığınız API Anahtarını yapıştırın:", currentKey);
@@ -6770,7 +6782,7 @@ async function processReceiptWithAI(event) {
     });
     const pureBase64 = base64Data.split(',')[1];
 
-    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
 
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -6869,14 +6881,45 @@ function addAIChatBubble(role, text, extraClass) {
   return div;
 }
 
-// Envanterden AI'nin kullanabileceği kısa, hafif bir özet çıkarır (çok büyük stok listelerinde token tasarrufu için kısaltılır)
-function buildInventoryContextForAI() {
+// Envanterden AI'nin kullanabileceği kısa, hafif bir özet çıkarır.
+// Envanter çok büyükse (400+ ürün), rastgele ilk 400'ü göndermek yerine
+// kullanıcının mesajındaki kelimelerle EŞLEŞEN ürünleri önceliklendirir;
+// böylece liste ne kadar büyük olursa olsun, sorulan ürün gözden kaçmaz.
+function buildInventoryContextForAI(queryText) {
   const all = Object.values(productsData || {});
-  const trimmed = all.slice(0, 400).map(p => ({
+  const LIMIT = 400;
+
+  const normalize = (s) => (s || '').toString().toLowerCase()
+    .replace(/İ/g, 'i').replace(/I/g, 'ı')
+    .replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c');
+
+  let list = all;
+  let note = '';
+
+  if (all.length > LIMIT) {
+    const words = normalize(queryText).split(/[^a-zçğıöşü0-9]+/i).filter(w => w.length >= 3);
+    let matches = [];
+    if (words.length > 0) {
+      matches = all.filter(p => {
+        const hay = normalize((p.name || '') + ' ' + (p.code || ''));
+        return words.some(w => hay.includes(w));
+      });
+    }
+    if (matches.length > 0) {
+      // Eşleşenleri öne al, kalan kotayı genel listeden doldur (bağlam için)
+      const matchedCodes = new Set(matches.map(p => p.code));
+      const rest = all.filter(p => !matchedCodes.has(p.code));
+      list = matches.concat(rest).slice(0, LIMIT);
+      note = `\n(Not: Envanterde toplam ${all.length} ürün var. Mesajınızla eşleşen ${matches.length} ürün listenin başına eklendi, kalan yer genel listeden dolduruldu.)`;
+    } else {
+      list = all.slice(0, LIMIT);
+      note = `\n(Not: Envanterde toplam ${all.length} ürün var, ilk ${LIMIT} tanesi listelendi. Aradığınız ürün burada yoksa, tam adını/kodunu tekrar yazıp sorabilirsiniz.)`;
+    }
+  }
+
+  const trimmed = list.map(p => ({
     kod: p.code, ad: p.name, stok: p.qty, birim: p.unit, fiyat: p.price
   }));
-  let note = '';
-  if (all.length > 400) note = `\n(Not: Envanterde toplam ${all.length} ürün var, ilk 400 tanesi listelendi. Kullanıcı listede olmayan bir ürün sorarsa, tam adını/kodunu sorup emin olun.)`;
   return JSON.stringify(trimmed) + note;
 }
 
@@ -6909,7 +6952,7 @@ async function sendAIChatMessage() {
   else if (currentRole === 'staff') roleInfo = 'Çalışan yetkisine sahipsin. Modüller: Satış Sepeti, Malzeme Fişi, Yerleşim, Raporlar, Görevler, Stok.';
   else roleInfo = 'Ziyaretçi yetkisine sahipsin. Sadece stok sorgulama yapabilirsin, işlem yapamazsın.';
 
-  const inventoryContext = buildInventoryContextForAI();
+  const inventoryContext = buildInventoryContextForAI(userMessage);
   const systemPrompt = `Sen Reyhani Cam Hırdavat deposunun akıllı asistanısın. Kullanıcıya yardım et.
 Kullanıcının rolü: ${roleInfo}
 ${aiPendingImage ? 'Kullanıcı bir fotoğraf yükledi. Lütfen fotoğrafı analiz et ve hangi modülle ilgili olduğunu tahmin et. Ardından kullanıcıya hangi modülde işlem yapmak istediğini sor. Modül seçenekleri: borç, toptancılar, satış sepeti, malzeme fişi, stok, raporlar, yerleşim, görevler. Yetkisi yoksa bu modülleri önerme.' : ''}
@@ -6962,7 +7005,7 @@ ${inventoryContext}`;
   }
 
   try {
-    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -6972,7 +7015,7 @@ ${inventoryContext}`;
           // Gemini 3.6 Flash varsayılan olarak "medium" seviyede düşünüyor; bu basit
           // stok/fiyat/yönlendirme sınıflandırması için gereğinden fazla ve yavaş.
           // "low" ile gecikmeyi büyük ölçüde azaltıyoruz. Hâlâ yavaş geliyorsa "minimal" deneyin.
-          thinkingConfig: { thinkingLevel: "low" },
+          thinkingConfig: { thinkingLevel: "minimal" },
           // Cevaplar zaten kısa JSON, gereksiz uzun çıktı üretilmesini engelleyip hızlandırıyoruz
           maxOutputTokens: 400
         }
@@ -7030,7 +7073,7 @@ ${inventoryContext}`;
     }
   } catch (err) {
     thinkingBubble.remove();
-    addAIChatBubble('bot', '❌ Hata: ' + err.message, 'error');
+    addAIChatBubble('bot', friendlyAIErrorMessage(err), 'error');
   } finally {
     aiChatBusy = false;
   }
@@ -7077,14 +7120,14 @@ function handleAIChatConfirmAction(parsed) {
 //  1) O sekmenin HTML'ine ".panel-ai-box" kutusunu kopyalayın (siparis'teki gibi),
 //     id'lerdeki "siparis" kelimesini yeni panel anahtarıyla değiştirin (örn. "borc").
 //  2) Aşağıdaki PANEL_AI_CONFIG'e o anahtarla yeni bir girdi ekleyin:
-//     getSystemPrompt() -> o panelin işine özel talimat + ilgili veriler
+//     getSystemPrompt(userMessage) -> o panelin işine özel talimat + ilgili veriler
 //     handleAction(parsed) -> AI'nin önerdiği işlemi onaylatıp uygulayan kod
 const panelAIHistory = {};
 const panelAIBusy = {};
 
 const PANEL_AI_CONFIG = {
   siparis: {
-    getSystemPrompt: () => `Sen "Reyhani Cam Hırdavat" mağazasının SATIŞ / SEPET ekranında çalışan bir yapay zeka asistanısın. Kullanıcı (mağaza çalışanı) sana ürün stok/fiyat sorabilir, sepete ürün eklemeni isteyebilir ya da o an sepette ne olduğunu sorabilir. Sadece bu ekranın işine yardımcı ol; borç, toptancı, malzeme fişi gibi başka konularda kısaca "bunun için ilgili sekmedeki asistana sorabilirsiniz" de.
+    getSystemPrompt: (userMessage) => `Sen "Reyhani Cam Hırdavat" mağazasının SATIŞ / SEPET ekranında çalışan bir yapay zeka asistanısın. Kullanıcı (mağaza çalışanı) sana ürün stok/fiyat sorabilir, sepete ürün eklemeni isteyebilir ya da o an sepette ne olduğunu sorabilir. Sadece bu ekranın işine yardımcı ol; borç, toptancı, malzeme fişi gibi başka konularda kısaca "bunun için ilgili sekmedeki asistana sorabilirsiniz" de.
 
 Sana JSON formatında güncel ürün listesi ve o an sepette olanlar verilecek. SADECE bu verilere dayanarak cevap ver, uydurma bilgi verme.
 
@@ -7099,7 +7142,7 @@ Kurallar:
 - Asla JSON dışında metin yazma, kod bloğu (\`\`\`) kullanma.
 
 Güncel ürün listesi (JSON):
-${buildInventoryContextForAI()}
+${buildInventoryContextForAI(userMessage)}
 
 Şu an sepette olanlar (JSON):
 ${JSON.stringify(cart.map(i => ({ kod: i.code, ad: i.name, miktar: i.qty })))}`,
@@ -7172,8 +7215,8 @@ async function sendPanelAIMessage(panelKey) {
   panelAIBusy[panelKey] = true;
 
   try {
-    const systemPrompt = cfg.getSystemPrompt();
-    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(key.trim());
+    const systemPrompt = cfg.getSystemPrompt(userMessage);
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(key.trim());
 
     const contents = [
       { role: 'user', parts: [{ text: systemPrompt }] },
@@ -7189,7 +7232,7 @@ async function sendPanelAIMessage(panelKey) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents,
-        generationConfig: { thinkingConfig: { thinkingLevel: 'low' }, maxOutputTokens: 400 }
+        generationConfig: { thinkingConfig: { thinkingLevel: 'minimal' }, maxOutputTokens: 400 }
       })
     });
 
@@ -7212,7 +7255,7 @@ async function sendPanelAIMessage(panelKey) {
     }
   } catch (err) {
     thinkingBubble.remove();
-    addPanelAIBubble(panelKey, 'bot', '❌ Hata: ' + err.message, 'error');
+    addPanelAIBubble(panelKey, 'bot', friendlyAIErrorMessage(err), 'error');
   } finally {
     panelAIBusy[panelKey] = false;
   }
