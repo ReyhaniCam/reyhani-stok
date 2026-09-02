@@ -6809,6 +6809,7 @@ async function processReceiptWithAI(event) {
 // AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
 // ============================================================
 let aiPendingImage = null; // { dataUrl, mimeType } // {role:'user'|'model', text:'...'}
+  let aiChatHistory = [];
 let aiChatBusy = false;
 
 function toggleAIChat() {
