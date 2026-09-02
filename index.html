@@ -340,6 +340,18 @@
 #ai-chat-send{ background:var(--info); color:#fff; border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:16px; flex-shrink:0; }
 #ai-chat-key-row{ padding:8px 12px; font-size:11px; color:var(--steel); text-align:center; border-top:1px solid var(--steel-line); background:#F8FAFC; }
 #ai-chat-key-row a{ color:var(--info); cursor:pointer; font-weight:600; }
+
+/* ============ SEKME İÇİNE GÖMÜLÜ AI ASİSTAN KUTULARI ============ */
+.panel-ai-box{ background:var(--gradient-header); border-radius:var(--radius); margin-bottom:18px; overflow:hidden; border:1px solid var(--steel-line); box-shadow:var(--shadow-hover); }
+.panel-ai-box-header{ padding:12px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px; color:#fff; font-family:'Oswald',sans-serif; letter-spacing:0.3px; }
+.panel-ai-box-header .sub{ font-size:11px; font-weight:500; font-family:'Inter'; color:#CBD5E1; margin-top:2px; }
+.panel-ai-messages{ max-height:240px; min-height:56px; overflow-y:auto; padding:12px; background:var(--bg); display:flex; flex-direction:column; gap:8px; }
+.panel-ai-messages:empty{ padding:14px; }
+.panel-ai-messages:empty::before{ content:"Sorunuzu veya komutunuzu buraya yazabilirsiniz."; color:var(--steel); font-size:12px; font-style:italic; }
+.panel-ai-inputrow{ display:flex; gap:8px; padding:10px; border-top:1px solid rgba(255,255,255,0.15); background:#fff; }
+.panel-ai-input{ flex:1; border:1px solid var(--steel-line); border-radius:20px; padding:9px 14px; font-size:14px; font-family:'Inter'; resize:none; }
+.panel-ai-send{ background:var(--info); color:#fff; border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:16px; flex-shrink:0; }
+.panel-ai-key-btn{ width:auto; font-size:11px; background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:5px; padding:5px 10px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -839,6 +851,22 @@
 
     <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
     <div id="tab-siparis" class="tab-content">
+      <!-- AI SATIŞ ASİSTANI KUTUSU (BAŞLANGIÇ) -->
+      <div class="panel-ai-box">
+        <div class="panel-ai-box-header">
+          <div>
+            <div style="font-weight:bold; font-size:15px;">🤖 Yapay Zeka Satış Asistanı</div>
+            <div class="sub">Örn: "silikon fiyatı ne kadar?" veya "25lik dirsekten 3 tane ekle"</div>
+          </div>
+          <button type="button" class="panel-ai-key-btn" onclick="promptGeminiApiKey()">🔑 API Key</button>
+        </div>
+        <div class="panel-ai-messages" id="siparis-ai-messages"></div>
+        <div class="panel-ai-inputrow">
+          <textarea class="panel-ai-input" id="siparis-ai-input" rows="1" placeholder="Ürün sorun veya sepete ekleme komutu verin..." onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendPanelAIMessage('siparis');}"></textarea>
+          <button type="button" class="panel-ai-send" onclick="sendPanelAIMessage('siparis')">➤</button>
+        </div>
+      </div>
+      <!-- AI SATIŞ ASİSTANI KUTUSU (BİTİŞ) -->
       <div class="form-card">
         <h3 style="margin-top:0; font-family:'Oswald';">Satış / Sepet Ekranı</h3>
         <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Satış yapılacak ürünleri sepete ekleyerek hem stoktan düşebilir hem de müşteri için fiş kesebilirsiniz.</p>
@@ -6809,7 +6837,6 @@ async function processReceiptWithAI(event) {
 // AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
 // ============================================================
 let aiPendingImage = null; // { dataUrl, mimeType } // {role:'user'|'model', text:'...'}
-  let aiChatHistory = [];
 let aiChatBusy = false;
 
 function toggleAIChat() {
@@ -7040,6 +7067,154 @@ function handleAIChatConfirmAction(parsed) {
     } else {
       addAIChatBubble('bot', 'İşlem iptal edildi.');
     }
+  }
+}
+
+// ============================================================
+// SEKME İÇİNE GÖMÜLÜ AI ASİSTANLAR (her panel kendi işine hakim)
+// ============================================================
+// Yeni bir sekmeye asistan eklemek için:
+//  1) O sekmenin HTML'ine ".panel-ai-box" kutusunu kopyalayın (siparis'teki gibi),
+//     id'lerdeki "siparis" kelimesini yeni panel anahtarıyla değiştirin (örn. "borc").
+//  2) Aşağıdaki PANEL_AI_CONFIG'e o anahtarla yeni bir girdi ekleyin:
+//     getSystemPrompt() -> o panelin işine özel talimat + ilgili veriler
+//     handleAction(parsed) -> AI'nin önerdiği işlemi onaylatıp uygulayan kod
+const panelAIHistory = {};
+const panelAIBusy = {};
+
+const PANEL_AI_CONFIG = {
+  siparis: {
+    getSystemPrompt: () => `Sen "Reyhani Cam Hırdavat" mağazasının SATIŞ / SEPET ekranında çalışan bir yapay zeka asistanısın. Kullanıcı (mağaza çalışanı) sana ürün stok/fiyat sorabilir, sepete ürün eklemeni isteyebilir ya da o an sepette ne olduğunu sorabilir. Sadece bu ekranın işine yardımcı ol; borç, toptancı, malzeme fişi gibi başka konularda kısaca "bunun için ilgili sekmedeki asistana sorabilirsiniz" de.
+
+Sana JSON formatında güncel ürün listesi ve o an sepette olanlar verilecek. SADECE bu verilere dayanarak cevap ver, uydurma bilgi verme.
+
+Cevabını HER ZAMAN şu JSON formatlarından biriyle, başka hiçbir metin eklemeden ver:
+{"action":"none","reply":"kullanıcıya gösterilecek doğal, kısa, Türkçe cevap"}
+{"action":"add_to_cart","code":"ÜRÜN_KODU","qty":sayı,"reply":"onay için kısa açıklama, örn: 25lik dirsekten 3 adet sepete eklensin mi?"}
+
+Kurallar:
+- "code" alanı MUTLAKA sana verilen ürün listesindeki gerçek bir kod olmalı; ürünü isimden bulup doğru kodu kullan.
+- Ürünü net bulamıyorsan veya birden fazla eşleşme varsa action:"none" dön ve hangi ürünü kastettiğini sorun.
+- Genel sohbet/selamlaşmada action:"none" kullan.
+- Asla JSON dışında metin yazma, kod bloğu (\`\`\`) kullanma.
+
+Güncel ürün listesi (JSON):
+${buildInventoryContextForAI()}
+
+Şu an sepette olanlar (JSON):
+${JSON.stringify(cart.map(i => ({ kod: i.code, ad: i.name, miktar: i.qty })))}`,
+    handleAction: (parsed) => {
+      if (parsed.action !== 'add_to_cart' || !parsed.code) return false;
+      if (currentRole !== 'admin' && currentRole !== 'staff') {
+        addPanelAIBubble('siparis', 'bot', 'Bu işlemi yapabilmeniz için yönetici veya çalışan girişi yapmanız gerekiyor.', 'error');
+        return true;
+      }
+      const p = productsData[parsed.code];
+      if (!p) {
+        addPanelAIBubble('siparis', 'bot', 'Bu ürün kodunu envanterde bulamadım: ' + parsed.code, 'error');
+        return true;
+      }
+      const qty = Number(parsed.qty) > 0 ? Number(parsed.qty) : 1;
+      const ok = confirm(`${p.name} (${parsed.code})\n${qty} ${p.unit || 'Adet'} sepete eklensin mi?`);
+      if (ok) {
+        const existingIndex = cart.findIndex(item => item.code === parsed.code);
+        if (existingIndex !== -1) {
+          cart[existingIndex].qty += qty;
+          cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
+        } else {
+          const price = Number(p.price || 0);
+          cart.push({ code: p.code, name: p.name, price, qty, unit: p.unit || 'Adet', total: price * qty });
+        }
+        renderCart();
+        addPanelAIBubble('siparis', 'bot', '✅ Sepete eklendi: ' + p.name);
+      } else {
+        addPanelAIBubble('siparis', 'bot', 'İşlem iptal edildi.');
+      }
+      return true;
+    }
+  }
+};
+
+function addPanelAIBubble(panelKey, role, text, extraClass) {
+  const wrap = document.getElementById(panelKey + '-ai-messages');
+  if (!wrap) return null;
+  const div = document.createElement('div');
+  div.className = 'ai-msg ' + (role === 'user' ? 'user' : 'bot') + (extraClass ? ' ' + extraClass : '');
+  div.textContent = text;
+  wrap.appendChild(div);
+  wrap.scrollTop = wrap.scrollHeight;
+  return div;
+}
+
+async function sendPanelAIMessage(panelKey) {
+  const cfg = PANEL_AI_CONFIG[panelKey];
+  if (!cfg) return;
+  if (panelAIBusy[panelKey]) return;
+
+  const input = document.getElementById(panelKey + '-ai-input');
+  if (!input) return;
+  const userMessage = input.value.trim();
+  if (!userMessage) return;
+
+  let key = getGeminiApiKey();
+  if (!key) {
+    key = prompt("Bu asistanı kullanmak için Google API Anahtarınızı girin:");
+    if (!key) return;
+    localStorage.setItem('gemini_api_key', key.trim());
+  }
+
+  if (!panelAIHistory[panelKey]) panelAIHistory[panelKey] = [];
+
+  input.value = '';
+  addPanelAIBubble(panelKey, 'user', userMessage);
+  panelAIHistory[panelKey].push({ role: 'user', text: userMessage });
+  const thinkingBubble = addPanelAIBubble(panelKey, 'bot', 'Yazıyor...', 'thinking');
+  panelAIBusy[panelKey] = true;
+
+  try {
+    const systemPrompt = cfg.getSystemPrompt();
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(key.trim());
+
+    const contents = [
+      { role: 'user', parts: [{ text: systemPrompt }] },
+      { role: 'model', parts: [{ text: '{"action":"none","reply":"Anladım, yardımcı olmaya hazırım."}' }] }
+    ];
+    // Hız için sadece son 10 mesajı gönderiyoruz
+    panelAIHistory[panelKey].slice(-10).forEach(h => {
+      contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] });
+    });
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        generationConfig: { thinkingConfig: { thinkingLevel: 'low' }, maxOutputTokens: 400 }
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zekadan cevap alınamadı.");
+    }
+
+    let raw = data.candidates[0].content.parts[0].text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch (e) { parsed = { action: 'none', reply: raw }; }
+
+    panelAIHistory[panelKey].push({ role: 'model', text: raw });
+    thinkingBubble.remove();
+
+    const handled = cfg.handleAction ? cfg.handleAction(parsed) : false;
+    if (!handled) {
+      addPanelAIBubble(panelKey, 'bot', parsed.reply || raw);
+    }
+  } catch (err) {
+    thinkingBubble.remove();
+    addPanelAIBubble(panelKey, 'bot', '❌ Hata: ' + err.message, 'error');
+  } finally {
+    panelAIBusy[panelKey] = false;
   }
 }
 </script>
