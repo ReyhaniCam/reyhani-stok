@@ -1453,12 +1453,12 @@
   </div>
   <div id="ai-chat-messages"></div>
   <div id="ai-chat-inputrow">
-    <textarea id="ai-chat-input" rows="1" placeholder="Örn: 25lik dirsek stoğu ne kadar?" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendAIChatMessage();}"></textarea>
-    <button id="ai-chat-send" onclick="sendAIChatMessage()">➤</button>
-  </div>
-  <div id="ai-chat-key-row">Google Gemini API kullanır. <a onclick="promptGeminiApiKey()">API Anahtarını Ayarla</a></div>
+    <div id="ai-chat-inputrow" style="display:flex; gap:6px; align-items:center;">
+    <textarea id="ai-chat-input" rows="1" placeholder="Örn: 25lik dirsek stoğu ne kadar? veya fotoğraf yükle" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendAIChatMessage();}" style="flex:1;"></textarea>
+    <button id="ai-chat-upload" onclick="document.getElementById('ai-chat-file-input').click()" style="background:none; border:none; font-size:22px; cursor:pointer; padding:4px 8px;" title="Fotoğraf yükle">📷</button>
+    <button id="ai-chat-send" onclick="sendAIChatMessage()" style="background:var(--info); color:#fff; border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:16px; flex-shrink:0;">➤</button>
+    <input type="file" id="ai-chat-file-input" accept="image/*" style="display:none;" onchange="handleAIChatFileUpload(event)">
 </div>
-
 <script>
 // SPLASH SCREEN SÜRESİ
 setTimeout(() => {
@@ -6808,7 +6808,7 @@ async function processReceiptWithAI(event) {
 // ============================================================
 // AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
 // ============================================================
-let aiChatHistory = []; // {role:'user'|'model', text:'...'}
+let aiPendingImage = null; // { dataUrl, mimeType } // {role:'user'|'model', text:'...'}
 let aiChatBusy = false;
 
 function toggleAIChat() {
@@ -6819,7 +6819,18 @@ function toggleAIChat() {
     setTimeout(() => document.getElementById('ai-chat-input').focus(), 200);
   }
 }
-
+function handleAIChatFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    aiPendingImage = { dataUrl: e.target.result, mimeType: file.type };
+    // Fotoğraf yüklendi, hemen gönder
+    sendAIChatMessage();
+    event.target.value = '';
+  };
+  reader.readAsDataURL(file);
+}
 function addAIChatBubble(role, text, extraClass) {
   const wrap = document.getElementById('ai-chat-messages');
   const div = document.createElement('div');
@@ -6841,17 +6852,149 @@ function buildInventoryContextForAI() {
   return JSON.stringify(trimmed) + note;
 }
 
-async function sendAIChatMessage() {
+async function sendAIChatMessage() {async function sendAIChatMessage() {
   if (aiChatBusy) return;
   const input = document.getElementById('ai-chat-input');
   const text = input.value.trim();
-  if (!text) return;
+  if (!text && !aiPendingImage) return;
 
   let apiKey = getGeminiApiKey();
   if (!apiKey) {
     apiKey = prompt("Sohbet asistanını kullanmak için Google API Anahtarınızı girin:");
     if (!apiKey) return;
     localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  // Kullanıcı mesajını göster
+  let userMessage = text || (aiPendingImage ? '📷 Fotoğraf yükledim' : '');
+  if (userMessage) {
+    addAIChatBubble('user', userMessage);
+    aiChatHistory.push({ role: 'user', text: userMessage });
+  }
+  input.value = '';
+  const thinkingBubble = addAIChatBubble('bot', 'Yazıyor...', 'thinking');
+  aiChatBusy = true;
+
+  // Rol bilgisi
+  let roleInfo = '';
+  if (currentRole === 'admin') roleInfo = 'Yönetici yetkisine sahipsin. Tüm modülleri kullanabilirsin: Borç, Toptancılar, Satış Sepeti, Malzeme Fişi, Raporlar, Yerleşim, Görevler, Stok.';
+  else if (currentRole === 'staff') roleInfo = 'Çalışan yetkisine sahipsin. Modüller: Satış Sepeti, Malzeme Fişi, Yerleşim, Raporlar, Görevler, Stok.';
+  else roleInfo = 'Ziyaretçi yetkisine sahipsin. Sadece stok sorgulama yapabilirsin, işlem yapamazsın.';
+
+  const inventoryContext = buildInventoryContextForAI();
+  const systemPrompt = `Sen Reyhani Cam Hırdavat deposunun akıllı asistanısın. Kullanıcıya yardım et.
+Kullanıcının rolü: ${roleInfo}
+${aiPendingImage ? 'Kullanıcı bir fotoğraf yükledi. Lütfen fotoğrafı analiz et ve hangi modülle ilgili olduğunu tahmin et. Ardından kullanıcıya hangi modülde işlem yapmak istediğini sor. Modül seçenekleri: borç, toptancılar, satış sepeti, malzeme fişi, stok, raporlar, yerleşim, görevler. Yetkisi yoksa bu modülleri önerme.' : ''}
+Sana güncel ürün listesi (JSON) verilecek. Sadece bu listeye ve kullanıcının söylediklerine dayanarak cevap ver, uydurma bilgi verme.
+
+Cevabını HER ZAMAN şu JSON formatında, başka hiçbir metin eklemeden ver:
+{"action": "none", "reply": "kullanıcıya gösterilecek doğal, kısa ve Türkçe cevap"}
+veya kullanıcı bir ürünün stoğunu artırmak/azaltmak istiyorsa:
+{"action": "update_stock", "code": "ÜRÜN_KODU", "change": sayı (pozitif=ekleme, negatif=azaltma), "reply": "onay mesajı"}
+veya kullanıcı bir ürünün fiyatını değiştirmek istiyorsa:
+{"action": "update_price", "code": "ÜRÜN_KODU", "price": sayı, "reply": "onay mesajı"}
+veya kullanıcıyı bir modüle yönlendirmek istiyorsan (önce kullanıcıdan onay al, sonra yönlendir):
+{"action": "navigate", "module": "borc|toptanci|siparis|fis|stok|raporlar|yerlesim|gorevler", "reply": "yönlendirme açıklaması"}
+
+Kurallar:
+- Kullanıcı yetkisi yoksa (ziyaretçi), asla update_stock, update_price veya navigate yapma, sadece stok sorgulama yap.
+- update_stock/update_price önerirken, "code" gerçek bir ürün kodu olmalı.
+- Ürünü net bulamazsan, action:"none" ile sor.
+- Modül navigasyonu için önce kullanıcıya sor, onay al, sonra navigate action'ı ile yönlendir.
+- Asla JSON dışında metin yazma, kod bloğu kullanma.
+
+Güncel ürün listesi (JSON):
+${inventoryContext}`;
+
+  // Contents oluştur
+  const contents = [
+    { role: 'user', parts: [{ text: systemPrompt }] },
+    { role: 'model', parts: [{ text: '{"action":"none","reply":"Anladım, yardımcı olmaya hazırım."}' }] }
+  ];
+  aiChatHistory.forEach(h => {
+    contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] });
+  });
+
+  // Eğer fotoğraf varsa, son kullanıcı mesajına inlineData ekle
+  if (aiPendingImage) {
+    const lastUserIndex = contents.length - 1;
+    if (contents[lastUserIndex] && contents[lastUserIndex].role === 'user') {
+      contents[lastUserIndex].parts.push({
+        inlineData: { mimeType: aiPendingImage.mimeType, data: aiPendingImage.dataUrl.split(',')[1] }
+      });
+    } else {
+      contents.push({ role: 'user', parts: [
+        { text: userMessage },
+        { inlineData: { mimeType: aiPendingImage.mimeType, data: aiPendingImage.dataUrl.split(',')[1] } }
+      ]});
+    }
+    aiPendingImage = null; // temizle
+  }
+
+  try {
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zekadan cevap alınamadı.");
+    }
+
+    let raw = data.candidates[0].content.parts[0].text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      parsed = { action: 'none', reply: raw };
+    }
+
+    aiChatHistory.push({ role: 'model', text: raw });
+    thinkingBubble.remove();
+
+    if (parsed.action === 'update_stock' && parsed.code) {
+      addAIChatBubble('bot', parsed.reply || 'Stok değişikliği yapmak istiyorum, onaylıyor musunuz?');
+      handleAIChatConfirmAction(parsed);
+    } else if (parsed.action === 'update_price' && parsed.code) {
+      addAIChatBubble('bot', parsed.reply || 'Fiyat değişikliği yapmak istiyorum, onaylıyor musunuz?');
+      handleAIChatConfirmAction(parsed);
+    } else if (parsed.action === 'navigate' && parsed.module) {
+      addAIChatBubble('bot', parsed.reply || 'Yönlendiriliyor...');
+      const tabMap = {
+        'borc': 'borc',
+        'toptanci': 'toptanci',
+        'siparis': 'siparis',
+        'fis': 'fis',
+        'stok': 'stok',
+        'raporlar': 'raporlar',
+        'yerlesim': 'yerlesim',
+        'gorevler': 'gorevler'
+      };
+      const tabName = tabMap[parsed.module];
+      if (tabName) {
+        if (currentRole === 'guest' && ['toptanci','borc','siparis','fis','raporlar','yerlesim','gorevler'].includes(tabName)) {
+          addAIChatBubble('bot', 'Bu modüle erişim yetkiniz yok. Lütfen giriş yapın.', 'error');
+        } else {
+          switchTab(tabName);
+          showToast('Yönlendirildi: ' + tabName);
+        }
+      } else {
+        addAIChatBubble('bot', 'Geçersiz modül.', 'error');
+      }
+    } else {
+      addAIChatBubble('bot', parsed.reply || raw);
+    }
+  } catch (err) {
+    thinkingBubble.remove();
+    addAIChatBubble('bot', '❌ Hata: ' + err.message, 'error');
+  } finally {
+    aiChatBusy = false;
+  }
+}
   }
 
   input.value = '';
