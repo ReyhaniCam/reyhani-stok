@@ -6642,19 +6642,19 @@ async function downloadZReportByDate(dateStr) {
   
   await saveExcelFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
 }
-
 // Initialize
 checkDeviceAuthorizationLink();
 updateAuthUI();
-}
-  // YAPAY ZEKA MOTORU (GÜNCEL)
+
+// YAPAY ZEKA MOTORU (GÜNCEL & HATASIZ)
 function getGeminiApiKey() { 
   return localStorage.getItem('gemini_api_key') || ''; 
 }
 
 function promptGeminiApiKey() {
-  const newKey = prompt("Google'dan aldığınız API Anahtarını yapıştırın:", getGeminiApiKey());
-  if (newKey) {
+  const currentKey = getGeminiApiKey();
+  const newKey = prompt("Google'dan aldığınız API Anahtarını yapıştırın:", currentKey);
+  if (newKey !== null && newKey !== "") {
     localStorage.setItem('gemini_api_key', newKey.trim());
     alert("API Anahtarı kaydedildi!");
   }
@@ -6667,7 +6667,10 @@ async function processReceiptWithAI(event) {
   let apiKey = getGeminiApiKey();
   if (!apiKey) {
     apiKey = prompt("Fiş okuyabilmek için Google API Anahtarınızı girmelisiniz:");
-    if (!apiKey) { event.target.value = ''; return; }
+    if (!apiKey) { 
+      event.target.value = ''; 
+      return; 
+    }
     localStorage.setItem('gemini_api_key', apiKey.trim());
   }
 
@@ -6687,7 +6690,6 @@ async function processReceiptWithAI(event) {
     });
     const pureBase64 = base64Data.split(',')[1];
 
-    // Doğrudan güncel model adını çağırıyoruz:
     const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
 
     const response = await fetch(apiUrl, {
@@ -6706,7 +6708,15 @@ async function processReceiptWithAI(event) {
     const data = await response.json();
     if (data.error) throw new Error(data.error.message);
 
-    let textResult = data.candidates[0].content.parts[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zeka gorselden veri okuyamadi.");
+    }
+
+    let textResult = data.candidates[0].content.parts[0].text
+      .replace(/```(?:json)?/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
     const parsedItems = JSON.parse(textResult);
 
     if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw new Error("Ürün bulunamadı");
