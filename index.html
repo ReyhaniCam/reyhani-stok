@@ -6852,7 +6852,7 @@ function buildInventoryContextForAI() {
   return JSON.stringify(trimmed) + note;
 }
 
-async function sendAIChatMessage() {async function sendAIChatMessage() {
+async function sendAIChatMessage() {
   if (aiChatBusy) return;
   const input = document.getElementById('ai-chat-input');
   const text = input.value.trim();
@@ -6985,82 +6985,6 @@ ${inventoryContext}`;
       } else {
         addAIChatBubble('bot', 'Geçersiz modül.', 'error');
       }
-    } else {
-      addAIChatBubble('bot', parsed.reply || raw);
-    }
-  } catch (err) {
-    thinkingBubble.remove();
-    addAIChatBubble('bot', '❌ Hata: ' + err.message, 'error');
-  } finally {
-    aiChatBusy = false;
-  }
-}
-  }
-
-  input.value = '';
-  addAIChatBubble('user', text);
-  aiChatHistory.push({ role: 'user', text });
-  const thinkingBubble = addAIChatBubble('bot', 'Yazıyor...', 'thinking');
-  aiChatBusy = true;
-
-  const systemPrompt = `Sen "Reyhani Cam Hırdavat" adlı hırdavat/vidalama deposu için çalışan bir mağaza içi yapay zeka asistanısın. Kullanıcı sana ürün stoğu, fiyatı hakkında sorular sorar veya stok/fiyat değiştirme komutu verir. Sana JSON formatında güncel ürün listesi (kod, ad, stok, birim, fiyat) verilecek. SADECE bu listeye ve kullanıcının söylediklerine dayanarak cevap ver, uydurma bilgi verme.
-
-Cevabını HER ZAMAN şu JSON formatında, başka hiçbir metin eklemeden ver:
-{"action": "none", "reply": "kullanıcıya gösterilecek doğal, kısa ve Türkçe cevap"}
-veya kullanıcı bir ürünün stoğunu artırmak/azaltmak istiyorsa:
-{"action": "update_stock", "code": "ÜRÜN_KODU", "change": sayı (pozitif=ekleme, negatif=azaltma), "reply": "kullanıcıya onay için gösterilecek kısa açıklama, örn: 25lik dirsek stoğuna 10 adet eklemek istiyorsunuz, onaylıyor musunuz?"}
-veya kullanıcı bir ürünün fiyatını değiştirmek istiyorsa:
-{"action": "update_price", "code": "ÜRÜN_KODU", "price": sayı, "reply": "kullanıcıya onay için gösterilecek kısa açıklama"}
-
-Kurallar:
-- update_stock veya update_price önerirken, "code" alanı MUTLAKA sana verilen ürün listesindeki gerçek bir "kod" değeri olmalı. Ürünü isimden bulup doğru kodu kullan.
-- Ürünü listede net şekilde bulamıyorsan veya birden fazla eşleşme varsa, action:"none" dön ve kullanıcıya hangi ürünü kastettiğini sor.
-- Genel sohbet, selamlaşma veya envanterle ilgisi olmayan sorularda kısaca ve nazikçe cevap ver, action:"none" kullan.
-- Asla JSON dışında metin yazma, kod bloğu (\`\`\`) kullanma.
-
-Güncel ürün listesi (JSON):
-${buildInventoryContextForAI()}`;
-
-  try {
-    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
-
-    const contents = [
-      { role: 'user', parts: [{ text: systemPrompt }] },
-      { role: 'model', parts: [{ text: '{"action":"none","reply":"Anladım, yardımcı olmaya hazırım."}' }] }
-    ];
-    aiChatHistory.forEach(h => {
-      contents.push({ role: h.role === 'user' ? 'user' : 'model', parts: [{ text: h.text }] });
-    });
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
-      throw new Error("Yapay zekadan cevap alınamadı.");
-    }
-
-    let raw = data.candidates[0].content.parts[0].text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
-    let parsed;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (e) {
-      parsed = { action: 'none', reply: raw };
-    }
-
-    aiChatHistory.push({ role: 'model', text: raw });
-    thinkingBubble.remove();
-
-    if (parsed.action === 'update_stock' && parsed.code) {
-      addAIChatBubble('bot', parsed.reply || 'Stok değişikliği yapmak istiyorum, onaylıyor musunuz?');
-      handleAIChatConfirmAction(parsed);
-    } else if (parsed.action === 'update_price' && parsed.code) {
-      addAIChatBubble('bot', parsed.reply || 'Fiyat değişikliği yapmak istiyorum, onaylıyor musunuz?');
-      handleAIChatConfirmAction(parsed);
     } else {
       addAIChatBubble('bot', parsed.reply || raw);
     }
