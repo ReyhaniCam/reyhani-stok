@@ -6608,6 +6608,17 @@ function loadHistory(key) {
     ` : '';
 
     const balance = w.balance || 0;
+
+    const manualBalanceBlock = isAdmin ? `
+      <div style="margin-bottom:15px; background:#FFF7ED; border:1px dashed var(--warning, #F59E0B); padding:10px; border-radius:6px;">
+        <label style="font-size:12px; font-weight:600;">⚙️ Bakiyeyi Manuel Düzelt (yanlış girilen tutarı elle düzeltmek için)</label>
+        <div class="form-row" style="margin-top:6px; align-items:flex-end;">
+          <div style="flex:1;"><input type="number" id="h-manual-balance" step="0.01" value="${balance}" placeholder="0.00"></div>
+          <button class="btn btn-sm" style="width:auto; background:var(--warning, #F59E0B); color:#fff; white-space:nowrap; padding:8px 12px;" onclick="setWholesalerBalanceManually()">Bakiyeyi Ayarla</button>
+        </div>
+        <div style="font-size:11px; color:var(--steel); margin-top:4px;">Bu, artış/azalış eklemez; bakiyeyi doğrudan yazdığınız tutara eşitler. Negatif değer = borç, pozitif değer = alacak.</div>
+      </div>
+    ` : '';
     const rows = Object.keys(data).sort().reverse().map(tId => {
       const t = data[tId];
       return `
@@ -6623,7 +6634,35 @@ function loadHistory(key) {
       `;
     }).join('') || '<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hareket kaydı yok.</p>';
 
-    list.innerHTML = html + `<div class="balance-box ${balance < 0 ? 'balance-negative' : 'balance-positive'}">Güncel Bakiye: ₺${formatMoney(balance)}</div>` + rows;
+    list.innerHTML = html + manualBalanceBlock + `<div class="balance-box ${balance < 0 ? 'balance-negative' : 'balance-positive'}">Güncel Bakiye: ₺${formatMoney(balance)}</div>` + rows;
+  });
+}
+
+function setWholesalerBalanceManually() {
+  if (currentRole !== 'admin' || !activeWholesalerKey) return;
+  const input = document.getElementById('h-manual-balance');
+  const newBalance = parseFloat(input.value);
+  if (isNaN(newBalance)) { alert("Lütfen geçerli bir tutar girin."); return; }
+
+  const w = wholesalersData[activeWholesalerKey] || {};
+  const oldBalance = w.balance || 0;
+  if (newBalance === oldBalance) { showToast("Bakiye zaten bu tutarda."); return; }
+
+  const ok = confirm(`Mevcut bakiye: ₺${formatMoney(oldBalance)}\nYeni bakiye: ₺${formatMoney(newBalance)}\n\nBakiyeyi doğrudan bu tutara eşitlemek istediğinize emin misiniz?`);
+  if (!ok) return;
+
+  const date = new Date().toLocaleString('tr-TR');
+  dbWholesalers.child(activeWholesalerKey).child('balance').set(newBalance, (err) => {
+    if (err) { showToast("Bakiye güncellenemedi: " + err.message); return; }
+    // Şeffaflık için hareket geçmişine de bir düzeltme kaydı düşelim
+    dbWholesalers.child(activeWholesalerKey).child('transactions').push({
+      desc: `Manuel Düzeltme (₺${formatMoney(oldBalance)} → ₺${formatMoney(newBalance)})`,
+      amount: Math.abs(newBalance - oldBalance),
+      type: newBalance < oldBalance ? 'borc' : 'odeme',
+      date
+    }, () => {
+      showToast("Bakiye manuel olarak güncellendi.");
+    });
   });
 }
 
