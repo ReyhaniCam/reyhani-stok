@@ -21,6 +21,178 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
 <style>
+  /* ============================================================
+   TAM EKRAN KARŞILAMA PANELİ (DASHBOARD) - EKLENEN KOD
+   ============================================================ */
+#tab-dashboard {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
+  background: linear-gradient(-45deg, #0F172A, #1E293B, #0EA5E9, #8B5CF6);
+  background-size: 400% 400%;
+  animation: gradientFlow 15s ease infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+  margin: 0;
+  border-radius: 0;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  overflow-y: auto;
+  backdrop-filter: blur(2px);
+}
+
+@keyframes gradientFlow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.dashboard-inner {
+  max-width: 1200px;
+  width: 100%;
+  margin: auto;
+  text-align: center;
+  animation: floatUp 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes floatUp {
+  0% { opacity: 0; transform: translateY(40px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dash-greeting h1 {
+  font-family: 'Oswald', sans-serif;
+  font-size: clamp(2.5rem, 8vw, 4.5rem);
+  margin: 0 0 8px 0;
+  letter-spacing: 2px;
+  text-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+.dash-greeting h1 span {
+  color: #FDE047;
+  background: linear-gradient(135deg, #FDE047, #F59E0B);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dash-greeting p {
+  font-size: clamp(1rem, 2.5vw, 1.4rem);
+  color: #CBD5E1;
+  margin: 0 0 12px 0;
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+.dash-greeting .sub-highlight {
+  display: inline-block;
+  background: rgba(255,255,255,0.08);
+  backdrop-filter: blur(4px);
+  padding: 6px 24px;
+  border-radius: 40px;
+  border: 1px solid rgba(255,255,255,0.1);
+  font-size: 0.85rem;
+  color: #94A3B8;
+}
+.dash-greeting .sub-highlight kbd {
+  background: rgba(255,255,255,0.15);
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-family: 'IBM Plex Mono', monospace;
+  color: #FDE047;
+}
+
+/* İstatistik Küçük Kartlar */
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin: 30px 0 36px 0;
+}
+.dash-stat-item {
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 16px 12px;
+  transition: all 0.3s ease;
+}
+.dash-stat-item:hover {
+  background: rgba(255,255,255,0.12);
+  transform: translateY(-6px);
+  border-color: #F59E0B;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+}
+.dash-stat-item .num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: clamp(1.6rem, 4vw, 2.6rem);
+  font-weight: 700;
+  display: block;
+  line-height: 1.2;
+}
+.dash-stat-item .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: #94A3B8;
+  font-weight: 600;
+}
+
+/* Büyük Aksiyon Butonları */
+.dash-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 18px;
+  margin: 10px 0 30px 0;
+}
+.dash-action-btn {
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 20px;
+  padding: 22px 10px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  text-decoration: none;
+}
+.dash-action-btn:hover {
+  transform: translateY(-10px) scale(1.04);
+  background: rgba(255,255,255,0.15);
+  border-color: var(--accent, #F59E0B);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+}
+.dash-action-btn .icon {
+  font-size: 2.8rem;
+  line-height: 1;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+}
+.dash-action-btn .title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+.dash-action-btn .desc {
+  font-size: 0.65rem;
+  color: #94A3B8;
+  font-weight: 400;
+}
+
+/* Küçük Ekranlar İçin Düzenleme */
+@media (max-width: 640px) {
+  #tab-dashboard { padding: 15px; align-items: flex-start; padding-top: 40px; }
+  .dash-actions { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .dash-action-btn { padding: 16px 8px; }
+  .dash-action-btn .icon { font-size: 2rem; }
+}
   :root{
     --bg:#F8FAFC; --paper:#FFFFFF; --charcoal:#0F172A; --steel:#475569;
     --steel-line:#E2E8F0; --safety:#F59E0B; --rust:#EF4444; --success:#10B981;
@@ -602,47 +774,89 @@
   </div>
 
   <main>
-    <!-- DASHBOARD / KARŞILAMA PANELİ -->
-    <div id="tab-dashboard" class="tab-content active">
-      <div class="dashboard-container">
-        <!-- Başlık -->
-        <div class="dashboard-header">
-          <h1>👋 Merhaba, <span id="dash-user-name">Ziyaretçi</span>!</h1>
-          <p class="dash-subtitle">Bugün ne yapmak istersiniz? Aşağıdaki kartlardan birini seçin veya <kbd>Ctrl+K</kbd> ile hızlı arama yapın.</p>
-        </div>
+   <!-- TAM EKRAN KARŞILAMA PANELİ (YENİ) -->
+<div id="tab-dashboard" class="tab-content" style="display:flex;">
+  <div class="dashboard-inner">
+    
+    <!-- KARŞILAMA BAŞLIĞI -->
+    <div class="dash-greeting">
+      <h1>👋 Merhaba, <span id="dash-user-name">Ziyaretçi</span>!</h1>
+      <p>Reyhani Cam Hırdavat Yönetim Panelinde işlemlerinizi hızlıca başlatın.</p>
+      <div class="sub-highlight">
+        ⚡ <kbd>Ctrl + K</kbd> ile hızlı arama yapın &nbsp;·&nbsp; 🚀 Aşağıdan başlayın
+      </div>
+    </div>
 
-        <!-- İstatistik Kartları -->
-        <div class="stats-grid">
-          <div class="stat-card" style="--accent: #3B82F6;">
-            <div class="stat-icon">📦</div>
-            <div class="stat-info">
-              <span class="stat-label">Toplam Ürün</span>
-              <span class="stat-number" id="dash-total-products">0</span>
-            </div>
-          </div>
-          <div class="stat-card" style="--accent: #EF4444;">
-            <div class="stat-icon">⚠️</div>
-            <div class="stat-info">
-              <span class="stat-label">Kritik Stok (≤5)</span>
-              <span class="stat-number" id="dash-critical-stock">0</span>
-            </div>
-          </div>
-          <div class="stat-card" id="dash-stat-card-revenue" style="--accent: #10B981;">
-            <div class="stat-icon">💰</div>
-            <div class="stat-info">
-              <span class="stat-label">Bugünkü Ciro</span>
-              <span class="stat-number" id="dash-today-revenue">₺0</span>
-            </div>
-          </div>
-          <div class="stat-card" id="dash-stat-card-debt" style="--accent: #F59E0B;">
-            <div class="stat-icon">📋</div>
-            <div class="stat-info">
-              <span class="stat-label">Toplam Açık Borç</span>
-              <span class="stat-number" id="dash-total-debt">₺0</span>
-            </div>
-          </div>
-        </div>
+    <!-- ANLIK İSTATİSTİKLER -->
+    <div class="dash-stats">
+      <div class="dash-stat-item">
+        <span class="num" id="dash-total-products">0</span>
+        <span class="label">📦 Toplam Ürün</span>
+      </div>
+      <div class="dash-stat-item">
+        <span class="num" id="dash-critical-stock">0</span>
+        <span class="label">⚠️ Kritik Stok</span>
+      </div>
+      <div class="dash-stat-item">
+        <span class="num" id="dash-today-revenue">₺0</span>
+        <span class="label">💰 Bugünkü Ciro</span>
+      </div>
+      <div class="dash-stat-item">
+        <span class="num" id="dash-total-debt">₺0</span>
+        <span class="label">📋 Toplam Açık Borç</span>
+      </div>
+    </div>
 
+    <!-- HIZLI ERİŞİM BUTONLARI -->
+    <div class="dash-actions">
+      <div class="dash-action-btn" data-tab="stok" style="--accent: #0EA5E9;">
+        <span class="icon">📦</span>
+        <span class="title">Stok Listesi</span>
+        <span class="desc">Tüm ürünleri gör</span>
+      </div>
+      <div class="dash-action-btn" data-tab="ekle" style="--accent: #8B5CF6;">
+        <span class="icon">➕</span>
+        <span class="title">Ürün Ekle</span>
+        <span class="desc">Yeni ürün tanımla</span>
+      </div>
+      <div class="dash-action-btn" data-tab="siparis" style="--accent: #F59E0B;">
+        <span class="icon">🛒</span>
+        <span class="title">Satış Yap</span>
+        <span class="desc">Sepet & satış</span>
+      </div>
+      <div class="dash-action-btn" data-tab="borc" style="--accent: #EF4444;">
+        <span class="icon">💰</span>
+        <span class="title">Borç Takibi</span>
+        <span class="desc">Müşteri borçları</span>
+      </div>
+      <div class="dash-action-btn" data-tab="raporlar" style="--accent: #10B981;">
+        <span class="icon">📊</span>
+        <span class="title">Raporlar</span>
+        <span class="desc">Z raporu & analiz</span>
+      </div>
+      <div class="dash-action-btn" data-tab="fis" style="--accent: #EC4899;">
+        <span class="icon">📥</span>
+        <span class="title">Malzeme Fişi</span>
+        <span class="desc">Toptancı girişi</span>
+      </div>
+      <div class="dash-action-btn" data-tab="yerlesim" style="--accent: #8B5CF6;">
+        <span class="icon">🗺️</span>
+        <span class="title">Yerleşim</span>
+        <span class="desc">Kroki & konum</span>
+      </div>
+      <div class="dash-action-btn" data-tab="okut" style="--accent: #14B8A6;">
+        <span class="icon">📷</span>
+        <span class="title">QR Okut</span>
+        <span class="desc">Kamera ile bul</span>
+      </div>
+    </div>
+
+    <!-- ALT BİLGİ -->
+    <div style="margin-top:20px; font-size:0.8rem; color:#64748B; letter-spacing:0.5px;">
+      © 2026 Reyhani Cam Hırdavat · Tüm hakları saklıdır.
+    </div>
+  </div>
+</div>
         <!-- Hızlı Erişim Kartları -->
         <div class="action-grid">
           <div class="action-card" data-tab="stok" style="--accent: #0EA5E9;">
@@ -8008,6 +8222,142 @@ async function sendPanelAIMessage(panelKey) {
   } finally {
     panelAIBusy[panelKey] = false;
   }
+}
+  // ============================================================
+// TAM EKRAN DASHBOARD KONTROLÜ (EKLENEN KOD)
+// ============================================================
+
+// Dashboard'u gizlemek için (butona tıklanınca çağrılır)
+function closeDashboard() {
+  const dash = document.getElementById('tab-dashboard');
+  if (dash) dash.style.display = 'none';
+}
+
+// Mevcut switchTab fonksiyonunu genişlet (dashboard'u otomatik gizlesin)
+(function patchSwitchTab() {
+  const originalSwitch = window.switchTab;
+  if (typeof originalSwitch === 'function') {
+    window.switchTab = function(tabName) {
+      closeDashboard();
+      originalSwitch(tabName);
+    };
+  }
+})();
+
+// Dashboard içindeki butonlara tıklama olaylarını bağla
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.dash-action-btn[data-tab]').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      const tab = this.dataset.tab;
+      if (tab && typeof window.switchTab === 'function') {
+        window.switchTab(tab);
+      } else {
+        // Yedek: manuel geçiş
+        closeDashboard();
+        if (tab) {
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          const target = document.getElementById('tab-' + tab);
+          if (target) target.classList.add('active');
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          document.querySelectorAll('.tab-btn').forEach(b => {
+            if (b.textContent.toLowerCase().includes(tab)) b.classList.add('active');
+          });
+        }
+      }
+    });
+  });
+});
+
+// Dashboard istatistiklerini güncelle
+function updateDashboardStats() {
+  const total = Object.keys(productsData || {}).length;
+  let critical = 0;
+  Object.values(productsData || {}).forEach(p => { if (p.qty <= 5) critical++; });
+
+  let todayRevenue = 0;
+  const todayStr = new Date().toISOString().slice(0,10);
+  if (typeof globalPastOrders !== 'undefined' && globalPastOrders) {
+    Object.values(globalPastOrders).forEach(entry => {
+      if (entry.date === todayStr) todayRevenue += (entry.orderData?.total || 0);
+    });
+  }
+
+  animateNumber('dash-total-products', total);
+  animateNumber('dash-critical-stock', critical);
+  animateNumber('dash-today-revenue', todayRevenue, '₺');
+
+  // Borç toplamı (veritabanından çek)
+  if (typeof dbCustomerDebts !== 'undefined') {
+    dbCustomerDebts.once('value', snap => {
+      const data = snap.val() || {};
+      let debt = 0;
+      Object.values(data).forEach(d => {
+        if (d.status === 'Açık' || d.status === 'Kısmi') {
+          debt += (d.remaining || d.amount || 0);
+        }
+      });
+      animateNumber('dash-total-debt', debt, '₺');
+    });
+  }
+
+  // Kullanıcı adını güncelle
+  const nameEl = document.getElementById('dash-user-name');
+  if (nameEl) {
+    if (currentRole === 'admin') nameEl.textContent = 'Yönetici';
+    else if (currentRole === 'staff') nameEl.textContent = 'Çalışan';
+    else nameEl.textContent = 'Ziyaretçi';
+  }
+}
+
+// Sayı animasyonu (yardımcı fonksiyon)
+function animateNumber(elementId, target, prefix = '', suffix = '') {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  const isCurrency = prefix === '₺';
+  const start = 0;
+  const duration = 700;
+  const startTime = performance.now();
+  function update(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    const current = start + (target - start) * eased;
+    el.textContent = (isCurrency ? '₺' : '') + (Number.isInteger(target) ? Math.round(current) : current.toFixed(1));
+    if (progress < 1) requestAnimationFrame(update);
+    else el.textContent = (isCurrency ? '₺' : '') + (Number.isInteger(target) ? target : target.toFixed(1));
+  }
+  requestAnimationFrame(update);
+}
+
+// Veri değişiminde dashboard güncelle (mevcut db dinleyicisine ek olarak)
+if (typeof db !== 'undefined') {
+  db.on('value', () => {
+    if (document.getElementById('tab-dashboard')?.style.display !== 'none') {
+      updateDashboardStats();
+    }
+  });
+}
+
+// Sayfa yüklendiğinde dashboard'u göster ve istatistikleri doldur
+document.addEventListener('DOMContentLoaded', function() {
+  // Eğer dashboard zaten açık değilse aç
+  const dash = document.getElementById('tab-dashboard');
+  if (dash) {
+    dash.style.display = 'flex';
+    setTimeout(updateDashboardStats, 300);
+  }
+});
+
+// Varsayılan sekme olarak dashboard'u ayarla (mevcut updateAuthUI içinde de çalışsın)
+// Eğer updateAuthUI mevcutsa, çağrıldığında dashboard'u göster
+if (typeof updateAuthUI === 'function') {
+  const originalAuth = updateAuthUI;
+  window.updateAuthUI = function() {
+    originalAuth();
+    const dash = document.getElementById('tab-dashboard');
+    if (dash) dash.style.display = 'flex';
+    setTimeout(updateDashboardStats, 200);
+  };
 }
 </script>
 </body>
