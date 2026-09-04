@@ -464,12 +464,12 @@
           <div class="dash-stat-num" id="dash-stat-critical">–</div>
           <div class="dash-stat-lbl">Kritik Stok (≤5)</div>
         </div>
-        <div class="dash-stat-card dash-stat-success">
+        <div class="dash-stat-card dash-stat-success" id="dash-stat-card-revenue">
           <div class="dash-stat-icon">💵</div>
           <div class="dash-stat-num" id="dash-stat-revenue">–</div>
           <div class="dash-stat-lbl">Bugünkü Ciro</div>
         </div>
-        <div class="dash-stat-card dash-stat-danger">
+        <div class="dash-stat-card dash-stat-danger" id="dash-stat-card-debt">
           <div class="dash-stat-icon">🧾</div>
           <div class="dash-stat-num" id="dash-stat-debt">–</div>
           <div class="dash-stat-lbl">Açık Müşteri Borcu</div>
@@ -2162,12 +2162,21 @@ function renderDashboard() {
   const criticalEl = document.getElementById('dash-stat-critical');
   const revenueEl = document.getElementById('dash-stat-revenue');
   const debtEl = document.getElementById('dash-stat-debt');
+  const revenueCard = document.getElementById('dash-stat-card-revenue');
+  const debtCard = document.getElementById('dash-stat-card-debt');
   const greetEl = document.getElementById('dash-greeting');
 
   if (countEl) countEl.textContent = allProducts.length;
   if (criticalEl) criticalEl.textContent = allProducts.filter(p => Number(p.qty || 0) <= 5).length;
 
-  if (revenueEl) {
+  // Ciro ve müşteri borcu hassas mali bilgiler — sadece yönetici görebilir,
+  // ziyaretçi/çalışan modunda kart tamamen gizlenir (veri bile sorgulanmaz).
+  const isAdminView = (currentRole === 'admin');
+
+  if (revenueCard) revenueCard.style.display = isAdminView ? '' : 'none';
+  if (debtCard) debtCard.style.display = isAdminView ? '' : 'none';
+
+  if (isAdminView && revenueEl) {
     const todayStr = new Date().toISOString().slice(0, 10);
     let todayTotal = 0;
     Object.values(globalPastOrders || {}).forEach(o => {
@@ -2176,7 +2185,7 @@ function renderDashboard() {
     revenueEl.textContent = '₺' + formatMoney(todayTotal);
   }
 
-  if (debtEl && typeof dbCustomerDebts !== 'undefined') {
+  if (isAdminView && debtEl && typeof dbCustomerDebts !== 'undefined') {
     dbCustomerDebts.once('value', (snap) => {
       const data = snap.val() || {};
       let openTotal = 0;
