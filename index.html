@@ -710,7 +710,10 @@
     </button>
   </div>
   <p style="font-size: 12px; color: #94A3B8; margin-top: 0; margin-bottom: 14px; font-family: sans-serif;">
-    Gelen malzeme fişinin fotoğrafını çekin; ürün adları, miktarlar ve geliş fiyatları otomatik çözümlenip listeye eklensin.
+    Gelen malzeme fişinin fotoğrafını çekin; ürün adları, miktarlar ve geliş fiyatları otomatik çözümlenip listeye eklensin. Sistem, okunan her ürünü mevcut stokla otomatik karşılaştırır:
+    <br>🔴 <strong>Kırmızı tik</strong> = bu ürün stokta zaten kayıtlı, miktar üzerine eklenecek.
+    &nbsp;🔵 <strong>Mavi tik</strong> = stokta bulunamadı, yeni ürün olarak açılacak.
+    <br>Eşleşme yanlışsa listedeki linklerden düzeltebilirsiniz — fişi tamamlamadan önce mutlaka kontrol edin.
   </p>
   
   <input type="file" id="ai-receipt-file" accept="image/*" capture="environment" style="display:none;" onchange="processReceiptWithAI(event)">
@@ -4288,10 +4291,18 @@ function renderGoodsReceiptCart() {
 
   goodsReceiptCart.forEach((item, index) => {
     grandTotal += item.total;
+    const tickIcon = item.isNew
+      ? '<span title="Stokta kayıtlı bulunamadı, YENİ ürün olarak eklenecek" style="color:#2563EB;">🔵</span>'
+      : '<span title="Mevcut stoktaki bir ürünle eşleşti, stok bunun üzerine eklenecek" style="color:#DC2626;">🔴</span>';
+    const overrideLink = (!item.isNew && item.matched)
+      ? ` <a href="javascript:void(0)" onclick="markFisItemAsNew(${index})" style="font-size:10px; color:var(--rust); text-decoration:underline;">yanlış eşleşme mi? yeni ürün yap</a>`
+      : (item.isNew && item.aiOriginalName)
+        ? ` <a href="javascript:void(0)" onclick="editFisItem(${index})" style="font-size:10px; color:var(--info); text-decoration:underline;">aslında kayıtlı mı? elle eşleştir</a>`
+        : '';
     tbody.innerHTML += `
       <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 0; line-height:1.3;">
-          <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}<br>
+          ${tickIcon} <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}${overrideLink}<br>
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
           ${(item.isNew || item.justCreated) && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
         </td>
@@ -4307,6 +4318,18 @@ function renderGoodsReceiptCart() {
   });
 
   document.getElementById('fis-total').textContent = "₺" + formatMoney(grandTotal);
+}
+
+function markFisItemAsNew(index) {
+  const item = goodsReceiptCart[index];
+  if (!item) return;
+  item.code = null;
+  item.isNew = true;
+  item.matched = false;
+  item.category = item.category || 'Diğer';
+  item.price = item.price || 0;
+  renderGoodsReceiptCart();
+  showToast('Bu kalem "Yeni Ürün" olarak işaretlendi. Fişi tamamlamadan önce ✏️ Düzenle ile fiyat/kategori bilgisini girin.');
 }
 
 function removeFromGoodsReceipt(index) {
@@ -6791,6 +6814,98 @@ function promptGeminiApiKey() {
   }
 }
 
+// ============================================================
+// ÜRÜN ADI EŞLEŞTİRME MOTORU
+// Fiş fotoğrafından okunan ürün adlarını, mevcut 3600+ ürünlük
+// envanterle karşılaştırıp "zaten kayıtlı mı, yoksa gerçekten yeni mi"
+// olduğunu tespit eder. Amaç: aynı ürünün farklı adla tekrar tekrar
+// yeni ürün olarak oluşturulmasını (stok kirliliği) engellemek.
+// ============================================================
+const FIS_MATCH_THRESHOLD = 0.55;
+
+function normalizeProductName(s) {
+  return (s || '')
+    .toString()
+    .toLocaleLowerCase('tr-TR')
+    .replace(/İ/g, 'i').replace(/I/g, 'ı')
+    .replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function levenshteinDistance(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0];
+    dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const temp = dp[j];
+      dp[j] = a[i - 1] === b[j - 1] ? prev : 1 + Math.min(prev, dp[j], dp[j - 1]);
+      prev = temp;
+    }
+  }
+  return dp[n];
+}
+
+// İçinde rakam geçen kelimeleri döndürür ("25lik", "280ml" gibi ölçü/boyut ifadeleri)
+function extractSizeTokens(tokens) {
+  return tokens.filter(t => /\d/.test(t));
+}
+
+function productNameSimilarity(nameA, nameB) {
+  const na = normalizeProductName(nameA);
+  const nb = normalizeProductName(nameB);
+  if (!na || !nb) return 0;
+  if (na === nb) return 1;
+
+  const ta = na.split(' ').filter(Boolean);
+  const tb = nb.split(' ').filter(Boolean);
+  const setA = new Set(ta), setB = new Set(tb);
+  let inter = 0;
+  setA.forEach(t => { if (setB.has(t)) inter++; });
+  const union = new Set([...setA, ...setB]).size || 1;
+  const jaccard = inter / union;
+
+  const dist = levenshteinDistance(na, nb);
+  const maxLen = Math.max(na.length, nb.length) || 1;
+  const charRatio = 1 - dist / maxLen;
+
+  // Kısaltılmış isimler için (AI bazen ürünü kısa okur) hafif bonus
+  const containmentBonus = (na.includes(nb) || nb.includes(na)) ? 0.15 : 0;
+
+  let score = Math.min(1, jaccard * 0.55 + charRatio * 0.3 + containmentBonus);
+
+  // ÖLÇÜ/BOYUT GÜVENLİĞİ: "25lik" ile "20lik" gibi farklı ölçüleri ASLA birbirine karıştırma.
+  // İkisinde de rakamlı bir ifade varsa ve bunlar örtüşmüyorsa, eşleşmeyi neredeyse imkansız kıl.
+  const sizeA = extractSizeTokens(ta);
+  const sizeB = extractSizeTokens(tb);
+  if (sizeA.length > 0 && sizeB.length > 0) {
+    const sameSize = sizeA.some(s => sizeB.includes(s));
+    if (!sameSize) score *= 0.1;
+  } else if (sizeA.length > 0 || sizeB.length > 0) {
+    // Sadece birinde ölçü belirtilmiş -> hangi ölçü/varyant olduğu belirsiz, temkinli ol
+    score *= 0.75;
+  }
+
+  return score;
+}
+
+// Envanterdeki (3600+ ürün olabilir) tüm ürünlerle karşılaştırıp en iyi eşleşmeyi bulur
+function findBestProductMatch(aiName) {
+  const all = Object.values(productsData || {});
+  let best = null, bestScore = 0;
+  for (const p of all) {
+    const score = productNameSimilarity(aiName, p.name);
+    if (score > bestScore) { bestScore = score; best = p; }
+  }
+  return { product: best, score: bestScore };
+}
+
 async function processReceiptWithAI(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -6853,14 +6968,38 @@ async function processReceiptWithAI(event) {
     if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw new Error("Ürün bulunamadı");
 
     let addedCount = 0;
+    let matchedCount = 0;
+    let newCount = 0;
     parsedItems.forEach(item => {
+      const aiName = item.name || 'Bilinmeyen Ürün';
+      const qty = parseFloat(item.qty) || 1;
+      const cost = parseFloat(item.cost) || 0;
+      const { product: matchedProduct, score } = findBestProductMatch(aiName);
+      const isMatch = !!(matchedProduct && score >= FIS_MATCH_THRESHOLD);
+
       const receiptItem = {
-        name: item.name || 'Bilinmeyen Ürün',
-        unit: 'Adet',
-        qty: parseFloat(item.qty) || 1,
-        cost: parseFloat(item.cost) || 0,
-        total: (parseFloat(item.qty) || 1) * (parseFloat(item.cost) || 0)
+        name: isMatch ? matchedProduct.name : aiName,
+        unit: isMatch ? (matchedProduct.unit || 'Adet') : 'Adet',
+        qty,
+        cost,
+        total: qty * cost,
+        aiOriginalName: aiName
       };
+
+      if (isMatch) {
+        receiptItem.code = matchedProduct.code;
+        receiptItem.isNew = false;
+        receiptItem.matched = true;
+        receiptItem.matchScore = score;
+        matchedCount++;
+      } else {
+        receiptItem.isNew = true;
+        receiptItem.matched = false;
+        receiptItem.category = 'Diğer';
+        receiptItem.price = 0;
+        newCount++;
+      }
+
       if (typeof goodsReceiptCart !== 'undefined') {
         goodsReceiptCart.push(receiptItem);
         addedCount++;
@@ -6871,7 +7010,7 @@ async function processReceiptWithAI(event) {
     
     if (statusMsg) {
       statusMsg.style.color = '#10B981';
-      statusMsg.innerHTML = '✅ ' + addedCount + ' ürün tabloya eklendi.';
+      statusMsg.innerHTML = `✅ ${addedCount} ürün tabloya eklendi — 🔴 ${matchedCount} tanesi stokta bulundu, 🔵 ${newCount} tanesi yeni ürün gibi görünüyor. Tamamlamadan önce listeyi kontrol edin!`;
     }
   } catch (err) {
     if (statusMsg) {
