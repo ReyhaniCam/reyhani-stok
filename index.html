@@ -352,6 +352,47 @@
 .panel-ai-input{ flex:1; border:1px solid var(--steel-line); border-radius:20px; padding:9px 14px; font-size:14px; font-family:'Inter'; resize:none; }
 .panel-ai-send{ background:var(--info); color:#fff; border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:16px; flex-shrink:0; }
 .panel-ai-key-btn{ width:auto; font-size:11px; background:rgba(255,255,255,0.15); color:#fff; border:1px solid rgba(255,255,255,0.3); border-radius:5px; padding:5px 10px; cursor:pointer; flex-shrink:0; white-space:nowrap; }
+
+/* ============ DASHBOARD / KARŞILAMA PANELİ ============ */
+.dash-hero{ padding:6px 4px 22px; }
+.dash-hero h2{ font-family:'Oswald',sans-serif; font-size:26px; margin:0 0 6px; color:var(--charcoal); }
+.dash-hero .dash-sub{ margin:0; color:var(--steel); font-size:14px; }
+
+.dash-stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:14px; margin-bottom:28px; }
+.dash-stat-card{ background:var(--paper); border:1px solid var(--steel-line); border-radius:var(--radius); padding:16px; box-shadow:var(--shadow); text-align:center; }
+.dash-stat-icon{ font-size:22px; margin-bottom:6px; }
+.dash-stat-num{ font-family:'IBM Plex Mono',monospace; font-size:24px; font-weight:800; color:var(--charcoal); }
+.dash-stat-lbl{ font-size:12px; color:var(--steel); margin-top:2px; font-weight:600; }
+.dash-stat-card.dash-stat-warn .dash-stat-num{ color:var(--safety); }
+.dash-stat-card.dash-stat-success .dash-stat-num{ color:var(--success); }
+.dash-stat-card.dash-stat-danger .dash-stat-num{ color:var(--rust); }
+
+.dash-modules{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:16px; }
+.dash-module-card{ background:var(--gradient-header); color:#fff; border-radius:var(--radius); padding:22px 16px; text-align:center; cursor:pointer; box-shadow:var(--shadow); transition:transform .15s, box-shadow .15s; }
+.dash-module-card:hover{ transform:translateY(-3px); box-shadow:var(--shadow-hover); }
+.dash-module-icon{ font-size:30px; margin-bottom:8px; }
+.dash-module-title{ font-family:'Oswald',sans-serif; font-size:15px; font-weight:600; letter-spacing:.3px; }
+.dash-module-sub{ font-size:11.5px; color:#CBD5E1; margin-top:4px; }
+
+/* ============ GLOBAL ARAMA / COMMAND PALETTE ============ */
+.cmdk-trigger-btn{ background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.25); color:#fff; border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; }
+.cmdk-trigger-kbd{ font-size:10px; background:rgba(255,255,255,0.15); padding:1px 5px; border-radius:4px; }
+.cmdk-box{ background:var(--paper); width:92%; max-width:640px; margin-top:9vh; border-radius:14px; box-shadow:0 24px 70px rgba(0,0,0,0.45); overflow:hidden; max-height:78vh; display:flex; flex-direction:column; }
+.cmdk-input-row{ display:flex; align-items:center; gap:10px; padding:16px 18px; border-bottom:1px solid var(--steel-line); flex-shrink:0; }
+.cmdk-icon{ font-size:18px; }
+#cmdk-input{ flex:1; border:none; outline:none; font-size:16px; font-family:'Inter'; background:transparent; }
+.cmdk-esc{ font-size:11px; color:var(--steel); border:1px solid var(--steel-line); border-radius:4px; padding:2px 6px; flex-shrink:0; }
+.cmdk-results{ overflow-y:auto; padding:8px; }
+.cmdk-section-title{ font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--steel); font-weight:700; padding:10px 10px 4px; }
+.cmdk-item{ display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:8px; cursor:pointer; }
+.cmdk-item:hover, .cmdk-item.active{ background:var(--bg); }
+.cmdk-item-icon{ font-size:18px; width:26px; text-align:center; flex-shrink:0; }
+.cmdk-item-main{ flex:1; min-width:0; }
+.cmdk-item-title{ font-weight:600; font-size:14px; color:var(--charcoal); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cmdk-item-sub{ font-size:11.5px; color:var(--steel); font-family:'IBM Plex Mono'; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cmdk-item-actions{ display:flex; gap:6px; flex-shrink:0; }
+.cmdk-item-actions button{ font-size:11px; padding:5px 9px; border-radius:6px; border:1px solid var(--steel-line); background:#fff; cursor:pointer; }
+.cmdk-empty{ text-align:center; padding:30px 10px; color:var(--steel); font-size:13px; }
 </style>
 </head>
 <body>
@@ -372,15 +413,29 @@
       <span>Canlı Bulut &amp; QR Stok, Görev ve Fiş Paneli</span>
     </div>
     <div class="auth-status">
+      <button class="cmdk-trigger-btn" onclick="openCommandPalette()" title="Hızlı Arama">🔎 Ara <span class="cmdk-trigger-kbd">Ctrl+K</span></button>
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
       <button class="btn btn-primary btn-sm" id="auth-btn" onclick="toggleAuth()">Giriş Yap</button>
     </div>
   </header>
 
+  <!-- GLOBAL ARAMA / COMMAND PALETTE -->
+  <div class="modal-overlay" id="command-palette-overlay" style="display:none; align-items:flex-start; z-index:2000;" onclick="if(event.target===this) closeCommandPalette()">
+    <div class="cmdk-box" onclick="event.stopPropagation()">
+      <div class="cmdk-input-row">
+        <span class="cmdk-icon">🔎</span>
+        <input type="text" id="cmdk-input" placeholder="Ürün, sekme veya işlem ara... (örn: satış, rapor, 25lik dirsek)" oninput="renderCommandPaletteResults()" onkeydown="handleCommandPaletteKeydown(event)">
+        <span class="cmdk-esc">ESC</span>
+      </div>
+      <div class="cmdk-results" id="cmdk-results"></div>
+    </div>
+  </div>
+
   <div class="nav-tabs">
-    <button class="tab-btn active" onclick="switchTab('stok')">📦 Stok Listesi</button>
+    <button class="tab-btn active" id="nav-dashboard-btn" onclick="switchTab('dashboard')">🏠 Ana Sayfa</button>
+    <button class="tab-btn" id="nav-stok-btn" onclick="switchTab('stok')">📦 Stok Listesi</button>
     <button class="tab-btn" id="nav-add-btn" onclick="switchTab('ekle')" style="display:none;">➕ Ürün Ekle</button>
-    <button class="tab-btn" onclick="switchTab('okut')">📷 QR Okut</button>
+    <button class="tab-btn" id="nav-okut-btn" onclick="switchTab('okut')">📷 QR Okut</button>
     <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Günlük Görevler</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
     <button class="tab-btn" id="nav-fis-btn" onclick="switchTab('fis')" style="display:none;">📥 Malzeme Fişi</button>
@@ -391,8 +446,67 @@
   </div>
 
   <main>
+    <!-- DASHBOARD / KARŞILAMA PANELİ -->
+    <div id="tab-dashboard" class="tab-content active">
+      <div class="dash-hero">
+        <h2 id="dash-greeting">Merhaba, bugün ne yapmak istersiniz?</h2>
+        <p class="dash-sub">Reyhani Cam Hırdavat yönetim paneline hoş geldiniz.</p>
+      </div>
+
+      <div class="dash-stats">
+        <div class="dash-stat-card">
+          <div class="dash-stat-icon">📦</div>
+          <div class="dash-stat-num" id="dash-stat-count">–</div>
+          <div class="dash-stat-lbl">Ürün Çeşidi</div>
+        </div>
+        <div class="dash-stat-card dash-stat-warn">
+          <div class="dash-stat-icon">⚠️</div>
+          <div class="dash-stat-num" id="dash-stat-critical">–</div>
+          <div class="dash-stat-lbl">Kritik Stok (≤5)</div>
+        </div>
+        <div class="dash-stat-card dash-stat-success">
+          <div class="dash-stat-icon">💵</div>
+          <div class="dash-stat-num" id="dash-stat-revenue">–</div>
+          <div class="dash-stat-lbl">Bugünkü Ciro</div>
+        </div>
+        <div class="dash-stat-card dash-stat-danger">
+          <div class="dash-stat-icon">🧾</div>
+          <div class="dash-stat-num" id="dash-stat-debt">–</div>
+          <div class="dash-stat-lbl">Açık Müşteri Borcu</div>
+        </div>
+      </div>
+
+      <div class="dash-modules">
+        <div class="dash-module-card" onclick="switchTab('stok')">
+          <div class="dash-module-icon">📦</div>
+          <div class="dash-module-title">Stok Yönetimi</div>
+          <div class="dash-module-sub">Ürünleri görüntüle, ara, düzenle</div>
+        </div>
+        <div class="dash-module-card" data-role="admin" onclick="switchTab('ekle')">
+          <div class="dash-module-icon">➕</div>
+          <div class="dash-module-title">Yeni Ürün Ekle</div>
+          <div class="dash-module-sub">Envantere yeni ürün kaydet</div>
+        </div>
+        <div class="dash-module-card" data-role="staff" onclick="switchTab('siparis')">
+          <div class="dash-module-icon">🛒</div>
+          <div class="dash-module-title">Satış Yap</div>
+          <div class="dash-module-sub">Sepet oluştur, satış tamamla</div>
+        </div>
+        <div class="dash-module-card" data-role="admin" onclick="switchTab('borc')">
+          <div class="dash-module-icon">💰</div>
+          <div class="dash-module-title">Borç Takibi</div>
+          <div class="dash-module-sub">Müşteri borç / alacak kayıtları</div>
+        </div>
+        <div class="dash-module-card" data-role="staff" onclick="switchTab('raporlar')">
+          <div class="dash-module-icon">📊</div>
+          <div class="dash-module-title">Raporlar</div>
+          <div class="dash-module-sub">Satış ve stok raporları</div>
+        </div>
+      </div>
+    </div>
+
     <!-- STOK LİSTESİ TABI -->
-    <div id="tab-stok" class="tab-content active">
+    <div id="tab-stok" class="tab-content">
       <div class="summary">
         <div class="card"><div class="num" id="sum-count">0</div><div class="lbl">Çeşit</div></div>
         <div class="card"><div class="num" id="sum-units">0</div><div class="lbl">Toplam Miktar</div></div>
@@ -1538,7 +1652,7 @@ let highlightTimer = null;
 
 let html5QrcodeScanner = null;
 let currentRole = 'guest';
-let cart = [];
+let cart = JSON.parse(localStorage.getItem('reyhani_cart') || '[]'); // Sepet kalıcılığı: sayfa/oturum kapansa da sepet kaybolmasın
 let goodsReceiptCart = [];
 let globalPastReceipts = {};
 let gridCurrentPage = 1;
@@ -1764,6 +1878,8 @@ db.on('value', (snapshot) => {
   updateOrderProductList();
   updateBorcOrderProductList();
   renderLayoutGrid();
+  if (typeof renderCart === 'function') renderCart(); // localStorage'dan geri yüklenen sepeti göster
+  if (typeof renderDashboard === 'function') renderDashboard();
   if(currentRole === 'admin') renderRecentUpdates();
   if (targetCode && productsData[targetCode]) {
     document.getElementById('search').value = targetCode;
@@ -1938,6 +2054,7 @@ dbOrders.on('value', snapshot => {
   });
   
   if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
+  if (typeof renderDashboard === 'function') renderDashboard();
 });
 
 function clearSalesHistory() {
@@ -2036,6 +2153,209 @@ async function toggleAuth() {
   updateAuthUI();
 }
 
+// ============================================================
+// DASHBOARD / KARŞILAMA PANELİ
+// ============================================================
+function renderDashboard() {
+  const allProducts = Object.values(productsData || {});
+  const countEl = document.getElementById('dash-stat-count');
+  const criticalEl = document.getElementById('dash-stat-critical');
+  const revenueEl = document.getElementById('dash-stat-revenue');
+  const debtEl = document.getElementById('dash-stat-debt');
+  const greetEl = document.getElementById('dash-greeting');
+
+  if (countEl) countEl.textContent = allProducts.length;
+  if (criticalEl) criticalEl.textContent = allProducts.filter(p => Number(p.qty || 0) <= 5).length;
+
+  if (revenueEl) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let todayTotal = 0;
+    Object.values(globalPastOrders || {}).forEach(o => {
+      if (o.date === todayStr) todayTotal += Number(o.orderData.total || 0);
+    });
+    revenueEl.textContent = '₺' + formatMoney(todayTotal);
+  }
+
+  if (debtEl && typeof dbCustomerDebts !== 'undefined') {
+    dbCustomerDebts.once('value', (snap) => {
+      const data = snap.val() || {};
+      let openTotal = 0;
+      Object.values(data).forEach(d => {
+        if (d.status === 'Açık' || d.status === 'Kısmi') openTotal += Number(d.remaining || 0);
+      });
+      debtEl.textContent = '₺' + formatMoney(openTotal);
+    });
+  }
+
+  if (greetEl) {
+    const h = new Date().getHours();
+    const parca = h < 12 ? 'Günaydın' : h < 18 ? 'İyi günler' : 'İyi akşamlar';
+    greetEl.textContent = `${parca}, bugün ne yapmak istersiniz?`;
+  }
+
+  // Modül kartlarını yetkiye göre göster/gizle
+  document.querySelectorAll('.dash-module-card').forEach(card => {
+    const req = card.getAttribute('data-role');
+    let visible = true;
+    if (req === 'admin') visible = (currentRole === 'admin');
+    if (req === 'staff') visible = (currentRole === 'admin' || currentRole === 'staff');
+    card.style.display = visible ? '' : 'none';
+  });
+}
+
+// ============================================================
+// GLOBAL ARAMA / COMMAND PALETTE (Ctrl+K / Cmd+K)
+// ============================================================
+const COMMAND_MODULES = [
+  { label: 'Ana Sayfa', icon: '🏠', tab: 'dashboard', keywords: 'ana sayfa dashboard anasayfa panel karsilama' },
+  { label: 'Stok Listesi', icon: '📦', tab: 'stok', keywords: 'stok liste envanter urunler urun listesi' },
+  { label: 'Ürün Ekle', icon: '➕', tab: 'ekle', keywords: 'yeni urun ekle', role: 'admin' },
+  { label: 'QR Okut', icon: '📷', tab: 'okut', keywords: 'qr barkod okut tara kamera' },
+  { label: 'Günlük Görevler', icon: '📋', tab: 'gorevler', keywords: 'gorev task yapilacaklar', role: 'staff' },
+  { label: 'Toptancılar', icon: '🤝', tab: 'toptanci', keywords: 'toptanci tedarikci', role: 'admin' },
+  { label: 'Malzeme Fişi', icon: '📥', tab: 'fis', keywords: 'fis mal girisi malzeme fisi', role: 'staff' },
+  { label: 'Satış / Sepet', icon: '🛒', tab: 'siparis', keywords: 'satis sepet siparis sat', role: 'staff' },
+  { label: 'Yerleşim', icon: '🗺️', tab: 'yerlesim', keywords: 'yerlesim kroki stand harita magaza plani', role: 'staff' },
+  { label: 'Raporlar', icon: '📊', tab: 'raporlar', keywords: 'rapor raporlar', role: 'staff' },
+  { label: 'Müşteri Borç', icon: '💰', tab: 'borc', keywords: 'borc musteri alacak', role: 'admin' }
+];
+
+let cmdkActiveIndex = 0;
+
+function cmdkCanSee(mod) {
+  if (!mod.role) return true;
+  if (mod.role === 'admin') return currentRole === 'admin';
+  if (mod.role === 'staff') return currentRole === 'admin' || currentRole === 'staff';
+  return true;
+}
+
+function openCommandPalette() {
+  const overlay = document.getElementById('command-palette-overlay');
+  overlay.style.display = 'flex';
+  const input = document.getElementById('cmdk-input');
+  input.value = '';
+  renderCommandPaletteResults();
+  setTimeout(() => input.focus(), 30);
+}
+
+function closeCommandPalette() {
+  document.getElementById('command-palette-overlay').style.display = 'none';
+}
+
+function cmdkUpdateActiveHighlight() {
+  const items = document.querySelectorAll('#cmdk-results .cmdk-item');
+  items.forEach((el, i) => el.classList.toggle('active', i === cmdkActiveIndex));
+}
+
+function handleCommandPaletteKeydown(e) {
+  const items = document.querySelectorAll('#cmdk-results .cmdk-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    cmdkActiveIndex = Math.min(cmdkActiveIndex + 1, items.length - 1);
+    cmdkUpdateActiveHighlight();
+    items[cmdkActiveIndex] && items[cmdkActiveIndex].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    cmdkActiveIndex = Math.max(cmdkActiveIndex - 1, 0);
+    cmdkUpdateActiveHighlight();
+    items[cmdkActiveIndex] && items[cmdkActiveIndex].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    items[cmdkActiveIndex] && items[cmdkActiveIndex].click();
+  } else if (e.key === 'Escape') {
+    closeCommandPalette();
+  }
+}
+
+function renderCommandPaletteResults() {
+  const rawQ = document.getElementById('cmdk-input').value;
+  const q = normalizeProductName(rawQ);
+  const resultsDiv = document.getElementById('cmdk-results');
+  cmdkActiveIndex = 0;
+
+  let html = '';
+  let flatCount = 0;
+
+  const moduleMatches = COMMAND_MODULES.filter(m => cmdkCanSee(m) && (!q || normalizeProductName(m.label).includes(q) || normalizeProductName(m.keywords).includes(q)));
+  if (moduleMatches.length > 0) {
+    html += `<div class="cmdk-section-title">Sekmeler / Modüller</div>`;
+    moduleMatches.forEach(m => {
+      html += `<div class="cmdk-item" data-idx="${flatCount}" onclick="cmdkGoTab('${m.tab}')">
+        <div class="cmdk-item-icon">${m.icon}</div>
+        <div class="cmdk-item-main"><div class="cmdk-item-title">${m.label}</div></div>
+      </div>`;
+      flatCount++;
+    });
+  }
+
+  // Ürün araması: sadece anlamlı bir sorgu varken (3600+ ürünü boşken listelememek için)
+  if (q && q.length >= 2) {
+    const all = Object.values(productsData || {});
+    const productMatches = all.filter(p => normalizeProductName((p.name || '') + ' ' + (p.code || '')).includes(q)).slice(0, 8);
+
+    if (productMatches.length > 0) {
+      html += `<div class="cmdk-section-title">Ürünler</div>`;
+      const canEdit = (currentRole === 'admin' || currentRole === 'staff');
+      productMatches.forEach(p => {
+        html += `<div class="cmdk-item" data-idx="${flatCount}" onclick="cmdkDefaultProductAction('${p.code}')">
+          <div class="cmdk-item-icon">📦</div>
+          <div class="cmdk-item-main">
+            <div class="cmdk-item-title">${p.name}</div>
+            <div class="cmdk-item-sub">${p.code} · Stok: ${p.qty ?? 0} ${p.unit || ''} · ₺${formatMoney(p.price || 0)}</div>
+          </div>
+          <div class="cmdk-item-actions">
+            ${canEdit ? `<button onclick="event.stopPropagation(); cmdkEditProduct('${p.code}')">✏️ Düzenle</button>` : ''}
+            ${p.location ? `<button onclick="event.stopPropagation(); cmdkGoLocation('${p.location}')">📍 Konuma Git</button>` : ''}
+          </div>
+        </div>`;
+        flatCount++;
+      });
+    }
+  }
+
+  if (!html) {
+    html = `<div class="cmdk-empty">Sonuç bulunamadı. Ürün adı/kodu veya bir modül adı (örn. "satış", "rapor") yazmayı deneyin.</div>`;
+  }
+
+  resultsDiv.innerHTML = html;
+  cmdkUpdateActiveHighlight();
+}
+
+function cmdkGoTab(tab) {
+  closeCommandPalette();
+  switchTab(tab);
+}
+
+function cmdkEditProduct(code) {
+  closeCommandPalette();
+  switchTab('stok');
+  setTimeout(() => openEditModal(code), 150);
+}
+
+function cmdkGoLocation(location) {
+  closeCommandPalette();
+  goToLocation(location);
+}
+
+function cmdkDefaultProductAction(code) {
+  const p = productsData[code];
+  if (!p) return;
+  if (currentRole === 'admin' || currentRole === 'staff') { cmdkEditProduct(code); }
+  else if (p.location) { cmdkGoLocation(p.location); }
+}
+
+document.addEventListener('keydown', (e) => {
+  const isK = (e.key === 'k' || e.key === 'K');
+  if ((e.ctrlKey || e.metaKey) && isK) {
+    e.preventDefault();
+    const overlay = document.getElementById('command-palette-overlay');
+    if (overlay.style.display === 'flex') closeCommandPalette(); else openCommandPalette();
+  } else if (e.key === 'Escape') {
+    const overlay = document.getElementById('command-palette-overlay');
+    if (overlay.style.display === 'flex') closeCommandPalette();
+  }
+});
+
 function updateAuthUI() {
   const statusBadge = document.getElementById('admin-status');
   const authBtn = document.getElementById('auth-btn');
@@ -2047,6 +2367,7 @@ function updateAuthUI() {
   document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-borc-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+  if (typeof renderDashboard === 'function') renderDashboard();
   
   const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
   document.getElementById('nav-siparis-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
@@ -3528,7 +3849,7 @@ function switchTab(tabName) {
   
   const allBtns = document.querySelectorAll('.tab-btn');
   for(let i=0; i<allBtns.length; i++) {
-    if(allBtns[i].id === 'nav-' + tabName + '-btn' || (tabName === 'stok' && i===0) || (tabName==='okut' && allBtns[i].textContent.includes('QR'))) {
+    if(allBtns[i].id === 'nav-' + tabName + '-btn') {
       allBtns[i].classList.add('active');
     }
   }
@@ -3987,6 +4308,9 @@ function addToCart() {
 }
 
 function renderCart() {
+  // Sepeti her değişimde tarayıcıya kaydet, böylece sayfa kapansa/yenilense bile kaybolmaz
+  localStorage.setItem('reyhani_cart', JSON.stringify(cart));
+
   const container = document.getElementById('cart-container');
   const tbody = document.getElementById('cart-items');
   
