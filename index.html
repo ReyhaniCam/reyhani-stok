@@ -284,9 +284,12 @@
     body::before{display:none !important;content:none !important;}
     #splash-screen{display:none !important;}
     body *{visibility:hidden;}
-    body.printing-label .app, body.printing-barcode-label .app, body.printing-receipt .app{display:none !important;}
+    body.printing-label .app, body.printing-barcode-label .app, body.printing-receipt .app, body.printing-senet .app{display:none !important;}
     body.printing-label #print-area, body.printing-label #print-area *{visibility:visible;}
     body.printing-label #print-area{display:flex !important;flex-wrap:wrap;gap:4mm;position:absolute;left:0;top:0;width:100%;background:#fff;}
+
+    body.printing-senet #print-area, body.printing-senet #print-area *{visibility:visible;}
+    body.printing-senet #print-area{display:block !important;position:absolute;left:0;top:0;width:100%;background:#fff;}
     .sticker-label{width:50mm;height:30mm;border:1px dashed #000;padding:2mm;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:space-between;page-break-inside:avoid;text-align:center;}
     .sticker-title{font-size:9px;font-weight:bold;font-family:sans-serif;height:12px;overflow:hidden;}
     .sticker-qr{width:18mm;height:18mm;display:flex;justify-content:center;align-items:center;overflow:hidden;}
@@ -597,6 +600,7 @@
     <button class="tab-btn" id="nav-yerlesim-btn" onclick="switchTab('yerlesim')" style="display:none;">🗺️ Yerleşim</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
     <button class="tab-btn" id="nav-borc-btn" onclick="switchTab('borc')" style="display:none;">💰 Müşteri Borç</button>
+    <button class="tab-btn" id="nav-acikhesap-btn" onclick="switchTab('acikhesap')" style="display:none;">📖 Açık Hesap</button>
   </div>
 
   <main>
@@ -662,6 +666,10 @@
           <div class="action-card" data-tab="borc" data-role="admin" style="--accent: #EF4444;">
             <span class="action-icon">💰</span>
             <span class="action-label">Borç Takibi</span>
+          </div>
+          <div class="action-card" data-tab="acikhesap" data-role="admin" style="--accent: #8B5CF6;">
+            <span class="action-icon">📖</span>
+            <span class="action-label">Açık Hesap</span>
           </div>
           <div class="action-card" data-tab="raporlar" data-role="staff" style="--accent: #10B981;">
             <span class="action-icon">📊</span>
@@ -1391,6 +1399,50 @@
       <div id="customer-debts-list" style="margin-top:10px;"></div>
     </div>
 
+    <!-- AÇIK HESAP TABI (Müşteri Kayıt Defteri) -->
+    <div id="tab-acikhesap" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">📖 Açık Hesap — Yeni Müşteri Kaydı</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">
+          Müşteri bilgilerini bir kere kaydedin; bundan sonra o müşterinin tüm alışverişlerini ve borçlarını kendi "sayfasında" tarih sırasıyla görüntüleyebilir, borç fişi veya yasal senet çıkartabilirsiniz.
+        </p>
+        <div class="form-row">
+          <div>
+            <label>Müşteri Adı / Firma</label>
+            <input type="text" id="ah-cust-name" placeholder="Örn: Ahmet Usta İnşaat">
+          </div>
+          <div>
+            <label>Telefon</label>
+            <input type="text" id="ah-cust-phone" placeholder="0555 123 45 67">
+          </div>
+        </div>
+        <div class="form-row">
+          <div>
+            <label>Adres</label>
+            <input type="text" id="ah-cust-address" placeholder="Senet üzerinde gösterilir">
+          </div>
+          <div>
+            <label>T.C. Kimlik No / Vergi No</label>
+            <input type="text" id="ah-cust-tckn" placeholder="Senet için (opsiyonel)">
+          </div>
+        </div>
+        <div class="form-row" style="grid-template-columns:1fr;">
+          <div>
+            <label>Not</label>
+            <input type="text" id="ah-cust-note" placeholder="Ek bilgiler...">
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="registerCustomerAccount()">➕ Müşteriyi Kaydet</button>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex-wrap:wrap; gap:8px;">
+        <h3 style="font-family:'Oswald'; margin:0;">👥 Kayıtlı Müşteriler</h3>
+        <input type="text" id="ah-search" placeholder="İsim veya telefon ara..." oninput="ahCurrentPage=1; renderCustomerAccounts();" style="max-width:220px; padding:8px 12px;">
+      </div>
+      <div id="ah-customer-list" style="margin-top:10px;"></div>
+      <div id="ah-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px;"></div>
+    </div>
+
   </main>
 </div>
 
@@ -1740,6 +1792,47 @@
   </div>
 </div>
 
+<!-- AÇIK HESAP: MÜŞTERİ SAYFASI / EKSTRE MODALI -->
+<div class="modal-overlay" id="ah-ledger-modal" style="display:none;">
+  <div class="modal-content" style="max-width:680px;">
+    <button class="modal-close" onclick="closeCustomerLedger()">X</button>
+    <h3 id="ah-ledger-title" style="margin-top:0; font-family:'Oswald';">Müşteri Hesabı</h3>
+    <div id="ah-ledger-summary"></div>
+    <div id="ah-ledger-list"></div>
+    <div id="ah-ledger-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px;"></div>
+  </div>
+</div>
+
+<!-- AÇIK HESAP: MÜŞTERİ DÜZENLEME MODALI -->
+<div class="modal-overlay" id="ah-cust-edit-modal" style="display:none;">
+  <div class="modal-content" style="max-width:520px;">
+    <button class="modal-close" onclick="closeCustomerEditModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">Müşteri Bilgilerini Düzenle</h3>
+    <input type="hidden" id="ah-edit-key">
+    <div style="margin-bottom:12px;">
+      <label>Müşteri Adı / Firma</label>
+      <input type="text" id="ah-edit-name">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>Telefon</label>
+      <input type="text" id="ah-edit-phone">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>Adres</label>
+      <input type="text" id="ah-edit-address">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>T.C. Kimlik No / Vergi No</label>
+      <input type="text" id="ah-edit-tckn">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>Not</label>
+      <input type="text" id="ah-edit-note">
+    </div>
+    <button class="btn btn-success" onclick="saveCustomerEdit()">Değişiklikleri Kaydet</button>
+  </div>
+</div>
+
 <div class="modal-overlay" id="barcode-lookup-modal">
   <div class="modal-content" style="max-width:420px; text-align:center;">
     <button class="modal-close" onclick="closeBarcodeLookupScanner()">X</button>
@@ -1811,6 +1904,8 @@ const dbLayout = dbRoot.child('store_layout');
 const dbBrandSettings = dbRoot.child('brand_settings');
 const dbBarcodeCache = dbRoot.child('barcode_cache');
 const dbCustomerDebts = dbRoot.child('customer_debts');
+const dbCustomers = dbRoot.child('customers');
+const dbSenetler = dbRoot.child('senetler');
 
 const DEFAULT_BRANDS = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon"];
 let brandSeedChecked = false;
@@ -2465,7 +2560,8 @@ const COMMAND_MODULES = [
   { label: 'Satış / Sepet', icon: '🛒', tab: 'siparis', keywords: 'satis sepet siparis sat', role: 'staff' },
   { label: 'Yerleşim', icon: '🗺️', tab: 'yerlesim', keywords: 'yerlesim kroki stand harita magaza plani', role: 'staff' },
   { label: 'Raporlar', icon: '📊', tab: 'raporlar', keywords: 'rapor raporlar', role: 'staff' },
-  { label: 'Müşteri Borç', icon: '💰', tab: 'borc', keywords: 'borc musteri alacak', role: 'admin' }
+  { label: 'Müşteri Borç', icon: '💰', tab: 'borc', keywords: 'borc musteri alacak', role: 'admin' },
+  { label: 'Açık Hesap', icon: '📖', tab: 'acikhesap', keywords: 'acik hesap musteri defteri sayfa senet cari hesap kayit', role: 'admin' }
 ];
 
 let cmdkActiveIndex = 0;
@@ -2615,6 +2711,7 @@ function updateAuthUI() {
   document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-borc-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+  document.getElementById('nav-acikhesap-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   if (typeof renderDashboard === 'function') renderDashboard();
   
   const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
@@ -2881,7 +2978,7 @@ function completeBorcSale() {
     saleType: 'borc_sale'
   };
   
-  dbCustomerDebts.push(debtData, (err) => {
+  const newDebtRef = dbCustomerDebts.push(debtData, (err) => {
     if (!err) {
       const faturaData = {
         musteriAdi: customer,
@@ -2904,7 +3001,10 @@ function completeBorcSale() {
       window.open('fatura.html', '_blank');
       
       showToast(`Satış tamamlandı! ${customer} için ${formatMoney(grandTotal)}₺ borç oluşturuldu. Fatura açılıyor...`);
-      
+
+      // Açık Hesap: müşteri kayıtlı değilse otomatik olarak deftere eklenir.
+      if (typeof upsertCustomerAccount === 'function') upsertCustomerAccount(customer, phone);
+
       borcCart = [];
       renderBorcCart();
       document.getElementById('borc-sale-customer').value = '';
@@ -2912,6 +3012,15 @@ function completeBorcSale() {
       document.getElementById('borc-sale-note').value = '';
       renderCustomerDebts();
       renderGrid();
+
+      // Borç kaydedildiğinde, bu borç için yasal senet düzenlenmek istenip istenmediği sorulur.
+      if (typeof printSenet === 'function' && newDebtRef && newDebtRef.key) {
+        setTimeout(() => {
+          if (confirm(`${customer} için ${formatMoney(grandTotal)}₺ tutarında yasal senet kağıdı düzenlemek ister misiniz?`)) {
+            printSenet(newDebtRef.key);
+          }
+        }, 600);
+      }
     } else {
       alert("Satış kaydedilemedi: " + err.message);
     }
@@ -3023,6 +3132,7 @@ function renderCustomerDebts() {
                 ${d.dueDate ? `| ⏰ Vade: ${d.dueDate} ${isPastDue ? '🚨 GECİKTİ!' : ''}` : '| ⏰ Vade: Belirsiz'}
                 <br>📝 ${d.description}
                 ${d.note ? `<br>📌 ${d.note}` : ''}
+                ${d.senetNo ? `<br>🖋️ Senet No: ${d.senetNo} (${d.senetDate || ''})` : ''}
               </div>
             </div>
             <div style="text-align:right; display:flex; flex-direction:column; gap:4px;">
@@ -3032,6 +3142,7 @@ function renderCustomerDebts() {
                 <button class="btn btn-danger btn-sm" onclick="deleteCustomerDebt('${key}')" style="width:auto;">🗑️ Sil</button>
                 <button class="btn btn-dark btn-sm" onclick="printDebtSlip('${key}')" style="width:auto;">🖨️ Borç Fişi</button>
                 <button class="btn btn-primary btn-sm" onclick="reprintInvoice('${key}')" style="width:auto;">🧾 A4 Fatura</button>
+                <button class="btn btn-warning btn-sm" onclick="printSenet('${key}')" style="width:auto;">🖋️ Senet Yazdır</button>
               ` : ''}
               ${d.status !== 'Kapalı' && currentRole === 'admin' ? `
                 <button class="btn btn-primary btn-sm" onclick="markDebtClosed('${key}')" style="width:auto;">✅ Kapat</button>
@@ -3362,6 +3473,461 @@ function exportCustomerDebts() {
     XLSX.utils.book_append_sheet(wb, ws, "MusteriBorclar");
     const dateStr = new Date().toISOString().slice(0,10);
     saveExcelFile(wb, `Reyhani_Musteri_Borclari_${dateStr}.xlsx`);
+  });
+}
+
+// ============================================================
+// AÇIK HESAP (MÜŞTERİ KAYIT DEFTERİ) — Müşteri profilleri + sayfa sayfa hesap ekstresi + senet
+// ============================================================
+
+let customersData = {};
+
+dbCustomers.on('value', (snapshot) => {
+  customersData = snapshot.val() || {};
+  const tab = document.getElementById('tab-acikhesap');
+  if (tab && tab.classList.contains('active')) renderCustomerAccounts();
+});
+
+// Bir borç kaydının, verilen müşteri (isim/telefon) ile eşleşip eşleşmediğini kontrol eder.
+// Telefon numarası varsa telefon üzerinden, yoksa isim üzerinden eşleştirir.
+function matchesCustomer(d, name, phone) {
+  const cleanPhone = (phone || '').replace(/\s+/g, '');
+  if (cleanPhone) {
+    return (d.phone || '').replace(/\s+/g, '') === cleanPhone;
+  }
+  return (d.customer || '').trim().toLowerCase() === (name || '').trim().toLowerCase();
+}
+
+// Aynı isim/telefonla kayıtlı bir müşteri var mı diye bakar, varsa kaydının anahtarını döner.
+function findCustomerKey(name, phone) {
+  const cleanPhone = (phone || '').replace(/\s+/g, '');
+  const cleanName = (name || '').trim().toLowerCase();
+  const keys = Object.keys(customersData || {});
+  for (const k of keys) {
+    const c = customersData[k];
+    if (cleanPhone && c.phone && c.phone.replace(/\s+/g, '') === cleanPhone) return k;
+    if (!cleanPhone && c.name && c.name.trim().toLowerCase() === cleanName) return k;
+  }
+  return null;
+}
+
+// Borç satışı sırasında girilen müşteri, açık hesap defterinde kayıtlı değilse otomatik olarak ekler.
+function upsertCustomerAccount(name, phone) {
+  if (!name) return;
+  if (findCustomerKey(name, phone)) return;
+  dbCustomers.push({
+    name: name,
+    phone: phone || '',
+    address: '',
+    tckn: '',
+    note: '',
+    createdAt: new Date().toISOString(),
+    createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan',
+    autoCreated: true
+  });
+}
+
+function registerCustomerAccount() {
+  if (currentRole !== 'admin') { alert("Bu işlem için yönetici yetkisi gerekir!"); return; }
+
+  const name = document.getElementById('ah-cust-name').value.trim();
+  const phone = document.getElementById('ah-cust-phone').value.trim();
+  const address = document.getElementById('ah-cust-address').value.trim();
+  const tckn = document.getElementById('ah-cust-tckn').value.trim();
+  const note = document.getElementById('ah-cust-note').value.trim();
+
+  if (!name) { alert("Müşteri adı giriniz!"); return; }
+
+  if (findCustomerKey(name, phone)) {
+    alert("Bu müşteri (aynı isim/telefon ile) zaten kayıtlı. Listeden '✏️ Düzenle' ile güncelleyebilirsiniz.");
+    return;
+  }
+
+  dbCustomers.push({
+    name, phone, address, tckn, note,
+    createdAt: new Date().toISOString(),
+    createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+  }, (err) => {
+    if (!err) {
+      showToast("Müşteri kaydedildi!");
+      ['ah-cust-name', 'ah-cust-phone', 'ah-cust-address', 'ah-cust-tckn', 'ah-cust-note'].forEach(id => document.getElementById(id).value = '');
+      renderCustomerAccounts();
+    } else {
+      alert("Kaydedilemedi: " + err.message);
+    }
+  });
+}
+
+let ahCurrentPage = 1;
+const AH_PAGE_SIZE = 8;
+
+function renderCustomerAccounts() {
+  const listDiv = document.getElementById('ah-customer-list');
+  const pagDiv = document.getElementById('ah-pagination');
+  if (!listDiv) return;
+
+  const search = (document.getElementById('ah-search').value || '').trim().toLowerCase();
+
+  dbCustomerDebts.once('value', (snap) => {
+    const debts = snap.val() || {};
+    let entries = Object.keys(customersData || {}).map(key => ({ key, ...customersData[key] }));
+
+    if (search) {
+      entries = entries.filter(c =>
+        (c.name || '').toLowerCase().includes(search) ||
+        (c.phone || '').toLowerCase().includes(search)
+      );
+    }
+
+    entries.forEach(c => {
+      let totalDebt = 0, totalRemaining = 0, txCount = 0;
+      Object.values(debts).forEach(d => {
+        if (matchesCustomer(d, c.name, c.phone)) {
+          txCount++;
+          totalDebt += Number(d.amount || 0);
+          totalRemaining += Number(d.remaining != null ? d.remaining : d.amount || 0);
+        }
+      });
+      c._totalDebt = totalDebt;
+      c._totalRemaining = totalRemaining;
+      c._txCount = txCount;
+    });
+
+    entries.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
+
+    if (entries.length === 0) {
+      listDiv.innerHTML = '<p style="color:var(--steel); font-size:13px; text-align:center;">Henüz kayıtlı müşteri yok. Yukarıdan yeni müşteri ekleyin.</p>';
+      pagDiv.innerHTML = '';
+      return;
+    }
+
+    const totalPages = Math.max(1, Math.ceil(entries.length / AH_PAGE_SIZE));
+    if (ahCurrentPage > totalPages) ahCurrentPage = totalPages;
+    if (ahCurrentPage < 1) ahCurrentPage = 1;
+    const pageEntries = entries.slice((ahCurrentPage - 1) * AH_PAGE_SIZE, ahCurrentPage * AH_PAGE_SIZE);
+
+    listDiv.innerHTML = pageEntries.map(c => `
+      <div class="tag" style="margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div class="tag-title">${c.name} ${c.phone ? '📞 ' + c.phone : ''}</div>
+            <div class="tag-code">
+              ${c.address ? '📍 ' + c.address + '<br>' : ''}
+              🧾 ${c._txCount} işlem | 💰 Toplam: ${formatMoney(c._totalDebt)}₺ | Kalan: <strong style="color:${c._totalRemaining > 0 ? 'var(--rust)' : 'var(--success)'}">${formatMoney(c._totalRemaining)}₺</strong>
+            </div>
+          </div>
+          <div style="text-align:right; display:flex; flex-direction:column; gap:4px;">
+            <button class="btn btn-info btn-sm" onclick="openCustomerLedger('${c.key}')" style="width:auto;">📖 Hesabı Aç</button>
+            <button class="btn btn-dark btn-sm" onclick="openCustomerEditModal('${c.key}')" style="width:auto;">✏️ Düzenle</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteCustomerAccount('${c.key}')" style="width:auto;">🗑️ Sil</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    let pagHtml = '';
+    if (totalPages > 1) {
+      pagHtml += `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="ahChangePage(-1)" ${ahCurrentPage <= 1 ? 'disabled' : ''}>◀ Önceki</button>`;
+      pagHtml += `<span style="font-size:12px; color:var(--steel);">Sayfa ${ahCurrentPage} / ${totalPages}</span>`;
+      pagHtml += `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="ahChangePage(1)" ${ahCurrentPage >= totalPages ? 'disabled' : ''}>Sonraki ▶</button>`;
+    }
+    pagDiv.innerHTML = pagHtml;
+  });
+}
+
+function ahChangePage(delta) {
+  ahCurrentPage += delta;
+  renderCustomerAccounts();
+}
+
+function openCustomerEditModal(key) {
+  const c = customersData[key];
+  if (!c) return;
+  document.getElementById('ah-edit-key').value = key;
+  document.getElementById('ah-edit-name').value = c.name || '';
+  document.getElementById('ah-edit-phone').value = c.phone || '';
+  document.getElementById('ah-edit-address').value = c.address || '';
+  document.getElementById('ah-edit-tckn').value = c.tckn || '';
+  document.getElementById('ah-edit-note').value = c.note || '';
+  document.getElementById('ah-cust-edit-modal').style.display = 'flex';
+}
+
+function closeCustomerEditModal() {
+  document.getElementById('ah-cust-edit-modal').style.display = 'none';
+}
+
+function saveCustomerEdit() {
+  const key = document.getElementById('ah-edit-key').value;
+  if (!key) return;
+  const name = document.getElementById('ah-edit-name').value.trim();
+  if (!name) { alert("Müşteri adı boş olamaz."); return; }
+
+  dbCustomers.child(key).update({
+    name,
+    phone: document.getElementById('ah-edit-phone').value.trim(),
+    address: document.getElementById('ah-edit-address').value.trim(),
+    tckn: document.getElementById('ah-edit-tckn').value.trim(),
+    note: document.getElementById('ah-edit-note').value.trim()
+  }, (err) => {
+    if (!err) {
+      showToast("Müşteri bilgileri güncellendi.");
+      closeCustomerEditModal();
+      renderCustomerAccounts();
+    } else {
+      alert("Güncellenemedi: " + err.message);
+    }
+  });
+}
+
+function deleteCustomerAccount(key) {
+  if (currentRole !== 'admin') return;
+  if (!confirm("Bu müşteri kartını silmek istediğinize emin misiniz? (Geçmiş borç/işlem kayıtları silinmez, sadece müşteri kartı kaldırılır.)")) return;
+  dbCustomers.child(key).remove(() => {
+    showToast("Müşteri kaydı silindi.");
+    renderCustomerAccounts();
+  });
+}
+
+// --- MÜŞTERİ SAYFASI: geçmiş işlemleri sayfa sayfa gösteren ekstre ---
+let ahLedgerCustomerKey = null;
+let ahLedgerPage = 1;
+const AH_LEDGER_PAGE_SIZE = 5;
+
+function openCustomerLedger(key) {
+  ahLedgerCustomerKey = key;
+  ahLedgerPage = 1;
+  document.getElementById('ah-ledger-modal').style.display = 'flex';
+  renderCustomerLedger();
+}
+
+function closeCustomerLedger() {
+  document.getElementById('ah-ledger-modal').style.display = 'none';
+  ahLedgerCustomerKey = null;
+}
+
+function renderCustomerLedger() {
+  const c = customersData[ahLedgerCustomerKey];
+  if (!c) { closeCustomerLedger(); return; }
+  document.getElementById('ah-ledger-title').textContent = '📖 ' + c.name + (c.phone ? ' — 📞 ' + c.phone : '');
+
+  dbCustomerDebts.once('value', (snap) => {
+    const debts = snap.val() || {};
+    const txs = Object.keys(debts)
+      .filter(k => matchesCustomer(debts[k], c.name, c.phone))
+      .map(k => ({ key: k, ...debts[k] }))
+      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+
+    let totalDebt = 0, totalRemaining = 0;
+    txs.forEach(t => {
+      totalDebt += Number(t.amount || 0);
+      totalRemaining += Number(t.remaining != null ? t.remaining : t.amount || 0);
+    });
+
+    document.getElementById('ah-ledger-summary').innerHTML = `
+      <div style="background:var(--bg); border:1px solid var(--steel-line); border-radius:var(--radius); padding:12px; margin-bottom:14px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:13px;">
+        <span><strong>${txs.length}</strong> işlem kaydı</span>
+        <span>Toplam: <strong>${formatMoney(totalDebt)}₺</strong></span>
+        <span>Kalan: <strong style="color:${totalRemaining > 0 ? 'var(--rust)' : 'var(--success)'}">${formatMoney(totalRemaining)}₺</strong></span>
+      </div>
+    `;
+
+    const totalPages = Math.max(1, Math.ceil(txs.length / AH_LEDGER_PAGE_SIZE));
+    if (ahLedgerPage > totalPages) ahLedgerPage = totalPages;
+    if (ahLedgerPage < 1) ahLedgerPage = 1;
+    const pageTxs = txs.slice((ahLedgerPage - 1) * AH_LEDGER_PAGE_SIZE, ahLedgerPage * AH_LEDGER_PAGE_SIZE);
+
+    const listDiv = document.getElementById('ah-ledger-list');
+    if (txs.length === 0) {
+      listDiv.innerHTML = '<p style="color:var(--steel); font-size:13px; text-align:center;">Bu müşteriye ait işlem yok.</p>';
+    } else {
+      listDiv.innerHTML = pageTxs.map(d => `
+        <div class="tag" style="margin-bottom:10px;">
+          <div class="tag-title">📅 ${d.date || ''} ${d.time || ''}</div>
+          <div class="tag-code">
+            📝 ${d.description || (d.items ? d.items.map(i => i.name + ' x' + i.qty).join(', ') : '')}
+            <br>💰 ${formatMoney(d.amount)}₺ ${d.remaining != null && d.remaining !== d.amount ? '| Kalan: ' + formatMoney(d.remaining) + '₺' : ''}
+            ${d.status === 'Açık' ? ' | 🔴 Açık' : d.status === 'Kısmi' ? ' | 🟡 Kısmi' : ' | 🟢 Kapalı'}
+            ${d.dueDate ? ' | ⏰ Vade: ' + d.dueDate : ''}
+            ${d.senetNo ? '<br>🖋️ Senet No: ' + d.senetNo + ' (' + (d.senetDate || '') + ')' : ''}
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
+            <button class="btn btn-dark btn-sm" style="width:auto;" onclick="printDebtSlip('${d.key}')">🖨️ Borç Fişi</button>
+            ${d.items && d.items.length ? `<button class="btn btn-primary btn-sm" style="width:auto;" onclick="reprintInvoice('${d.key}')">🧾 A4 Fatura</button>` : ''}
+            <button class="btn btn-warning btn-sm" style="width:auto;" onclick="printSenet('${d.key}')">🖋️ Senet Yazdır</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    let pagHtml = '';
+    if (totalPages > 1) {
+      pagHtml += `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="ahLedgerChangePage(-1)" ${ahLedgerPage <= 1 ? 'disabled' : ''}>◀ Önceki Sayfa</button>`;
+      pagHtml += `<span style="font-size:12px; color:var(--steel);">Sayfa ${ahLedgerPage} / ${totalPages}</span>`;
+      pagHtml += `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="ahLedgerChangePage(1)" ${ahLedgerPage >= totalPages ? 'disabled' : ''}>Sonraki Sayfa ▶</button>`;
+    }
+    document.getElementById('ah-ledger-pagination').innerHTML = pagHtml;
+  });
+}
+
+function ahLedgerChangePage(delta) {
+  ahLedgerPage += delta;
+  renderCustomerLedger();
+}
+
+// --- SAYIYI TÜRKÇE YAZIYA ÇEVİRME (senet üzerinde "bedel yazıyla" için) ---
+function numberToTurkishWords(num) {
+  num = Math.floor(Number(num) || 0);
+  if (num === 0) return 'Sıfır';
+
+  const ones = ['', 'Bir', 'İki', 'Üç', 'Dört', 'Beş', 'Altı', 'Yedi', 'Sekiz', 'Dokuz'];
+  const tens = ['', 'On', 'Yirmi', 'Otuz', 'Kırk', 'Elli', 'Altmış', 'Yetmiş', 'Seksen', 'Doksan'];
+  const scales = ['', 'Bin', 'Milyon', 'Milyar', 'Trilyon'];
+
+  function threeDigits(n) {
+    let s = '';
+    const h = Math.floor(n / 100);
+    const t = Math.floor((n % 100) / 10);
+    const o = n % 10;
+    if (h > 0) s += (h === 1 ? '' : ones[h] + ' ') + 'Yüz ';
+    if (t > 0) s += tens[t] + ' ';
+    if (o > 0) s += ones[o] + ' ';
+    return s.trim();
+  }
+
+  let groups = [];
+  let n = num;
+  while (n > 0) { groups.push(n % 1000); n = Math.floor(n / 1000); }
+
+  let words = '';
+  for (let i = groups.length - 1; i >= 0; i--) {
+    if (groups[i] === 0) continue;
+    if (i === 1 && groups[i] === 1) {
+      words += 'Bin ';
+    } else if (i > 0) {
+      words += threeDigits(groups[i]) + ' ' + scales[i] + ' ';
+    } else {
+      words += threeDigits(groups[i]) + ' ';
+    }
+  }
+  return words.trim();
+}
+
+function amountToTurkishWordsTL(amount) {
+  amount = Number(amount) || 0;
+  const lira = Math.floor(amount);
+  const kurus = Math.round((amount - lira) * 100);
+  let text = numberToTurkishWords(lira) + ' Türk Lirası';
+  if (kurus > 0) text += ' ' + numberToTurkishWords(kurus) + ' Kuruş';
+  return text + ' Sadece';
+}
+
+function setSenetPrintPageSize(active) {
+  let s = document.getElementById('dynamic-senet-page-size');
+  if (!s) {
+    s = document.createElement('style');
+    s.id = 'dynamic-senet-page-size';
+    document.head.appendChild(s);
+  }
+  s.textContent = active ? '@page { size: A4; margin: 15mm; }' : '';
+}
+
+// --- YASAL SENET KAĞIDI OLUŞTUR VE YAZDIR (kalıcı olarak sistemde de saklanır) ---
+function printSenet(key) {
+  if (currentRole !== 'admin') { alert("Bu işlem için yönetici yetkisi gerekir!"); return; }
+
+  dbCustomerDebts.child(key).once('value', (snap) => {
+    const d = snap.val();
+    if (!d) { alert("Borç kaydı bulunamadı!"); return; }
+
+    const senetAmount = Number(d.amount || 0);
+    if (senetAmount <= 0) { alert("Geçerli bir borç tutarı bulunamadı."); return; }
+
+    dbRoot.child('senet_counter').transaction(cur => (Number(cur) || 0) + 1, (err, committed, snapAfter) => {
+      if (err || !committed) { alert("Senet numarası oluşturulamadı, lütfen tekrar deneyin."); return; }
+
+      const seq = snapAfter.val();
+      const now = new Date();
+      const senetNo = now.getFullYear() + '-' + String(seq).padStart(6, '0');
+      const duzenlemeTarihi = now.toLocaleDateString('tr-TR');
+      const vadeTarihi = d.dueDate ? new Date(d.dueDate).toLocaleDateString('tr-TR') : (d.term || 'Belirsiz');
+
+      const customerInfo = Object.values(customersData || {}).find(c => matchesCustomer(d, c.name, c.phone));
+      const address = customerInfo ? (customerInfo.address || '') : '';
+      const tckn = customerInfo ? (customerInfo.tckn || '') : '';
+      const amountWords = amountToTurkishWordsTL(senetAmount);
+
+      const printArea = document.getElementById('print-area');
+      printArea.innerHTML = `
+        <div style="width:100%; max-width:700px; margin:0 auto; padding:10mm; font-family:'Inter',Arial,sans-serif; background:#fff; color:#000; border:2px solid #000;">
+          <div style="text-align:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:16px;">
+            <h2 style="margin:0; font-size:20px; letter-spacing:1px;">BONO / SENET</h2>
+            <p style="margin:4px 0; font-size:11px;">Senet No: <strong>${senetNo}</strong></p>
+          </div>
+
+          <table style="width:100%; font-size:13px; border-collapse:collapse; margin-bottom:16px;">
+            <tr><td style="padding:4px 0; width:40%;"><strong>Düzenlenme Tarihi:</strong></td><td>${duzenlemeTarihi}</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Düzenlenme Yeri:</strong></td><td>Arsuz / Hatay</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Vade Tarihi:</strong></td><td>${vadeTarihi}</td></tr>
+          </table>
+
+          <div style="border:1px solid #000; padding:12px; margin-bottom:16px; text-align:center;">
+            <div style="font-size:12px;">İŞBU SENET KARŞILIĞINDA</div>
+            <div style="font-size:22px; font-weight:bold; margin:8px 0;">₺${formatMoney(senetAmount)}</div>
+            <div style="font-size:13px; font-style:italic;">(${amountWords})</div>
+          </div>
+
+          <p style="font-size:13px; line-height:1.7; text-align:justify;">
+            İşbu senet karşılığında yukarıda yazılı bedeli, vade tarihinde <strong>REYHANİ CAM HIRDAVAT</strong>'a veya emrine, kayıtsız şartsız ödeyeceğimi kabul, beyan ve taahhüt ederim.
+          </p>
+
+          <table style="width:100%; font-size:13px; border-collapse:collapse; margin:16px 0;">
+            <tr><td style="padding:4px 0; width:30%;"><strong>Borçlu Adı Soyadı / Ünvanı:</strong></td><td>${d.customer}</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Telefon:</strong></td><td>${d.phone || '-'}</td></tr>
+            <tr><td style="padding:4px 0;"><strong>Adres:</strong></td><td>${address || '-'}</td></tr>
+            <tr><td style="padding:4px 0;"><strong>T.C. Kimlik No / Vergi No:</strong></td><td>${tckn || '-'}</td></tr>
+          </table>
+
+          <div style="display:flex; justify-content:space-between; margin-top:50px; font-size:13px;">
+            <div style="text-align:center; width:45%;">
+              <div style="border-top:1px solid #000; padding-top:6px;">Borçlu İmza</div>
+            </div>
+            <div style="text-align:center; width:45%;">
+              <div style="border-top:1px solid #000; padding-top:6px;">Alacaklı — Reyhani Cam Hırdavat</div>
+            </div>
+          </div>
+
+          <p style="font-size:9px; color:#555; margin-top:24px; text-align:center;">
+            Bu belge dahili kayıt/tahsilat takibi amaçlı düzenlenmiştir. Kambiyo senedi olarak tam hukuki geçerlilik için Türk Ticaret Kanunu'nun aradığı şekil şartlarına ve ıslak imzaya dikkat ediniz.
+          </p>
+        </div>
+      `;
+
+      // Senet kaydını sistemde kalıcı olarak sakla (tekrar sorgulanabilmesi / kaybolmaması için)
+      dbSenetler.push({
+        debtKey: key,
+        senetNo,
+        customer: d.customer,
+        phone: d.phone || '',
+        amount: senetAmount,
+        amountWords,
+        issueDate: duzenlemeTarihi,
+        dueDate: vadeTarihi,
+        createdAt: now.toISOString(),
+        createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+      });
+
+      dbCustomerDebts.child(key).update({ senetNo: senetNo, senetDate: duzenlemeTarihi });
+
+      setSenetPrintPageSize(true);
+      document.body.className = 'printing-senet';
+      setTimeout(() => {
+        window.print();
+        document.body.className = '';
+        setSenetPrintPageSize(false);
+        renderCustomerDebts();
+        if (ahLedgerCustomerKey) renderCustomerLedger();
+      }, 400);
+    });
   });
 }
 
@@ -4089,6 +4655,7 @@ function switchTab(tabName) {
   if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'borc' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  if(tabName === 'acikhesap' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'fis') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -4103,6 +4670,7 @@ function switchTab(tabName) {
     }
   }
   if(tabName === 'okut') startScanner(); else stopScanner();
+  if(tabName === 'acikhesap' && typeof renderCustomerAccounts === 'function') renderCustomerAccounts();
 }
 
 function showToast(msg) {
@@ -7820,6 +8388,7 @@ ${inventoryContext}`;
       addAIChatBubble('bot', parsed.reply || 'Yönlendiriliyor...');
       const tabMap = {
         'borc': 'borc',
+        'acikhesap': 'acikhesap',
         'toptanci': 'toptanci',
         'siparis': 'siparis',
         'fis': 'fis',
@@ -7830,7 +8399,7 @@ ${inventoryContext}`;
       };
       const tabName = tabMap[parsed.module];
       if (tabName) {
-        if (currentRole === 'guest' && ['toptanci','borc','siparis','fis','raporlar','yerlesim','gorevler'].includes(tabName)) {
+        if (currentRole === 'guest' && ['toptanci','borc','acikhesap','siparis','fis','raporlar','yerlesim','gorevler'].includes(tabName)) {
           addAIChatBubble('bot', 'Bu modüle erişim yetkiniz yok. Lütfen giriş yapın.', 'error');
         } else {
           switchTab(tabName);
