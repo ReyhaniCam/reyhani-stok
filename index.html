@@ -356,19 +356,17 @@
 /* ============ DASHBOARD / KARŞILAMA PANELİ ============ */
 .dashboard-container {
   padding: 20px 16px 40px;
+  /* Not: Önceden burada 12sn'de bir döngüye giren bir arkaplan animasyonu vardı.
+     Bu animasyon, üstündeki blur'lu (backdrop-filter) kartlarla birleşince,
+     tarayıcının saniyede 60 kez tüm arkaplanı yeniden bulanıklaştırmasına
+     sebep oluyordu — bu sayfa artık VARSAYILAN karşılama ekranı olduğu için
+     bu sürekli yük ciddi bir yavaşlama kaynağıydı. Statik gradient'e çevirdik,
+     görünüm hemen hemen aynı ama artık sıfır ekstra işlemci/GPU maliyeti var. */
   background: linear-gradient(135deg, #0F172A 0%, #1E293B 50%, #0EA5E9 100%);
-  background-size: 300% 300%;
-  animation: gradientShift 12s ease infinite;
   border-radius: var(--radius);
   min-height: calc(100vh - 160px);
   color: #fff;
   box-shadow: inset 0 0 60px rgba(0,0,0,0.3);
-}
-
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
 }
 
 .dashboard-header {
@@ -2089,6 +2087,7 @@ dbGoodsReceipts.on('value', snapshot => {
   const cutoffStr = cutoffDate.toISOString().slice(0, 10);
 
   let hasReceipts = false;
+  const __receiptParts = [];
 
   Object.keys(data).sort().reverse().forEach(dateStr => {
     if(dateStr < cutoffStr) return;
@@ -2101,7 +2100,7 @@ dbGoodsReceipts.on('value', snapshot => {
 
       const itemsSummary = (rec.items || []).map(it => `${it.name} (${it.qty} ${it.unit || 'Adet'})`).join(', ');
 
-      listDiv.innerHTML += `
+      __receiptParts.push(`
         <div class="tag" style="margin-bottom:10px;">
            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
               <div>
@@ -2120,11 +2119,11 @@ dbGoodsReceipts.on('value', snapshot => {
            <div style="font-size:11px; color:var(--steel); margin-top:8px; line-height:1.4;">${itemsSummary}</div>
            ${rec.note ? `<div style="font-size:11px; color:var(--charcoal); margin-top:4px; font-style:italic;">Not: ${rec.note}</div>` : ''}
         </div>
-      `;
+      `);
     });
   });
 
-  if(!hasReceipts) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz kaydedilmiş malzeme fişi bulunamadı.</p>';
+  listDiv.innerHTML = hasReceipts ? __receiptParts.join('') : '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz kaydedilmiş malzeme fişi bulunamadı.</p>';
 });
 
 dbMovements.on('value', (snapshot) => {
@@ -2173,12 +2172,13 @@ dbZReports.on('value', (snapshot) => {
   globalZReports = {};
   
   let hasReports = false;
+  const __zReportParts = [];
   Object.keys(data).sort().reverse().forEach(dateStr => {
     hasReports = true;
     const rep = data[dateStr];
     globalZReports[dateStr] = rep;
     
-    listDiv.innerHTML += `
+    __zReportParts.push(`
       <div class="tag" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
          <div>
             <div class="tag-title">📅 Z Raporu: ${rep.date}</div>
@@ -2192,10 +2192,10 @@ dbZReports.on('value', (snapshot) => {
             <button class="btn btn-success btn-sm" onclick="downloadZReportByDate('${dateStr}')">📊 Z Raporu Excel İndir</button>
          </div>
       </div>
-    `;
+    `);
   });
   
-  if(!hasReports) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
+  listDiv.innerHTML = hasReports ? __zReportParts.join('') : '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
 });
 
 dbOrders.on('value', snapshot => {
@@ -2210,6 +2210,7 @@ dbOrders.on('value', snapshot => {
   const cutoffStr = cutoffDate.toISOString().slice(0, 10);
   
   let hasOrders = false;
+  const __orderParts = [];
   
   Object.keys(data).sort().reverse().forEach(dateStr => {
     if(dateStr < cutoffStr) {
@@ -2222,7 +2223,7 @@ dbOrders.on('value', snapshot => {
       const order = ordersOnDate[orderId];
       globalPastOrders[orderId] = { orderData: order, date: dateStr };
 
-      listDiv.innerHTML += `
+      __orderParts.push(`
         <div class="tag" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
            <div>
               <div class="tag-title">Satış / Sipariş: ${dateStr}</div>
@@ -2233,11 +2234,11 @@ dbOrders.on('value', snapshot => {
               <button class="btn btn-info btn-sm" onclick="downloadOrderById('${orderId}')">İndir (Excel)</button>
            </div>
         </div>
-      `;
+      `);
     });
   });
   
-  if(!hasOrders) listDiv.innerHTML = '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
+  listDiv.innerHTML = hasOrders ? __orderParts.join('') : '<p style="color:var(--steel);font-size:13px;text-align:center;">Geçmiş satış bulunamadı.</p>';
   if (typeof renderDashboard === 'function') renderDashboard();
 });
 
@@ -2761,12 +2762,12 @@ function renderBorcCart() {
   }
   
   container.style.display = 'block';
-  tbody.innerHTML = '';
   let grandTotal = 0;
+  const __borcCartParts = [];
   
   borcCart.forEach((item, index) => {
     grandTotal += item.total;
-    tbody.innerHTML += `
+    __borcCartParts.push(`
       <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 0; line-height:1.3;">
           <strong>${item.name}</strong><br>
@@ -2777,8 +2778,9 @@ function renderBorcCart() {
         <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
         <td><button class="btn btn-dark btn-sm" onclick="removeFromBorcCart(${index})">Çıkar</button></td>
       </tr>
-    `;
+    `);
   });
+  tbody.innerHTML = __borcCartParts.join('');
   
   document.getElementById('borc-cart-total').textContent = "₺" + formatMoney(grandTotal);
 }
@@ -4151,9 +4153,10 @@ function renderNotifications() {
   badge.style.display = 'inline-block';
   badge.textContent = keys.length + " Yeni";
   
+  const __notifParts = [];
   keys.reverse().forEach(key => {
     const n = notificationsData[key];
-    listDiv.innerHTML += `
+    __notifParts.push(`
       <div style="background:#F1F5F9; border:1px solid var(--steel-line); padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
          <div>
             <div style="font-size:12px; font-weight:bold; color:var(--charcoal);">📥 ${n.text}</div>
@@ -4164,8 +4167,9 @@ function renderNotifications() {
            <button class="sm-btn" onclick="dismissNotification('${key}')" style="color:var(--steel);">Yoksay / Kapat</button>
          </div>
       </div>
-    `;
+    `);
   });
+  listDiv.innerHTML = __notifParts.join('');
 }
 
 function dismissNotification(notifKey) {
@@ -4310,9 +4314,9 @@ function deleteSelectedTasks() {
 function renderTasks() {
   const tbody = document.getElementById('tasks-table-body');
   if(!tbody) return;
-  tbody.innerHTML = '';
   
   const keys = Object.keys(tasksData);
+  const __taskParts = [];
   selectedTaskIds.forEach(id => { if(!tasksData[id]) selectedTaskIds.delete(id); });
   updateBulkDeleteUI();
 
@@ -4329,7 +4333,7 @@ function renderTasks() {
     const isSelected = selectedTaskIds.has(key);
     const isAdmin = currentRole === 'admin';
     
-    tbody.innerHTML += `
+    __taskParts.push(`
       <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 4px; text-align:center;">
           <input type="checkbox" value="${key}" ${isSelected ? 'checked' : ''} onclick="toggleTaskSelection('${key}', this)">
@@ -4349,8 +4353,9 @@ function renderTasks() {
           ${isAdmin ? `<button class="sm-btn" onclick="deleteTask('${key}')" style="color:var(--rust); margin-left:8px;">Sil</button>` : ''}
         </td>
       </tr>
-    `;
+    `);
   });
+  tbody.innerHTML = __taskParts.join('');
 
   const master = document.getElementById('select-all-tasks');
   if(master) {
@@ -4564,12 +4569,12 @@ function renderCart() {
   if(cart.length === 0) { container.style.display = 'none'; return; }
   
   container.style.display = 'block';
-  tbody.innerHTML = '';
   let grandTotal = 0;
+  const __cartParts = [];
   
   cart.forEach((item, index) => {
     grandTotal += item.total;
-    tbody.innerHTML += `
+    __cartParts.push(`
       <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 0; line-height:1.3;">
           <strong>${item.name}</strong><br>
@@ -4580,8 +4585,9 @@ function renderCart() {
         <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
         <td><button class="btn btn-dark btn-sm" onclick="removeFromCart(${index})">Çıkar</button></td>
       </tr>
-    `;
+    `);
   });
+  tbody.innerHTML = __cartParts.join('');
   
   document.getElementById('cart-total').textContent = "₺" + formatMoney(grandTotal);
 }
@@ -4857,8 +4863,8 @@ function renderGoodsReceiptCart() {
   if(goodsReceiptCart.length === 0) { container.style.display = 'none'; return; }
 
   container.style.display = 'block';
-  tbody.innerHTML = '';
   let grandTotal = 0;
+  const __fisParts = [];
 
   goodsReceiptCart.forEach((item, index) => {
     grandTotal += item.total;
@@ -4870,7 +4876,7 @@ function renderGoodsReceiptCart() {
       : (item.isNew && item.aiOriginalName)
         ? ` <a href="javascript:void(0)" onclick="editFisItem(${index})" style="font-size:10px; color:var(--info); text-decoration:underline;">aslında kayıtlı mı? elle eşleştir</a>`
         : '';
-    tbody.innerHTML += `
+    __fisParts.push(`
       <tr style="border-bottom:1px dashed var(--steel-line);">
         <td style="padding:10px 0; line-height:1.3;">
           ${tickIcon} <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}${overrideLink}<br>
@@ -4885,8 +4891,9 @@ function renderGoodsReceiptCart() {
           <button class="btn btn-dark btn-sm" style="width:auto;" onclick="removeFromGoodsReceipt(${index})">Çıkar</button>
         </td>
       </tr>
-    `;
+    `);
   });
+  tbody.innerHTML = __fisParts.join('');
 
   document.getElementById('fis-total').textContent = "₺" + formatMoney(grandTotal);
 }
@@ -7075,12 +7082,12 @@ function addWholesaler() {
 function renderWholesalers() {
   const grid = document.getElementById('wholesalers-grid');
   if(!grid) return;
-  grid.innerHTML = '';
 
   const statusFilterEl = document.getElementById('w-filter-status');
   const categoryFilterEl = document.getElementById('w-filter-category');
   const statusFilter = statusFilterEl ? statusFilterEl.value : 'aktif';
   const categoryFilter = categoryFilterEl ? categoryFilterEl.value : '';
+  const __wholesalerParts = [];
 
   Object.keys(wholesalersData).forEach(key => {
     const w = wholesalersData[key];
@@ -7091,7 +7098,7 @@ function renderWholesalers() {
 
     const isNegative = w.balance < 0;
     const isPassive = status === 'pasif';
-    grid.innerHTML += `
+    __wholesalerParts.push(`
       <div class="tag" style="${isPassive ? 'opacity:0.6;' : ''}">
         <div class="tag-header">
           <div>
@@ -7122,12 +7129,10 @@ function renderWholesalers() {
         </div>
         <button class="btn btn-dark btn-sm" style="width:100%; margin-top:6px;" onclick="openHistory('${key}', '${w.name.replace(/'/g, "\\'")}')">📄 Ekstre / Hesap Geçmişi</button>
       </div>
-    `;
+    `);
   });
 
-  if (!grid.innerHTML) {
-    grid.innerHTML = '<p style="color:var(--steel); font-size:13px;">Bu filtreye uyan toptancı yok.</p>';
-  }
+  grid.innerHTML = __wholesalerParts.length ? __wholesalerParts.join('') : '<p style="color:var(--steel); font-size:13px;">Bu filtreye uyan toptancı yok.</p>';
 }
 
 function deleteWholesaler(key) {
