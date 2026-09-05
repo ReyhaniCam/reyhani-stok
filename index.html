@@ -6956,8 +6956,25 @@ function printBarcodeLabel(code) {
   setTimeout(() => {
     window.print();
     document.body.className = '';
+    // ÖNEMLİ: Bu özel sayfa boyutunu (100mm x 40mm) hemen temizle. Temizlenmezse
+    // <head>'de kalıcı kalır ve ondan SONRAKİ TÜM yazdırmalar (satış fişi dahil)
+    // bu sabit/yanlış boyuta sıkışır — yazıcı "boyu çok uzun" davranır ya da
+    // hata verip hiç basmaz. (Aşağıdaki 'afterprint' dinleyicisi de ek güvence.)
+    pageStyle.textContent = '';
   }, 400);
 }
+
+// GÜVENLİK AĞI: Bazı mobil/tablet tarayıcılarda yazdırma penceresi asenkron açılır
+// (window.print() hemen geri döner, kullanıcı önizlemede beklerken kod çalışmaya devam eder).
+// Bu durumda yukarıdaki setTimeout içindeki temizlik erken tetiklenebilir. 'afterprint'
+// olayı, yazdırma penceresi GERÇEKTEN kapandığında ateşlenir; burada da aynı temizliği
+// tekrar yaparak barkod etiketi sayfa boyutunun (@page 100mm x 40mm) kalıcı kalıp
+// sonraki satış fişi / diğer yazdırmaları bozmasını kesin olarak engelliyoruz.
+window.addEventListener('afterprint', () => {
+  document.body.className = '';
+  const leftoverPageStyle = document.getElementById('dynamic-barcode-page-size');
+  if (leftoverPageStyle) leftoverPageStyle.textContent = '';
+});
 
 function printAllLabels() {
   if(currentRole !== 'admin' && currentRole !== 'staff') return;
