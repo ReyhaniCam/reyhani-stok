@@ -1797,6 +1797,74 @@
   <div class="modal-content" style="max-width:680px;">
     <button class="modal-close" onclick="closeCustomerLedger()">X</button>
     <h3 id="ah-ledger-title" style="margin-top:0; font-family:'Oswald';">Müşteri Hesabı</h3>
+
+    <div class="form-card" style="padding:14px; margin-bottom:16px; background:var(--bg);">
+      <h4 style="margin:0 0 10px 0; font-family:'Oswald'; border-bottom:1px solid var(--steel-line); padding-bottom:8px;">➕ Bu Müşteriye Yeni İşlem / Borç Ekle</h4>
+
+      <div class="form-row">
+        <div>
+          <label>Ürün Ara (İsme veya Koda Göre)</label>
+          <input list="ah-ledger-product-list" id="ah-ledger-product" placeholder="Ürünü yazmaya başlayın...">
+          <datalist id="ah-ledger-product-list"></datalist>
+        </div>
+        <div style="display:flex; gap:10px; align-items:flex-end;">
+          <div style="flex:1;">
+            <label>Miktar</label>
+            <input type="number" id="ah-ledger-qty" placeholder="1" value="1" min="0.1" step="any">
+          </div>
+          <button class="btn btn-primary" style="width:auto; padding:10px 15px;" onclick="addToLedgerCart()">➕ Sepete Ekle</button>
+        </div>
+      </div>
+
+      <div id="ah-ledger-cart-container" style="display:none; margin:12px 0;">
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:380px;">
+            <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
+              <th style="padding-bottom:5px;">Ürün</th><th>Fiyat</th><th>Miktar</th><th>Ara Toplam</th><th></th>
+            </tr></thead>
+            <tbody id="ah-ledger-cart-items"></tbody>
+          </table>
+        </div>
+        <div style="text-align:right; margin-top:8px; font-family:'IBM Plex Mono';">
+          Sepet Toplamı: <strong id="ah-ledger-cart-total">₺0,00</strong>
+        </div>
+      </div>
+
+      <p style="font-size:11px; color:var(--steel); text-align:center; margin:10px 0;">— veya stoktan düşmeyen serbest tutarlı bir borç girin —</p>
+
+      <div class="form-row">
+        <div>
+          <label>Açıklama (Serbest Tutar İçin)</label>
+          <input type="text" id="ah-ledger-manual-desc" placeholder="Örn: Nakit avans / hizmet bedeli">
+        </div>
+        <div>
+          <label>Tutar (₺)</label>
+          <input type="number" id="ah-ledger-manual-amount" placeholder="0.00" min="0.01" step="any">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div>
+          <label>Vade Süresi (Gün)</label>
+          <select id="ah-ledger-term">
+            <option value="7">7 Gün</option>
+            <option value="15">15 Gün</option>
+            <option value="30" selected>30 Gün</option>
+            <option value="45">45 Gün</option>
+            <option value="60">60 Gün</option>
+            <option value="90">90 Gün</option>
+          </select>
+        </div>
+        <div>
+          <label>Not (Opsiyonel)</label>
+          <input type="text" id="ah-ledger-note" placeholder="Ek bilgiler...">
+        </div>
+      </div>
+
+      <button class="btn btn-success" onclick="saveLedgerTransaction()">✅ İşlemi Bu Müşterinin Hesabına Kaydet</button>
+      <button class="btn btn-danger" style="margin-top:8px;" onclick="clearLedgerCart()">🗑️ Sepeti Temizle</button>
+    </div>
+
     <div id="ah-ledger-summary"></div>
     <div id="ah-ledger-list"></div>
     <div id="ah-ledger-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px;"></div>
@@ -2154,6 +2222,7 @@ db.on('value', (snapshot) => {
   renderGrid();
   updateOrderProductList();
   updateBorcOrderProductList();
+  updateAhLedgerProductList();
   renderLayoutGrid();
   if (typeof renderCart === 'function') renderCart(); // localStorage'dan geri yüklenen sepeti göster
   if (typeof renderDashboard === 'function') renderDashboard();
@@ -3696,6 +3765,13 @@ const AH_LEDGER_PAGE_SIZE = 5;
 function openCustomerLedger(key) {
   ahLedgerCustomerKey = key;
   ahLedgerPage = 1;
+  ahLedgerCart = [];
+  document.getElementById('ah-ledger-product').value = '';
+  document.getElementById('ah-ledger-qty').value = '1';
+  document.getElementById('ah-ledger-manual-desc').value = '';
+  document.getElementById('ah-ledger-manual-amount').value = '';
+  document.getElementById('ah-ledger-note').value = '';
+  renderLedgerCart();
   document.getElementById('ah-ledger-modal').style.display = 'flex';
   renderCustomerLedger();
 }
@@ -3703,6 +3779,7 @@ function openCustomerLedger(key) {
 function closeCustomerLedger() {
   document.getElementById('ah-ledger-modal').style.display = 'none';
   ahLedgerCustomerKey = null;
+  ahLedgerCart = [];
 }
 
 function renderCustomerLedger() {
@@ -3772,6 +3849,208 @@ function renderCustomerLedger() {
 function ahLedgerChangePage(delta) {
   ahLedgerPage += delta;
   renderCustomerLedger();
+}
+
+// --- MÜŞTERİ SAYFASINDAN DOĞRUDAN YENİ İŞLEM/BORÇ EKLEME (Müşteri Borç ile tam entegre) ---
+let ahLedgerCart = [];
+
+function updateAhLedgerProductList() {
+  const dl = document.getElementById('ah-ledger-product-list');
+  if (!dl) return;
+  dl.innerHTML = '';
+  Object.values(productsData).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = `${p.code} - ${p.name}`;
+    dl.appendChild(opt);
+  });
+}
+
+function addToLedgerCart() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Bu işlem için yetkiniz yok!"); return; }
+
+  const inputVal = document.getElementById('ah-ledger-product').value;
+  const qty = parseFloat(document.getElementById('ah-ledger-qty').value);
+
+  if (!inputVal || isNaN(qty) || qty <= 0) { alert("Lütfen geçerli bir ürün ve miktar girin."); return; }
+
+  const code = inputVal.split(' - ')[0].trim();
+  const p = productsData[code];
+  if (!p) { alert("Ürün bulunamadı! Lütfen listeden seçin."); return; }
+
+  const existingIndex = ahLedgerCart.findIndex(item => item.code === code);
+  const currentInCart = existingIndex !== -1 ? ahLedgerCart[existingIndex].qty : 0;
+  if (p.qty < currentInCart + qty) {
+    alert(`Yetersiz stok! Mevcut: ${p.qty} ${p.unit || 'Adet'}`);
+    return;
+  }
+
+  if (existingIndex !== -1) {
+    ahLedgerCart[existingIndex].qty += qty;
+    ahLedgerCart[existingIndex].total = ahLedgerCart[existingIndex].qty * ahLedgerCart[existingIndex].price;
+  } else {
+    const price = Number(p.price || 0);
+    ahLedgerCart.push({ code: p.code, name: p.name, price, qty, unit: p.unit || 'Adet', total: price * qty });
+  }
+
+  document.getElementById('ah-ledger-product').value = '';
+  document.getElementById('ah-ledger-qty').value = '1';
+  renderLedgerCart();
+}
+
+function removeFromLedgerCart(idx) {
+  ahLedgerCart.splice(idx, 1);
+  renderLedgerCart();
+}
+
+function renderLedgerCart() {
+  const container = document.getElementById('ah-ledger-cart-container');
+  const tbody = document.getElementById('ah-ledger-cart-items');
+  if (!container || !tbody) return;
+
+  if (ahLedgerCart.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.style.display = 'block';
+
+  let total = 0;
+  tbody.innerHTML = ahLedgerCart.map((item, idx) => {
+    total += item.total;
+    return `
+      <tr style="border-bottom:1px solid var(--steel-line);">
+        <td style="padding:5px 0;">${item.name}</td>
+        <td>₺${formatMoney(item.price)}</td>
+        <td>${item.qty} ${item.unit}</td>
+        <td>₺${formatMoney(item.total)}</td>
+        <td><button class="btn btn-danger btn-sm" style="width:auto; padding:4px 8px;" onclick="removeFromLedgerCart(${idx})">✕</button></td>
+      </tr>
+    `;
+  }).join('');
+  document.getElementById('ah-ledger-cart-total').textContent = '₺' + formatMoney(total);
+}
+
+function clearLedgerCart() {
+  ahLedgerCart = [];
+  renderLedgerCart();
+  document.getElementById('ah-ledger-manual-desc').value = '';
+  document.getElementById('ah-ledger-manual-amount').value = '';
+}
+
+// Açık Hesap sayfasından girilen işlemi, Müşteri Borç bölümüyle AYNI kaydı (dbCustomerDebts)
+// kullanarak kaydeder — böylece iki bölüm arasında ayrı ayrı işlem girmeye gerek kalmaz.
+function saveLedgerTransaction() {
+  if (currentRole !== 'admin') { alert("Bu işlem için yönetici yetkisi gerekir!"); return; }
+
+  const c = customersData[ahLedgerCustomerKey];
+  if (!c) { alert("Müşteri bulunamadı!"); return; }
+
+  const manualDesc = document.getElementById('ah-ledger-manual-desc').value.trim();
+  const manualAmount = parseFloat(document.getElementById('ah-ledger-manual-amount').value);
+  const hasManual = manualDesc && !isNaN(manualAmount) && manualAmount > 0;
+  const hasCart = ahLedgerCart.length > 0;
+
+  if (!hasCart && !hasManual) {
+    alert("Sepete ürün ekleyin veya açıklama + tutar girerek serbest bir borç oluşturun.");
+    return;
+  }
+  if (hasCart && hasManual) {
+    alert("Aynı anda hem ürün sepeti hem serbest tutar giremezsiniz. Lütfen sadece birini kullanın.");
+    return;
+  }
+
+  const termDays = parseInt(document.getElementById('ah-ledger-term').value);
+  const note = document.getElementById('ah-ledger-note').value.trim();
+
+  let stockError = false;
+  if (hasCart) {
+    ahLedgerCart.forEach(item => {
+      const currentQty = productsData[item.code] ? (productsData[item.code].qty || 0) : 0;
+      if (currentQty < item.qty) {
+        alert(`Yetersiz stok: ${item.name} (Mevcut: ${currentQty}, İstenen: ${item.qty})`);
+        stockError = true;
+      }
+    });
+  }
+  if (stockError) return;
+
+  const grandTotal = hasCart ? ahLedgerCart.reduce((s, i) => s + i.total, 0) : manualAmount;
+
+  if (hasCart) {
+    ahLedgerCart.forEach(item => {
+      db.child(item.code).child('qty').transaction((currentQty) => Math.max(0, Number(currentQty || 0) - item.qty), (error, committed) => {
+        if (!error && committed) logMovement(item.code, item.name, -item.qty, 'AÇIK HESAP BORÇ: ' + c.name);
+      });
+    });
+  }
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timeStr = now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+  const dueDate = new Date(now);
+  dueDate.setDate(dueDate.getDate() + termDays);
+  const dueDateStr = dueDate.toISOString().slice(0, 10);
+
+  const description = hasCart
+    ? 'Satış: ' + ahLedgerCart.map(i => `${i.name} (${i.qty} ${i.unit})`).join(', ')
+    : manualDesc;
+
+  const debtData = {
+    customer: c.name,
+    phone: c.phone || '',
+    description,
+    amount: grandTotal,
+    remaining: grandTotal,
+    term: termDays + ' Gün',
+    dueDate: dueDateStr,
+    status: 'Açık',
+    note: note || '',
+    date: dateStr,
+    time: timeStr,
+    createdAt: now.toISOString(),
+    lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan',
+    saleType: hasCart ? 'borc_sale' : 'manuel_borc'
+  };
+  if (hasCart) {
+    debtData.items = ahLedgerCart.map(item => ({ code: item.code, name: item.name, price: item.price, qty: item.qty, unit: item.unit, total: item.total }));
+  }
+
+  const newRef = dbCustomerDebts.push(debtData, (err) => {
+    if (!err) {
+      showToast(`${c.name} hesabına ${formatMoney(grandTotal)}₺ borç işlendi!`);
+
+      if (hasCart) {
+        const faturaData = {
+          musteriAdi: c.name,
+          telefon: c.phone || '',
+          tarih: now.toLocaleDateString('tr-TR'),
+          saat: timeStr,
+          vadeSuresi: termDays + ' Gün',
+          vadeTarihi: dueDateStr,
+          genelToplam: grandTotal,
+          urunler: ahLedgerCart.map(i => ({ urunAdi: i.name, miktar: i.qty, birimFiyat: i.price, toplam: i.total })),
+          islemTipi: 'Borç Satış',
+          belgeNo: 'BORÇ-' + Date.now()
+        };
+        localStorage.setItem('guncelSiparis', JSON.stringify(faturaData));
+        window.open('fatura.html', '_blank');
+      }
+
+      clearLedgerCart();
+      renderCustomerLedger();
+      renderCustomerAccounts();
+      renderGrid();
+
+      if (newRef && newRef.key) {
+        setTimeout(() => {
+          if (confirm(`${c.name} için ${formatMoney(grandTotal)}₺ tutarında yasal senet kağıdı düzenlemek ister misiniz?`)) {
+            printSenet(newRef.key);
+          }
+        }, 600);
+      }
+    } else {
+      alert("Kaydedilemedi: " + err.message);
+    }
+  });
 }
 
 // --- SAYIYI TÜRKÇE YAZIYA ÇEVİRME (senet üzerinde "bedel yazıyla" için) ---
