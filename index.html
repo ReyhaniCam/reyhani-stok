@@ -10439,3 +10439,184 @@ async function sendPanelAIMessage(panelKey) {
   setTimeout(forceAccessPanel,1500);
 })();
 </script>
+
+<!-- =========================================================
+     SON DÜZENLEME: ERİŞİM + KOMUT PANELİ AYRI KATMANLAR
+     ========================================================= -->
+<style id="command-panel-final-fix">
+  /* Üst erişim barı: yalnızca giriş / arama / rol bilgisi */
+  body.luxury-theme #access-control-panel{
+    position:fixed!important;
+    top:0!important;left:0!important;right:0!important;
+    width:100vw!important;
+    min-height:82px!important;height:82px!important;
+    padding:10px 24px!important;
+    z-index:2147483000!important;
+    display:flex!important;align-items:center!important;
+    justify-content:flex-end!important;gap:14px!important;
+    background:#10244A!important;
+    border-bottom:3px solid #BFEAF4!important;
+    box-shadow:0 8px 24px rgba(0,0,0,.30)!important;
+    overflow:visible!important;
+  }
+
+  /* Komut / sekme paneli artık erişim barının ALTINDA */
+  body.luxury-theme .nav-tabs{
+    position:fixed!important;
+    top:82px!important;left:0!important;right:0!important;
+    width:100vw!important;height:76px!important;
+    z-index:2147479000!important;
+    display:flex!important;align-items:center!important;
+    gap:10px!important;
+    padding:9px 24px!important;
+    margin:0!important;
+    background:#172F5D!important;
+    border-bottom:2px solid #BFEAF4!important;
+    box-shadow:0 6px 20px rgba(0,0,0,.22)!important;
+    overflow-x:auto!important;overflow-y:hidden!important;
+    pointer-events:auto!important;
+  }
+  body.luxury-theme .nav-tabs .tab-btn{
+    flex:0 0 auto!important;
+    min-width:148px!important;
+    min-height:56px!important;
+    height:56px!important;
+    padding:12px 20px!important;
+    border-radius:12px!important;
+    border:2px solid rgba(191,234,244,.42)!important;
+    background:#24467D!important;
+    color:#fff!important;
+    font-size:16px!important;
+    font-weight:900!important;
+    opacity:1!important;
+    visibility:visible!important;
+    pointer-events:auto!important;
+  }
+  body.luxury-theme .nav-tabs .tab-btn:hover{
+    background:#315B98!important;
+    border-color:#E8F7FB!important;
+  }
+  body.luxury-theme .nav-tabs .tab-btn.active{
+    background:#BFEAF4!important;
+    color:#10244A!important;
+    border-color:#fff!important;
+  }
+
+  /* Üst arama butonu: komut paneline doğrudan erişim */
+  body.luxury-theme #access-search-btn{
+    min-width:190px!important;
+    min-height:58px!important;
+    height:58px!important;
+    background:#E5E7EB!important;
+    color:#10244A!important;
+    border:3px solid #BFEAF4!important;
+    border-radius:13px!important;
+    font-size:17px!important;
+    font-weight:900!important;
+    cursor:pointer!important;
+    box-shadow:0 5px 0 rgba(0,0,0,.14)!important;
+  }
+  body.luxury-theme #access-search-btn::after{
+    content:'  (Ctrl+K)'!important;
+    font-size:12px!important;
+    font-weight:800!important;
+    opacity:.72!important;
+  }
+  body.luxury-theme #access-login-btn{
+    min-width:190px!important;
+    min-height:58px!important;
+    height:58px!important;
+    background:#BFEAF4!important;
+    color:#10244A!important;
+    border:3px solid #FFFFFF!important;
+    border-radius:13px!important;
+    font-size:17px!important;
+    font-weight:900!important;
+    cursor:pointer!important;
+    box-shadow:0 5px 0 #7EC6D7!important;
+  }
+
+  /* Sayfanın içeriği iki sabit üst panelin altında başlasın */
+  body.luxury-theme{
+    padding-top:158px!important;
+  }
+  body.luxury-theme .app{
+    min-height:calc(100vh - 158px)!important;
+  }
+  body.luxury-theme header{
+    padding-top:28px!important;
+  }
+
+  /* Eski sağ üst auth alanı kullanılmıyor; tek erişim paneli kalsın */
+  body.luxury-theme .auth-status{display:none!important;}
+
+  /* Komut paleti açıkça üstte olsun */
+  body.luxury-theme #command-palette-overlay{
+    z-index:2147483646!important;
+  }
+  body.luxury-theme #command-palette-overlay .cmdk-box{
+    margin-top:120px!important;
+    width:min(760px,calc(100vw - 32px))!important;
+    max-height:76vh!important;
+    border:3px solid #BFEAF4!important;
+    border-radius:18px!important;
+  }
+  body.luxury-theme #cmdk-input{
+    min-height:56px!important;
+    font-size:19px!important;
+    color:#10244A!important;
+  }
+  body.luxury-theme .cmdk-item{
+    min-height:58px!important;
+    font-size:16px!important;
+  }
+  body.luxury-theme .cmdk-item-title{font-size:17px!important;}
+  body.luxury-theme .cmdk-item-sub{font-size:13px!important;}
+
+  @media(max-width:900px){
+    body.luxury-theme #access-control-panel{
+      min-height:132px!important;height:auto!important;
+      padding:10px 12px!important;
+      flex-wrap:wrap!important;
+      justify-content:stretch!important;
+      gap:8px!important;
+    }
+    body.luxury-theme #access-control-panel .access-control-title{width:100%!important;justify-content:center!important;margin:0!important;}
+    body.luxury-theme #access-control-panel .access-control-status{flex:1 1 150px!important;min-width:0!important;}
+    body.luxury-theme #access-control-panel button{flex:1 1 200px!important;min-width:0!important;}
+    body.luxury-theme .nav-tabs{top:132px!important;height:70px!important;padding:7px 12px!important;}
+    body.luxury-theme .nav-tabs .tab-btn{min-width:135px!important;min-height:54px!important;height:54px!important;font-size:15px!important;}
+    body.luxury-theme{padding-top:202px!important;}
+    body.luxury-theme .app{min-height:calc(100vh - 202px)!important;}
+    body.luxury-theme #command-palette-overlay .cmdk-box{margin-top:214px!important;}
+  }
+
+  @media(max-width:560px){
+    body.luxury-theme #access-control-panel{min-height:178px!important;}
+    body.luxury-theme #access-control-panel button{min-height:54px!important;height:54px!important;font-size:15px!important;}
+    body.luxury-theme .nav-tabs{top:178px!important;height:66px!important;}
+    body.luxury-theme{padding-top:244px!important;}
+    body.luxury-theme .app{min-height:calc(100vh - 244px)!important;}
+    body.luxury-theme #command-palette-overlay .cmdk-box{margin-top:252px!important;}
+  }
+</style>
+<script>
+(function(){
+  function ensureTopControls(){
+    var panel=document.getElementById('access-control-panel');
+    if(!panel) return;
+    panel.style.display='flex';
+    panel.style.visibility='visible';
+    panel.style.opacity='1';
+    panel.style.pointerEvents='auto';
+    var search=document.getElementById('access-search-btn');
+    var login=document.getElementById('access-login-btn');
+    if(search){search.style.display='inline-flex';search.style.visibility='visible';search.style.pointerEvents='auto';}
+    if(login){login.style.display='inline-flex';login.style.visibility='visible';login.style.pointerEvents='auto';}
+  }
+  ensureTopControls();
+  window.addEventListener('load', ensureTopControls);
+  setTimeout(ensureTopControls, 50);
+  setTimeout(ensureTopControls, 500);
+})();
+</script>
