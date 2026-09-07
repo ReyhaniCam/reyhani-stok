@@ -1125,6 +1125,32 @@
 
       <div id="fis-container" class="form-card" style="display:none; padding:12px;">
         <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Fiş Kalemleri</h3>
+
+        <!-- TOPLU KÂR / KDV UYGULAMA -->
+        <div id="fis-bulk-price-box" style="background:#FFF7E0; border:1px solid #F59E0B; border-radius:8px; padding:12px; margin:0 0 14px 0;">
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <div>
+              <div style="font-weight:800; font-size:13px; color:#0F172A;">💰 Tüm ürünlere toplu fiyat uygula</div>
+              <div style="font-size:11px; color:#475569; margin-top:3px;">AI fişinden gelen ürünlerin geliş fiyatı üzerinden mevcut fiyat hesaplama mantığı kullanılır: geliş + KDV + hedef kâr.</div>
+            </div>
+            <label style="display:flex; align-items:center; gap:7px; margin:0; text-transform:none; font-size:12px; font-weight:800; color:#0F172A; cursor:pointer;">
+              <input type="checkbox" id="fis-bulk-price-apply" onchange="applyBulkFisPricing()" style="width:20px; height:20px; cursor:pointer;">
+              ✅ Uygula
+            </label>
+          </div>
+          <div class="form-row" style="grid-template-columns:1fr 1fr; margin:10px 0 0 0;">
+            <div>
+              <label style="margin-bottom:4px;">Tüm ürünlere Kâr (%)</label>
+              <input type="number" id="fis-bulk-profit" step="0.01" min="0" placeholder="Örn: 25" oninput="if(document.getElementById('fis-bulk-price-apply')?.checked) applyBulkFisPricing();">
+            </div>
+            <div>
+              <label style="margin-bottom:4px;">Tüm ürünlere KDV (%)</label>
+              <input type="number" id="fis-bulk-vat" step="0.01" min="0" placeholder="Örn: 20" oninput="if(document.getElementById('fis-bulk-price-apply')?.checked) applyBulkFisPricing();">
+            </div>
+          </div>
+          <div id="fis-bulk-price-status" style="font-size:11px; margin-top:8px; color:#475569;"></div>
+        </div>
+
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:400px;" id="fis-table">
              <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
@@ -5702,6 +5728,71 @@ async function addToGoodsReceipt() {
   showToast(item.isNew ? "Sistemde bulunmayan yeni malzeme fişe eklendi." : "Malzeme fişe eklendi.");
 }
 
+function applyBulkFisPricing() {
+  const checkbox = document.getElementById('fis-bulk-price-apply');
+  const profitEl = document.getElementById('fis-bulk-profit');
+  const vatEl = document.getElementById('fis-bulk-vat');
+  const statusEl = document.getElementById('fis-bulk-price-status');
+
+  if (!checkbox || !profitEl || !vatEl) return;
+
+  if (!checkbox.checked) {
+    if (statusEl) statusEl.textContent = '';
+    return;
+  }
+
+  if (!goodsReceiptCart || goodsReceiptCart.length === 0) {
+    checkbox.checked = false;
+    if (statusEl) statusEl.textContent = 'Önce AI ile fişi okutun veya fişe ürün ekleyin.';
+    return;
+  }
+
+  const profitRaw = profitEl.value.trim();
+  const vatRaw = vatEl.value.trim();
+  if (profitRaw === '' || vatRaw === '') {
+    if (statusEl) statusEl.textContent = 'Lütfen Kâr ve KDV yüzdelerini girin.';
+    return;
+  }
+
+  const profit = Math.max(0, parseFloat(profitRaw) || 0);
+  const vat = Math.max(0, parseFloat(vatRaw) || 0);
+  let calculated = 0;
+  let waitingCost = 0;
+
+  goodsReceiptCart.forEach(item => {
+    const product = item.code ? productsData[item.code] : null;
+    const cost = Number(item.cost) > 0 ? Number(item.cost) : Number(product?.costPrice || 0);
+
+    item.vat = vat;
+    item.targetProfit = profit;
+    item.bulkPriceApplied = true;
+
+    if (cost > 0) {
+      // Mevcut sistemdeki fiyat formülü aynen korunuyor:
+      // geliş × (1 + KDV) × (1 + kâr)
+      const salePrice = Number((cost * (1 + vat / 100) * (1 + profit / 100)).toFixed(2));
+      item.price = salePrice;
+      if (!item.isNew && !item.justCreated) {
+        item.newPrice = salePrice;
+        item.updatePrices = true;
+      }
+      if (!(Number(item.cost) > 0) && product?.costPrice) item.cost = Number(product.costPrice);
+      calculated++;
+    } else {
+      if (!item.isNew && !item.justCreated) item.updatePrices = true;
+      waitingCost++;
+    }
+  });
+
+  renderGoodsReceiptCart();
+
+  if (statusEl) {
+    statusEl.style.color = waitingCost ? '#B45309' : '#047857';
+    statusEl.textContent = `✅ ${calculated} ürünün satış fiyatı hesaplandı ve kayda hazırlandı.` +
+      (waitingCost ? ` ${waitingCost} üründe geliş fiyatı olmadığı için satış fiyatı hesaplanamadı.` : '');
+  }
+}
+
 function renderGoodsReceiptCart() {
   const container = document.getElementById('fis-container');
   const tbody = document.getElementById('fis-items');
@@ -5728,7 +5819,7 @@ function renderGoodsReceiptCart() {
         <td style="padding:10px 0; line-height:1.3;">
           ${tickIcon} <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}${overrideLink}<br>
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
-          ${(item.isNew || item.justCreated) && item.price ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price)}${item.vat ? ' (KDV %' + item.vat + ')' : ''}</small>` : ''}
+          ${(item.price || item.newPrice) ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price || item.newPrice)}${item.vat !== undefined ? ' (KDV %' + item.vat + ')' : ''}${item.targetProfit !== undefined && item.targetProfit !== null ? ' · Kâr %' + item.targetProfit : ''}</small>` : ''}
         </td>
         <td>₺${formatMoney(item.cost)}</td>
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
@@ -5916,6 +6007,14 @@ async function completeGoodsReceipt() {
       document.getElementById('fis-wholesaler').value = '';
       document.getElementById('fis-no').value = '';
       document.getElementById('fis-note').value = '';
+      const bulkApplyEl = document.getElementById('fis-bulk-price-apply');
+      const bulkProfitEl = document.getElementById('fis-bulk-profit');
+      const bulkVatEl = document.getElementById('fis-bulk-vat');
+      const bulkStatusEl = document.getElementById('fis-bulk-price-status');
+      if (bulkApplyEl) bulkApplyEl.checked = false;
+      if (bulkProfitEl) bulkProfitEl.value = '';
+      if (bulkVatEl) bulkVatEl.value = '';
+      if (bulkStatusEl) bulkStatusEl.textContent = '';
       showToast("Malzeme fişi başarıyla işlendi, stok güncellendi!");
     } else {
       alert("Fiş kaydedilemedi: " + err.message);
