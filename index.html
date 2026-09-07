@@ -1719,6 +1719,64 @@ body.luxury-theme[data-role="guest"] #nav-acikhesap-btn{display:none!important;}
 }
 </style>
 
+
+<style id="login-visibility-hotfix">
+/* =========================================================
+   GİRİŞ PANELİ HOTFIX — erişim kontrolleri hiçbir eski CSS tarafından gizlenemez
+   ========================================================= */
+#access-control-panel{
+  position:fixed!important;
+  top:14px!important;right:18px!important;
+  z-index:3000000!important;
+  display:flex!important;align-items:center!important;gap:10px!important;
+  min-height:68px!important;padding:9px 10px!important;
+  background:#10244A!important;border:3px solid #BFEAF4!important;
+  border-radius:18px!important;box-shadow:0 12px 30px rgba(0,0,0,.38)!important;
+  pointer-events:auto!important;
+}
+#access-control-panel *{box-sizing:border-box!important;}
+#access-control-panel .access-control-title{
+  color:#E5E7EB!important;font:900 11px/1 Inter,sans-serif!important;
+  letter-spacing:.12em!important;padding:0 5px!important;white-space:nowrap!important;
+}
+#access-control-panel .access-control-status{
+  color:#10244A!important;background:#86D7B2!important;border-radius:10px!important;
+  min-height:44px!important;display:flex!important;align-items:center!important;
+  padding:0 12px!important;font:900 13px/1 Inter,sans-serif!important;white-space:nowrap!important;
+}
+#access-control-panel button{
+  appearance:none!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;
+  min-width:150px!important;min-height:54px!important;padding:13px 19px!important;
+  border-radius:13px!important;border:3px solid #BFEAF4!important;
+  background:#F1F4F7!important;color:#10244A!important;
+  font:900 16px/1 Inter,sans-serif!important;cursor:pointer!important;
+  pointer-events:auto!important;opacity:1!important;visibility:visible!important;
+}
+#access-control-panel #access-login-btn{background:#BFEAF4!important;}
+#access-control-panel button:hover{background:#FFFFFF!important;transform:translateY(-1px)!important;}
+#access-control-panel button:focus-visible{outline:4px solid #FF6B6B!important;outline-offset:3px!important;}
+/* Mevcut küçük sağ üst butonlarını gizle; tek bir erişim paneli kullan */
+body.luxury-theme .auth-status{display:none!important;}
+body.luxury-theme header{padding-top:118px!important;}
+/* Login modal her zaman açılabilir ve görünür */
+body.luxury-theme #login-modal.login-modal{
+  z-index:4000000!important;pointer-events:auto!important;
+}
+body.luxury-theme #login-modal[style*="display: flex"],
+body.luxury-theme #login-modal[style*="display:flex"]{display:flex!important;}
+@media(max-width:900px){
+  #access-control-panel{left:12px!important;right:12px!important;top:10px!important;
+    justify-content:stretch!important;flex-wrap:wrap!important;min-height:0!important;}
+  #access-control-panel .access-control-title{display:none!important;}
+  #access-control-panel .access-control-status{flex:0 0 auto!important;}
+  #access-control-panel button{flex:1 1 180px!important;min-width:0!important;}
+}
+@media(max-width:720px){
+  #access-control-panel{gap:7px!important;padding:7px!important;border-radius:15px!important;}
+  #access-control-panel .access-control-status{min-height:50px!important;font-size:12px!important;padding:0 10px!important;}
+  #access-control-panel button{min-height:50px!important;font-size:14px!important;padding:11px 12px!important;}
+}
+</style>
 </head>
 <body class="luxury-theme">
 <div class="luxury-crystal-orbit" aria-hidden="true"></div>
@@ -1763,7 +1821,15 @@ body.luxury-theme[data-role="guest"] #nav-acikhesap-btn{display:none!important;}
     </div>
   </header>
 
-  <!-- GLOBAL ARAMA / COMMAND PALETTE -->
+  <!-- KULLANICI GİRİŞ KONTROLÜ: her ekran boyutunda görünür -->
+<div id="access-control-panel" aria-label="Kullanıcı erişim paneli">
+  <div class="access-control-title">SİSTEM ERİŞİMİ</div>
+  <div class="access-control-status" id="access-control-status">Ziyaretçi Modu</div>
+  <button type="button" id="access-search-btn" onclick="openCommandPalette()" aria-label="Ürün ve işlem ara">🔎 ARAMA</button>
+  <button type="button" id="access-login-btn" onclick="toggleAuth()" aria-label="Yönetici veya çalışan girişi">🔐 GİRİŞ YAP</button>
+</div>
+
+<!-- GLOBAL ARAMA / COMMAND PALETTE -->
   <div class="modal-overlay" id="command-palette-overlay" style="display:none; align-items:flex-start; z-index:2000;" onclick="if(event.target===this) closeCommandPalette()">
     <div class="cmdk-box" onclick="event.stopPropagation()">
       <div class="cmdk-input-row">
@@ -4055,6 +4121,13 @@ document.addEventListener('keydown', (e) => {
 
 function updateAuthUI() {
   document.body.dataset.role = currentRole;
+  const accessStatus = document.getElementById('access-control-status');
+  const accessLogin = document.getElementById('access-login-btn');
+  if (accessStatus) {
+    accessStatus.textContent = currentRole === 'admin' ? 'Yönetici Modu' : (currentRole === 'staff' ? 'Çalışan Modu' : 'Ziyaretçi Modu');
+    accessStatus.style.background = currentRole === 'admin' ? '#86D7B2' : (currentRole === 'staff' ? '#BFEAF4' : '#E5E7EB');
+  }
+  if (accessLogin) accessLogin.textContent = currentRole === 'guest' ? '🔐 GİRİŞ YAP' : '🚪 ÇIKIŞ YAP';
   const statusBadge = document.getElementById('admin-status');
   const authBtn = document.getElementById('auth-btn');
   const addCard = document.getElementById('add-form-card');
@@ -10259,3 +10332,110 @@ async function sendPanelAIMessage(panelKey) {
 </script>
 </body>
 </html>
+
+<!-- =========================================================
+     SON ERİŞİLEBİLİRLİK / GİRİŞ PANELİ DÜZELTMESİ
+     ========================================================= -->
+<style id="final-access-panel-v7">
+  body.luxury-theme{padding-top:96px!important;}
+  body.luxury-theme #access-control-panel{
+    position:fixed!important;
+    inset:0 0 auto 0!important;
+    width:100vw!important;
+    min-height:86px!important;
+    height:auto!important;
+    margin:0!important;
+    padding:14px 24px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    gap:14px!important;
+    background:#10244A!important;
+    border:0!important;
+    border-bottom:4px solid #BFEAF4!important;
+    border-radius:0!important;
+    box-shadow:0 8px 24px rgba(0,0,0,.28)!important;
+    z-index:2147483000!important;
+    pointer-events:auto!important;
+  }
+  body.luxury-theme #access-control-panel .access-control-title{
+    display:flex!important;
+    margin-right:auto!important;
+    color:#E8EEF5!important;
+    font-size:15px!important;
+    letter-spacing:.14em!important;
+  }
+  body.luxury-theme #access-control-panel .access-control-status{
+    min-width:170px!important;
+    min-height:56px!important;
+    padding:0 18px!important;
+    justify-content:center!important;
+    font-size:16px!important;
+    border-radius:12px!important;
+    font-weight:900!important;
+  }
+  body.luxury-theme #access-control-panel button{
+    min-width:180px!important;
+    min-height:58px!important;
+    padding:14px 24px!important;
+    font-size:17px!important;
+    border-radius:12px!important;
+    font-weight:900!important;
+    letter-spacing:.03em!important;
+  }
+  body.luxury-theme #access-control-panel #access-login-btn{
+    background:#BFEAF4!important;
+    color:#10244A!important;
+    border:3px solid #FFFFFF!important;
+    box-shadow:0 5px 0 #7EC6D7!important;
+  }
+  body.luxury-theme #access-control-panel #access-search-btn{
+    background:#E5E7EB!important;
+    color:#10244A!important;
+    border:3px solid #BFEAF4!important;
+  }
+  body.luxury-theme #access-control-panel button:active{
+    transform:translateY(3px)!important;
+    box-shadow:0 2px 0 rgba(0,0,0,.15)!important;
+  }
+  body.luxury-theme .app{max-width:none!important;width:100%!important;min-height:calc(100vh - 96px)!important;margin:0!important;border-radius:0!important;}
+  body.luxury-theme #splash-screen{z-index:1000!important;}
+  body.luxury-theme #login-modal{z-index:2147482000!important;}
+  @media(max-width:900px){
+    body.luxury-theme{padding-top:136px!important;}
+    body.luxury-theme #access-control-panel{justify-content:stretch!important;flex-wrap:wrap!important;padding:10px 14px!important;}
+    body.luxury-theme #access-control-panel .access-control-title{width:100%!important;justify-content:center!important;margin:0!important;font-size:13px!important;}
+    body.luxury-theme #access-control-panel .access-control-status{flex:1 1 160px!important;min-width:0!important;}
+    body.luxury-theme #access-control-panel button{flex:1 1 200px!important;min-width:0!important;}
+    body.luxury-theme .app{min-height:calc(100vh - 136px)!important;}
+  }
+  @media(max-width:560px){
+    body.luxury-theme{padding-top:194px!important;}
+    body.luxury-theme #access-control-panel{min-height:184px!important;}
+    body.luxury-theme #access-control-panel .access-control-status,
+    body.luxury-theme #access-control-panel button{min-height:52px!important;font-size:15px!important;}
+    body.luxury-theme .app{min-height:calc(100vh - 194px)!important;}
+  }
+</style>
+<script>
+(function(){
+  function forceAccessPanel(){
+    const panel=document.getElementById('access-control-panel');
+    if(!panel) return;
+    panel.style.display='flex';
+    panel.style.visibility='visible';
+    panel.style.opacity='1';
+    panel.style.pointerEvents='auto';
+    panel.style.position='fixed';
+    panel.style.top='0';
+    panel.style.left='0';
+    panel.style.right='0';
+    panel.style.zIndex='2147483000';
+  }
+  forceAccessPanel();
+  window.addEventListener('load',forceAccessPanel);
+  setTimeout(forceAccessPanel,50);
+  setTimeout(forceAccessPanel,500);
+  setTimeout(forceAccessPanel,1500);
+})();
+</script>
