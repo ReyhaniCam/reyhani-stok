@@ -1419,6 +1419,192 @@ body.luxury-theme .btn-warning{background:#DCE6F2!important;color:#172554!import
 @media(max-width:980px){body.luxury-theme .nav-tabs{padding-right:280px!important;}body.luxury-theme .tab-btn{min-width:125px!important;}}
 @media(max-width:720px){body.luxury-theme .nav-tabs{top:0!important;height:100svh!important;padding:96px 20px 36px!important;background:rgba(23,37,84,.99)!important;overflow-y:auto!important;}body.luxury-theme .tab-btn{min-height:60px!important;min-width:0!important;font-size:18px!important;justify-content:flex-start!important;}body.luxury-theme .auth-status{top:14px!important;left:18px!important;right:78px!important;}body.luxury-theme .cmdk-trigger-btn,body.luxury-theme #auth-btn{min-width:132px!important;}body.luxury-theme .brand h1{font-size:clamp(3.6rem,17vw,6rem)!important;}body.luxury-theme header{padding:110px 20px 42px!important;}}
 </style>
+
+<style id="accessible-final-v6">
+/* =========================================================
+   V6: SABİT ÜST KONTROL PANELİ + 60+ KULLANICI ERİŞİLEBİLİRLİĞİ
+   ========================================================= */
+:root{
+  --access-navy:#10244A;
+  --access-navy-2:#172F5E;
+  --access-ice:#BFEAF4;
+  --access-light:#F1F4F7;
+  --access-red:#C62828;
+  --access-red-bright:#FF6B6B;
+  --access-green:#2E9E68;
+  --access-text:#FFFFFF;
+}
+html{scroll-behavior:smooth!important;}
+body.luxury-theme{
+  background:linear-gradient(135deg,#0E1F3F 0%,#132A52 48%,#10244A 100%)!important;
+  color:#fff!important;
+  font-size:18px!important;
+  line-height:1.55!important;
+}
+body.luxury-theme .app{
+  width:100vw!important;max-width:none!important;margin:0!important;
+  min-height:100vh!important;padding:0 0 36px!important;
+}
+/* ÜST KONTROL PANELİ: sürekli ekranda */
+body.luxury-theme header{
+  min-height:100svh!important;height:100svh!important;
+  padding:112px clamp(22px,6vw,84px) 64px!important;
+}
+body.luxury-theme .nav-tabs{
+  position:fixed!important;
+  top:0!important;left:0!important;right:0!important;
+  height:88px!important;
+  width:100vw!important;max-width:none!important;
+  z-index:120000!important;
+  display:flex!important;align-items:center!important;
+  gap:10px!important;
+  padding:10px 330px 10px 22px!important;
+  margin:0!important;
+  overflow-x:auto!important;overflow-y:hidden!important;
+  background:rgba(16,36,74,.98)!important;
+  border:0!important;
+  border-bottom:2px solid rgba(191,234,244,.42)!important;
+  border-radius:0!important;
+  box-shadow:0 10px 30px rgba(0,0,0,.32)!important;
+  backdrop-filter:blur(18px)!important;
+  scrollbar-width:thin!important;
+}
+body.luxury-theme .tab-btn{
+  flex:0 0 auto!important;
+  min-width:150px!important;
+  min-height:62px!important;
+  padding:14px 22px!important;
+  border:2px solid rgba(191,234,244,.22)!important;
+  border-radius:14px!important;
+  background:rgba(255,255,255,.06)!important;
+  color:#fff!important;
+  font-family:Inter,sans-serif!important;
+  font-size:16px!important;
+  font-weight:850!important;
+  line-height:1.2!important;
+  letter-spacing:.01em!important;
+  text-transform:none!important;
+  cursor:pointer!important;
+  opacity:1!important;
+}
+body.luxury-theme .tab-btn:hover{
+  background:#26467E!important;color:#fff!important;
+  border-color:var(--access-ice)!important;
+  transform:none!important;
+}
+body.luxury-theme .tab-btn:focus-visible{
+  outline:4px solid #fff!important;outline-offset:2px!important;
+}
+body.luxury-theme .tab-btn.active{
+  background:var(--access-ice)!important;
+  color:var(--access-navy)!important;
+  border-color:#fff!important;
+  box-shadow:0 4px 16px rgba(0,0,0,.24)!important;
+}
+/* Sağ üst kontroller: panelin üstünde, büyük ve okunaklı */
+body.luxury-theme .auth-status{
+  position:fixed!important;right:18px!important;top:15px!important;
+  z-index:130000!important;
+  display:flex!important;align-items:center!important;gap:10px!important;
+}
+body.luxury-theme .cmdk-trigger-btn,
+body.luxury-theme #auth-btn{
+  min-width:150px!important;min-height:58px!important;height:58px!important;
+  padding:14px 20px!important;border-radius:14px!important;
+  font-size:17px!important;font-weight:900!important;
+  background:#F1F4F7!important;color:#10244A!important;
+  border:2px solid #fff!important;
+  box-shadow:0 8px 22px rgba(0,0,0,.24)!important;
+  cursor:pointer!important;pointer-events:auto!important;
+}
+body.luxury-theme #auth-btn{background:#BFEAF4!important;color:#10244A!important;}
+body.luxury-theme .cmdk-trigger-btn:hover,
+body.luxury-theme #auth-btn:hover{filter:brightness(1.03)!important;transform:translateY(-1px)!important;}
+body.luxury-theme .admin-badge{
+  min-height:48px!important;padding:10px 14px!important;
+  font-size:14px!important;font-weight:900!important;
+  color:#10244A!important;background:#A9E0C4!important;
+  border:2px solid #D5F4E3!important;border-radius:12px!important;
+}
+/* İçeriği sabit üst panelin altında rahat okut */
+body.luxury-theme main{padding-top:22px!important;}
+body.luxury-theme .dashboard-container,
+body.luxury-theme .form-card,
+body.luxury-theme .report-box,
+body.luxury-theme .recent-section,
+body.luxury-theme .panel-ai-box{
+  font-size:17px!important;
+}
+body.luxury-theme .dashboard-header h1{font-size:clamp(2.4rem,6vw,4.8rem)!important;}
+body.luxury-theme .dash-subtitle{font-size:18px!important;line-height:1.65!important;}
+/* Büyük, rahat okunur form elemanları */
+body.luxury-theme input,
+body.luxury-theme select,
+body.luxury-theme textarea{
+  min-height:54px!important;
+  padding:14px 16px!important;
+  font-size:17px!important;
+  border-width:2px!important;
+  border-radius:12px!important;
+}
+body.luxury-theme label{
+  font-size:14px!important;font-weight:900!important;
+  color:#E7F7FB!important;
+}
+body.luxury-theme .btn{
+  min-height:54px!important;
+  padding:14px 20px!important;
+  font-size:16px!important;
+  border-radius:13px!important;
+  font-weight:900!important;
+}
+body.luxury-theme .btn-sm{min-height:48px!important;font-size:14px!important;padding:12px 16px!important;}
+/* ÜRÜN İSİMLERİ VE AÇIKLAMALARI: belirgin kırmızı */
+body.luxury-theme #tab-stok .tag-title,
+body.luxury-theme #tab-stok .tag-title strong,
+body.luxury-theme #tab-stok .tag .tag-title{color:var(--access-red)!important;font-weight:950!important;font-size:18px!important;}
+body.luxury-theme #tab-stok .tag-code{color:#8E1B1B!important;font-size:13px!important;font-weight:800!important;}
+body.luxury-theme #tab-stok .price-info-box,
+body.luxury-theme #tab-stok .price-info-box *{color:#7F1D1D!important;}
+body.luxury-theme .recent-item .name,
+body.luxury-theme .recent-section .name{color:var(--access-red-bright)!important;font-weight:900!important;}
+body.luxury-theme .slot-item{color:#8E1B1B!important;font-weight:800!important;}
+body.luxury-theme .product-photo + *{color:var(--access-red)!important;}
+/* Fiş ürün isimleri de kırmızı ve büyük */
+body.luxury-theme #fis-items td:first-child strong{color:var(--access-red)!important;font-size:18px!important;font-weight:950!important;}
+body.luxury-theme #fis-items td:first-child small{color:#7F1D1D!important;font-size:13px!important;font-weight:800!important;}
+/* Durum göstergeleri renkli ve net */
+body.luxury-theme .status-ok{color:#0B7A4A!important;font-weight:900!important;}
+body.luxury-theme .status-error{color:#B91C1C!important;font-weight:900!important;}
+/* Klavye/odak */
+body.luxury-theme button:focus-visible,
+body.luxury-theme input:focus-visible,
+body.luxury-theme select:focus-visible,
+body.luxury-theme textarea:focus-visible{
+  outline:4px solid #fff!important;outline-offset:3px!important;
+  box-shadow:0 0 0 3px var(--access-ice)!important;
+}
+/* Mobil */
+@media(max-width:980px){
+  body.luxury-theme .nav-tabs{padding-right:330px!important;}
+}
+@media(max-width:720px){
+  body.luxury-theme .auth-status{top:12px!important;left:14px!important;right:70px!important;gap:8px!important;}
+  body.luxury-theme .cmdk-trigger-btn,body.luxury-theme #auth-btn{
+    min-width:0!important;flex:1!important;min-height:52px!important;height:52px!important;font-size:15px!important;padding:12px 14px!important;
+  }
+  body.luxury-theme .nav-tabs{
+    top:0!important;height:100svh!important;padding:92px 20px 34px!important;
+    display:none!important;flex-direction:column!important;align-items:stretch!important;justify-content:center!important;
+    overflow-y:auto!important;background:rgba(16,36,74,.995)!important;
+  }
+  body.luxury-theme.menu-open .nav-tabs{display:flex!important;}
+  body.luxury-theme .tab-btn{width:100%!important;min-width:0!important;min-height:64px!important;font-size:18px!important;justify-content:flex-start!important;}
+  body.luxury-theme header{padding:108px 20px 36px!important;}
+  body.luxury-theme main{padding-top:12px!important;}
+  body.luxury-theme .dashboard-container{padding:24px 16px 44px!important;}
+}
+</style>
 </head>
 <body class="luxury-theme">
 <div class="luxury-crystal-orbit" aria-hidden="true"></div>
