@@ -1199,6 +1199,153 @@ body.luxury-theme .luxury-footer {
   body.luxury-theme .luxury-footer { flex-direction:column !important; align-items:flex-start !important; }
 }
 </style>
+
+<style id="accessibility-modern-v4">
+/* =========================================================
+   MODERN ACCESSIBLE V4
+   Tam ekran, okunabilir kontroller, net kontrast, büyük tıklama alanları.
+   Mevcut JS/fonksiyonlara dokunmaz.
+   ========================================================= */
+:root{
+  --ui-navy:#172554;
+  --ui-navy-2:#0F1B3D;
+  --ui-light:#E5E7EB;
+  --ui-ice:#CDEFF7;
+  --ui-red:#F4A7A7;
+  --ui-green:#86D7B2;
+  --ui-text:#F8FAFC;
+  --ui-muted:#CBD5E1;
+}
+html,body{width:100%!important;min-width:100%!important;min-height:100%!important;margin:0!important;padding:0!important;}
+body.luxury-theme{background:var(--ui-navy-2)!important;color:var(--ui-text)!important;font-size:16px!important;}
+body.luxury-theme .app{width:100vw!important;max-width:none!important;min-height:100vh!important;margin:0!important;padding:0 0 28px!important;background:transparent!important;box-shadow:none!important;}
+
+/* ÜST MENÜ: görünür, büyük ve kesinlikle tıklanabilir */
+body.luxury-theme .nav-tabs{
+  position:fixed!important;top:0!important;left:0!important;right:0!important;transform:none!important;
+  z-index:9999!important;width:100%!important;max-width:none!important;height:76px!important;
+  display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:8px!important;
+  overflow-x:auto!important;overflow-y:hidden!important;white-space:nowrap!important;
+  padding:10px 280px 10px 22px!important;margin:0!important;box-sizing:border-box!important;
+  background:rgba(15,27,61,.97)!important;border:none!important;border-bottom:1px solid rgba(205,239,247,.20)!important;
+  border-radius:0!important;backdrop-filter:blur(18px)!important;box-shadow:0 8px 24px rgba(0,0,0,.28)!important;
+  pointer-events:auto!important;
+  scrollbar-width:thin;
+}
+body.luxury-theme .tab-btn{
+  flex:0 0 auto!important;width:auto!important;min-width:116px!important;min-height:52px!important;
+  display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:7px!important;
+  padding:13px 18px!important;margin:0!important;border:1px solid transparent!important;border-radius:12px!important;
+  background:transparent!important;color:var(--ui-text)!important;
+  font-family:'Inter',sans-serif!important;font-size:14px!important;font-weight:700!important;
+  line-height:1.1!important;letter-spacing:.01em!important;text-transform:none!important;
+  cursor:pointer!important;pointer-events:auto!important;opacity:1!important;
+}
+body.luxury-theme .tab-btn:hover{background:rgba(205,239,247,.12)!important;color:#fff!important;border-color:rgba(205,239,247,.25)!important;transform:translateY(-1px)!important;}
+body.luxury-theme .tab-btn.active{background:rgba(205,239,247,.18)!important;color:#fff!important;border-color:rgba(205,239,247,.35)!important;box-shadow:inset 0 -3px 0 var(--ui-ice)!important;}
+body.luxury-theme .tab-btn:focus-visible{outline:3px solid var(--ui-ice)!important;outline-offset:2px!important;}
+
+/* Sağ üst Ara / Giriş Yap butonları */
+body.luxury-theme .auth-status{
+  position:fixed!important;top:14px!important;right:20px!important;z-index:10050!important;
+  display:flex!important;align-items:center!important;gap:10px!important;
+}
+body.luxury-theme .cmdk-trigger-btn,body.luxury-theme #auth-btn{
+  min-height:48px!important;height:48px!important;padding:12px 18px!important;border-radius:12px!important;
+  background:var(--ui-light)!important;color:var(--ui-navy)!important;border:1px solid rgba(255,255,255,.15)!important;
+  font-size:14px!important;font-weight:800!important;letter-spacing:.01em!important;
+  box-shadow:0 5px 14px rgba(0,0,0,.18)!important;cursor:pointer!important;pointer-events:auto!important;
+}
+body.luxury-theme #auth-btn{background:var(--ui-ice)!important;color:var(--ui-navy)!important;}
+body.luxury-theme .admin-badge{font-size:12px!important;padding:9px 12px!important;background:rgba(229,231,235,.10)!important;color:#fff!important;border-color:rgba(229,231,235,.24)!important;}
+
+/* Hero artık menünün altında başlar */
+body.luxury-theme header{min-height:100svh!important;height:100svh!important;padding:90px clamp(22px,6vw,80px) 58px!important;}
+body.luxury-theme .brand h1{color:var(--ui-ice)!important;text-shadow:0 12px 50px rgba(0,0,0,.50)!important;}
+body.luxury-theme .brand span{color:var(--ui-light)!important;opacity:.86!important;}
+body.luxury-theme header::before{color:rgba(229,231,235,.82)!important;}
+
+/* Ana içerik / kartlar */
+body.luxury-theme main{width:100%!important;max-width:none!important;margin:0!important;padding:0!important;}
+body.luxury-theme .dashboard-container{width:100%!important;max-width:1500px!important;margin:0 auto!important;padding:clamp(24px,5vw,64px)!important;background:rgba(23,37,84,.58)!important;border-color:rgba(205,239,247,.18)!important;}
+body.luxury-theme .dashboard-header h1{color:#fff!important;}
+body.luxury-theme .dashboard-header h1 span{color:var(--ui-ice)!important;}
+body.luxury-theme .dash-subtitle{color:var(--ui-light)!important;opacity:.9!important;}
+body.luxury-theme .stat-card,body.luxury-theme .action-card{
+  background:rgba(229,231,235,.09)!important;border:1px solid rgba(229,231,235,.18)!important;
+  box-shadow:0 12px 28px rgba(0,0,0,.24)!important;
+}
+body.luxury-theme .stat-card:hover,body.luxury-theme .action-card:hover{background:rgba(205,239,247,.13)!important;border-color:rgba(205,239,247,.38)!important;transform:translateY(-3px)!important;}
+body.luxury-theme .stat-label{color:#DDE4EE!important;font-size:12px!important;letter-spacing:.08em!important;}
+body.luxury-theme .stat-number,body.luxury-theme .action-label{color:#fff!important;}
+body.luxury-theme .action-label{font-size:15px!important;font-weight:700!important;}
+
+/* Tüm standart butonlar */
+body.luxury-theme .btn{
+  min-height:46px!important;padding:12px 18px!important;border-radius:12px!important;
+  font-family:'Inter',sans-serif!important;font-size:14px!important;font-weight:800!important;
+  letter-spacing:0!important;text-transform:none!important;box-shadow:0 5px 14px rgba(0,0,0,.16)!important;
+  cursor:pointer!important;pointer-events:auto!important;
+}
+body.luxury-theme .btn-sm{min-height:42px!important;padding:10px 14px!important;font-size:13px!important;}
+body.luxury-theme .btn-primary{background:var(--ui-ice)!important;color:var(--ui-navy)!important;border:1px solid #DDF7FC!important;}
+body.luxury-theme .btn-dark{background:var(--ui-light)!important;color:var(--ui-navy)!important;border:1px solid #fff!important;}
+body.luxury-theme .btn-info{background:#B8E5F0!important;color:var(--ui-navy)!important;border:1px solid #D5F3F8!important;}
+body.luxury-theme .btn-success{background:var(--ui-green)!important;color:#083B2C!important;border:1px solid #B4EAD1!important;}
+body.luxury-theme .btn-danger{background:var(--ui-red)!important;color:#5B1616!important;border:1px solid #FAC8C8!important;}
+body.luxury-theme .btn-warning{background:#D6E0EE!important;color:var(--ui-navy)!important;border:1px solid #E8EEF6!important;}
+body.luxury-theme .btn:focus-visible,.body.luxury-theme button:focus-visible{outline:3px solid var(--ui-ice)!important;outline-offset:3px!important;}
+
+/* Form alanları okunabilir olsun */
+body.luxury-theme input,body.luxury-theme select,body.luxury-theme textarea{
+  min-height:48px!important;padding:12px 14px!important;background:#F8FAFC!important;color:#111827!important;
+  border:2px solid #CBD5E1!important;border-radius:12px!important;font-size:16px!important;font-weight:600!important;
+}
+body.luxury-theme input::placeholder,body.luxury-theme textarea::placeholder{color:#64748B!important;opacity:1!important;}
+body.luxury-theme input:focus,body.luxury-theme select:focus,body.luxury-theme textarea:focus{
+  outline:none!important;border-color:#7DD3FC!important;box-shadow:0 0 0 4px rgba(125,211,252,.22)!important;
+}
+body.luxury-theme label{color:#E5E7EB!important;font-size:12px!important;font-weight:800!important;letter-spacing:.04em!important;}
+
+/* Koyu panel içindeki bilgilendirme kutuları */
+body.luxury-theme .form-card,body.luxury-theme .report-box,body.luxury-theme .recent-section{
+  background:rgba(23,37,84,.66)!important;border:1px solid rgba(205,239,247,.18)!important;border-radius:20px!important;
+}
+body.luxury-theme .form-card p,body.luxury-theme .report-box p,body.luxury-theme .recent-section p{color:#DDE4EE!important;}
+
+/* AI alanı */
+body.luxury-theme .panel-ai-box{background:linear-gradient(135deg,#172554,#0F1B3D)!important;border-color:rgba(205,239,247,.24)!important;}
+body.luxury-theme .panel-ai-box-header{min-height:60px!important;}
+body.luxury-theme #ai-chat-fab{width:64px!important;height:64px!important;border-radius:18px!important;background:var(--ui-ice)!important;color:var(--ui-navy)!important;font-size:28px!important;z-index:10020!important;}
+body.luxury-theme #ai-chat-panel{z-index:10010!important;}
+
+/* Ürün kartları: daha modern, net */
+body.luxury-theme #tab-stok .grid>.tag{border:2px solid #B7CBD4!important;background:#F8FAFC!important;color:#0F172A!important;}
+body.luxury-theme #tab-stok .grid>.tag .tag-title,body.luxury-theme #tab-stok .grid>.tag .tag-code{color:#0F172A!important;}
+
+/* Mesaj/uyarı renkleri */
+body.luxury-theme .duplicate-warning-box{background:#FFF1F1!important;border-color:#F4A7A7!important;color:#5B1616!important;}
+body.luxury-theme .cost-calc-box{background:#EEF7FA!important;border-color:#B8E5F0!important;color:#334155!important;}
+
+/* Mobil: menü tam ekran, butonlar da büyük */
+@media (max-width:980px){
+  body.luxury-theme .nav-tabs{padding-right:185px!important;}
+  body.luxury-theme .auth-status .admin-badge{display:none!important;}
+}
+@media (max-width:720px){
+  body.luxury-theme .nav-tabs{display:none!important;height:100svh!important;padding:90px 24px 40px!important;flex-direction:column!important;justify-content:center!important;align-items:stretch!important;overflow-y:auto!important;background:rgba(15,27,61,.985)!important;}
+  body.luxury-theme.menu-open .nav-tabs{display:flex!important;}
+  body.luxury-theme .tab-btn{width:100%!important;min-width:0!important;min-height:56px!important;justify-content:flex-start!important;font-size:17px!important;padding:15px 18px!important;border-radius:14px!important;}
+  body.luxury-theme .auth-status{top:14px!important;right:76px!important;}
+  .lux-menu-toggle{display:flex!important;align-items:center!important;justify-content:center!important;position:fixed!important;right:18px!important;top:14px!important;width:48px!important;height:48px!important;z-index:11000!important;background:var(--ui-light)!important;color:var(--ui-navy)!important;border:0!important;border-radius:12px!important;font-size:20px!important;box-shadow:0 5px 14px rgba(0,0,0,.25)!important;}
+  body.luxury-theme header{padding:92px 20px 38px!important;}
+  body.luxury-theme .brand h1{font-size:clamp(3.5rem,18vw,6.2rem)!important;}
+  body.luxury-theme .dashboard-container{padding:24px 16px 44px!important;}
+  body.luxury-theme .action-grid{display:grid!important;grid-template-columns:1fr 1fr!important;overflow:visible!important;}
+  body.luxury-theme .action-card{min-height:104px!important;}
+}
+</style>
+
 </head>
 <body class="luxury-theme">
 <div class="luxury-crystal-orbit" aria-hidden="true"></div>
