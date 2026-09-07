@@ -1045,6 +1045,160 @@ body.luxury-theme #ai-chat-send{background:var(--lux-gold)!important;color:#0B0D
 @media (prefers-reduced-motion:reduce){body.luxury-theme *,body.luxury-theme *::before,body.luxury-theme *::after{transition:none!important;animation:none!important;}}
 </style>
 
+
+<style id="luxury-clean-v3">
+/* =========================================================
+   LUXURY CLEAN V3 — layout correction / button alignment
+   Mevcut fonksiyonları etkilemez; yalnızca görünümü düzenler.
+   ========================================================= */
+html, body { width:100%; min-width:0; margin:0 !important; padding:0 !important; }
+body.luxury-theme { min-height:100svh; overflow-x:hidden; background:#07090D !important; }
+body.luxury-theme .app { width:100%; max-width:none; min-height:100svh; margin:0; padding:0; background:transparent; box-shadow:none; }
+body.luxury-theme header {
+  width:100%; min-height:100svh; height:100svh; margin:0; padding:0 !important;
+  display:flex !important; flex-direction:column !important; justify-content:flex-end !important; align-items:stretch !important;
+  position:relative !important; top:0 !important; overflow:hidden !important;
+}
+body.luxury-theme .brand { position:relative; z-index:5; margin:0 !important; padding:0 6vw 10vh !important; max-width:1150px; }
+body.luxury-theme .brand h1 { font-size:clamp(4.2rem,11vw,9rem) !important; line-height:.84 !important; max-width:1100px; }
+body.luxury-theme .brand span { max-width:650px; }
+
+/* üst navigasyon: tek sırada, birbirine girmeyen düğmeler */
+body.luxury-theme .nav-tabs {
+  position:absolute !important; top:24px !important; left:50% !important; transform:translateX(-50%) !important;
+  z-index:40 !important; display:flex !important; flex-wrap:nowrap !important; align-items:center !important; justify-content:center !important;
+  gap:clamp(12px,2vw,28px) !important; width:max-content !important; max-width:calc(100vw - 380px) !important;
+  padding:10px 16px !important; margin:0 !important; background:rgba(7,10,16,.38) !important;
+  border:1px solid rgba(232,240,242,.10) !important; border-radius:999px !important;
+  backdrop-filter:blur(22px) saturate(130%) !important; box-shadow:0 12px 40px rgba(0,0,0,.20) !important;
+}
+body.luxury-theme .tab-btn {
+  position:relative !important; display:block !important; flex:0 0 auto !important; width:auto !important;
+  min-width:0 !important; margin:0 !important; padding:8px 2px 7px !important; border:0 !important; box-shadow:none !important;
+  background:transparent !important; color:rgba(232,240,242,.62) !important; font-size:10px !important;
+  line-height:1.2 !important; letter-spacing:.10em !important; white-space:nowrap !important;
+}
+body.luxury-theme .tab-btn::after { bottom:-1px !important; height:2px !important; }
+
+/* sağ üst yardımcı aksiyonlar */
+body.luxury-theme .auth-status {
+  position:absolute !important; top:20px !important; right:clamp(18px,4vw,56px) !important; z-index:45 !important;
+  display:flex !important; align-items:center !important; gap:8px !important;
+}
+body.luxury-theme .auth-status .admin-badge { white-space:nowrap !important; }
+body.luxury-theme .cmdk-trigger-btn, body.luxury-theme #auth-btn { min-height:42px !important; height:42px !important; white-space:nowrap !important; }
+
+/* içerik sayfaları: gerçek genişlik + düzgün merkezleme */
+body.luxury-theme main { width:100% !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+body.luxury-theme .tab-content { width:100% !important; min-height:100svh !important; }
+body.luxury-theme .dashboard-container,
+body.luxury-theme #tab-stok,
+body.luxury-theme #tab-ekle,
+body.luxury-theme #tab-okut,
+body.luxury-theme #tab-gorevler,
+body.luxury-theme #tab-toptanci,
+body.luxury-theme #tab-fis,
+body.luxury-theme #tab-siparis,
+body.luxury-theme #tab-yerlesim,
+body.luxury-theme #tab-raporlar,
+body.luxury-theme #tab-borc,
+body.luxury-theme #tab-acikhesap {
+  width:100% !important; max-width:1500px !important; margin:0 auto !important; box-sizing:border-box !important;
+}
+body.luxury-theme .form-card { width:100% !important; margin-left:auto !important; margin-right:auto !important; }
+body.luxury-theme .form-row { width:100% !important; align-items:end !important; }
+body.luxury-theme table { width:100%; }
+body.luxury-theme .search-wrap { align-items:center !important; }
+
+/* Ana sayfa kartları */
+body.luxury-theme .stats-grid { grid-template-columns:repeat(4,minmax(0,1fr)) !important; gap:16px !important; }
+body.luxury-theme .action-grid {
+  display:grid !important; grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  gap:14px !important; width:100% !important; overflow:visible !important;
+}
+body.luxury-theme .action-card {
+  width:100% !important; min-height:120px !important; min-width:0 !important; flex:none !important;
+  padding:22px 16px !important; box-sizing:border-box !important;
+}
+
+/* bütün butonların aynı hizada durması */
+body.luxury-theme .btn {
+  width:auto !important; min-width:0 !important; min-height:42px !important; height:auto !important;
+  display:inline-flex !important; align-items:center !important; justify-content:center !important;
+  gap:7px !important; text-align:center !important; white-space:nowrap !important;
+  vertical-align:middle !important;
+}
+body.luxury-theme .btn-sm { min-height:36px !important; padding:9px 13px !important; }
+body.luxury-theme .action-grid .btn,
+body.luxury-theme .form-card > .btn,
+body.luxury-theme .search-wrap > .btn { align-self:center !important; }
+body.luxury-theme .tag-header,
+body.luxury-theme .action-grid,
+body.luxury-theme .search-wrap { row-gap:10px !important; }
+body.luxury-theme .tag [style*="display:flex"],
+body.luxury-theme .form-card [style*="display:flex"],
+body.luxury-theme td[style*="display:flex"] {
+  flex-wrap:wrap !important; align-items:center !important;
+}
+
+/* tablo/işlem butonları satır içinde taşmasın */
+body.luxury-theme td:last-child .btn,
+body.luxury-theme td:last-child .sm-btn { margin:2px !important; }
+body.luxury-theme .qty-control { gap:10px !important; }
+
+/* AI sohbet kutusundaki düzensiz iç içe satırı düzelt */
+body.luxury-theme #ai-chat-inputrow {
+  display:flex !important; align-items:center !important; gap:7px !important; padding:10px !important;
+  min-height:60px !important; box-sizing:border-box !important;
+}
+body.luxury-theme #ai-chat-input { min-height:40px !important; height:40px !important; margin:0 !important; }
+body.luxury-theme #ai-chat-upload,
+body.luxury-theme #ai-chat-send {
+  width:40px !important; height:40px !important; min-width:40px !important; min-height:40px !important;
+  display:flex !important; align-items:center !important; justify-content:center !important;
+  border:1px solid rgba(232,240,242,.12) !important; border-radius:12px !important; flex:0 0 40px !important;
+}
+body.luxury-theme #ai-chat-upload { background:rgba(232,240,242,.06) !important; color:var(--lux-ink) !important; }
+body.luxury-theme #ai-chat-send { background:var(--lux-gold) !important; color:#111318 !important; }
+
+/* footer normal akışta kalsın */
+body.luxury-theme .luxury-footer {
+  width:100% !important; box-sizing:border-box !important; margin:0 !important;
+  display:flex !important; align-items:center !important; justify-content:space-between !important; gap:32px !important;
+}
+
+/* masaüstü / küçük laptop */
+@media (max-width:1180px){
+  body.luxury-theme .nav-tabs { max-width:calc(100vw - 330px) !important; gap:16px !important; }
+  body.luxury-theme .tab-btn { font-size:9px !important; letter-spacing:.07em !important; }
+  body.luxury-theme .stats-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  body.luxury-theme .action-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+}
+
+/* mobil: hamburger + tam ekran menü */
+@media (max-width:760px){
+  body.luxury-theme header { min-height:100svh !important; height:100svh !important; }
+  body.luxury-theme .auth-status { top:18px !important; left:18px !important; right:auto !important; }
+  body.luxury-theme .auth-status .admin-badge { display:none !important; }
+  body.luxury-theme .brand { padding:0 20px 90px !important; }
+  body.luxury-theme .brand h1 { font-size:clamp(4rem,19vw,6.7rem) !important; }
+  body.luxury-theme .nav-tabs {
+    position:fixed !important; inset:0 !important; width:100vw !important; max-width:none !important; height:100svh !important;
+    padding:90px 28px 60px !important; border:0 !important; border-radius:0 !important; transform:none !important; left:0 !important; top:0 !important;
+    display:none !important; flex-direction:column !important; gap:10px !important; justify-content:center !important;
+    background:rgba(5,8,13,.97) !important;
+  }
+  body.luxury-theme.menu-open .nav-tabs { display:flex !important; }
+  body.luxury-theme .tab-btn { font-family:'Playfair Display','Cormorant Garamond',Georgia,serif !important; font-size:27px !important; letter-spacing:0 !important; text-transform:none !important; padding:10px 0 !important; }
+  body.luxury-theme .stats-grid { grid-template-columns:1fr !important; }
+  body.luxury-theme .action-grid { grid-template-columns:1fr !important; overflow:visible !important; }
+  body.luxury-theme .action-card { min-height:96px !important; }
+  body.luxury-theme .form-row { grid-template-columns:1fr !important; }
+  body.luxury-theme .search-wrap { flex-direction:column !important; align-items:stretch !important; }
+  body.luxury-theme .search-wrap input, body.luxury-theme .search-wrap select, body.luxury-theme .search-wrap .btn { width:100% !important; }
+  body.luxury-theme .luxury-footer { flex-direction:column !important; align-items:flex-start !important; }
+}
+</style>
 </head>
 <body class="luxury-theme">
 <div class="luxury-crystal-orbit" aria-hidden="true"></div>
@@ -2463,11 +2617,11 @@ body.luxury-theme #ai-chat-send{background:var(--lux-gold)!important;color:#0B0D
   </div>
   <div id="ai-chat-messages"></div>
   <div id="ai-chat-inputrow">
-    <div id="ai-chat-inputrow" style="display:flex; gap:6px; align-items:center;">
     <textarea id="ai-chat-input" rows="1" placeholder="Örn: 25lik dirsek stoğu ne kadar? veya fotoğraf yükle" onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault(); sendAIChatMessage();}" style="flex:1;"></textarea>
-    <button id="ai-chat-upload" onclick="document.getElementById('ai-chat-file-input').click()" style="background:none; border:none; font-size:22px; cursor:pointer; padding:4px 8px;" title="Fotoğraf yükle">📷</button>
-    <button id="ai-chat-send" onclick="sendAIChatMessage()" style="background:var(--info); color:#fff; border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:16px; flex-shrink:0;">➤</button>
+    <button id="ai-chat-upload" type="button" onclick="document.getElementById('ai-chat-file-input').click()" title="Fotoğraf yükle">📷</button>
+    <button id="ai-chat-send" type="button" onclick="sendAIChatMessage()" title="Gönder">➤</button>
     <input type="file" id="ai-chat-file-input" accept="image/*" style="display:none;" onchange="handleAIChatFileUpload(event)">
+</div>
 </div>
 
 <footer class="luxury-footer" aria-label="İletişim ve sosyal medya">
