@@ -1186,7 +1186,10 @@
             <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünü fişe eklerken <b>hemen stok listesine düşür</b> <span style="color:var(--steel); font-weight:normal;">— böylece fişi yarıda bırakıp silseniz bile ürün tanımı (isim, fiyat, barkod vb.) kaybolmaz, sadece o fişten gelecek stok miktarı işlenmemiş olur.</span></label>
           </div>
         </div>
-        <button class="btn btn-primary" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" id="fis-add-btn" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
+          <button class="btn btn-dark" id="fis-cancel-edit-btn" onclick="cancelFisEdit()" style="display:none; width:auto; flex-shrink:0;">✕ İptal</button>
+        </div>
       </div>
 
       <div id="fis-container" class="form-card" style="display:none; padding:12px;">
