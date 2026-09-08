@@ -1186,10 +1186,11 @@
             <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünü fişe eklerken <b>hemen stok listesine düşür</b> <span style="color:var(--steel); font-weight:normal;">— böylece fişi yarıda bırakıp silseniz bile ürün tanımı (isim, fiyat, barkod vb.) kaybolmaz, sadece o fişten gelecek stok miktarı işlenmemiş olur.</span></label>
           </div>
         </div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-primary" id="fis-add-btn" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
-          <button class="btn btn-dark" id="fis-cancel-edit-btn" onclick="cancelFisEdit()" style="display:none; width:auto; flex-shrink:0;">✕ İptal</button>
+        <div id="fis-edit-banner" style="display:none; background:#FEF3C7; border:1px solid #F59E0B; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px; color:#92400E; font-weight:600; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <span>✏️ Bu kalemi düzenliyorsunuz. Değişiklikleri kaydetmek için aşağıdaki butona basın.</span>
+          <a href="javascript:void(0)" onclick="cancelFisEdit()" style="color:#92400E; text-decoration:underline; flex-shrink:0;">İptal</a>
         </div>
+        <button class="btn btn-primary" id="fis-add-btn" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
       </div>
 
       <div id="fis-container" class="form-card" style="display:none; padding:12px;">
@@ -2097,6 +2098,7 @@ let html5QrcodeScanner = null;
 let currentRole = 'guest';
 let cart = JSON.parse(localStorage.getItem('reyhani_cart') || '[]'); // Sepet kalıcılığı: sayfa/oturum kapansa da sepet kaybolmasın
 let goodsReceiptCart = [];
+let fisEditingIndex = null; // null = yeni ekleme modu; sayı ise o index düzenleniyor demektir
 let globalPastReceipts = {};
 let gridCurrentPage = 1;
 let lastGridSearch = null;
@@ -5774,7 +5776,19 @@ async function addToGoodsReceipt() {
   }
   item.total = item.qty * item.cost;
 
-  goodsReceiptCart.push(item);
+  const wasEditing = fisEditingIndex !== null;
+  if (wasEditing) {
+    // Düzenleme modu: yeni bir kalem eklemek yerine, düzenlenen kalemin yerine koy.
+    goodsReceiptCart[fisEditingIndex] = item;
+    fisEditingIndex = null;
+  } else {
+    goodsReceiptCart.push(item);
+  }
+
+  const banner = document.getElementById('fis-edit-banner');
+  if (banner) banner.style.display = 'none';
+  const addBtn = document.getElementById('fis-add-btn');
+  if (addBtn) addBtn.textContent = '+ Fişe Malzeme Ekle';
 
   document.getElementById('fis-product').value = '';
   document.getElementById('fis-qty').value = '1';
@@ -5797,7 +5811,7 @@ async function addToGoodsReceipt() {
   document.getElementById('fis-barcode-pending-code').value = '';
   document.getElementById('fis-new-barcode').value = '';
   renderGoodsReceiptCart();
-  showToast(item.isNew ? "Sistemde bulunmayan yeni malzeme fişe eklendi." : "Malzeme fişe eklendi.");
+  showToast(wasEditing ? "Malzeme kalemi güncellendi." : (item.isNew ? "Sistemde bulunmayan yeni malzeme fişe eklendi." : "Malzeme fişe eklendi."));
 }
 
 function applyBulkFisPricing() {
@@ -5886,10 +5900,15 @@ function renderGoodsReceiptCart() {
       : (item.isNew && item.aiOriginalName)
         ? ` <a href="javascript:void(0)" onclick="editFisItem(${index})" style="font-size:10px; color:var(--info); text-decoration:underline;">aslında kayıtlı mı? elle eşleştir</a>`
         : '';
+    const isBeingEdited = (fisEditingIndex === index);
+    const rowStyle = isBeingEdited
+      ? 'border-bottom:1px dashed var(--steel-line); background:#FEF3C7;'
+      : 'border-bottom:1px dashed var(--steel-line);';
+    const editBtnLabel = isBeingEdited ? '✏️ Düzenleniyor…' : '✏️ Düzenle';
     __fisParts.push(`
-      <tr style="border-bottom:1px dashed var(--steel-line);">
+      <tr style="${rowStyle}">
         <td style="padding:10px 0; line-height:1.3;">
-          ${tickIcon} <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}${overrideLink}<br>
+          ${tickIcon} <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}${isBeingEdited ? ' <span style="color:#B45309; font-size:10px; font-weight:700;">(DÜZENLENİYOR)</span>' : ''}${overrideLink}<br>
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
           ${(item.price || item.newPrice) ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price || item.newPrice)}${item.vat !== undefined ? ' (KDV %' + item.vat + ')' : ''}${item.targetProfit !== undefined && item.targetProfit !== null ? ' · Kâr %' + item.targetProfit : ''}</small>` : ''}
         </td>
@@ -5897,7 +5916,7 @@ function renderGoodsReceiptCart() {
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
         <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
         <td style="display:flex; gap:4px; flex-wrap:wrap;">
-          <button class="btn btn-info btn-sm" style="width:auto;" onclick="editFisItem(${index})">✏️ Düzenle</button>
+          <button class="btn btn-info btn-sm" style="width:auto;" onclick="editFisItem(${index})">${editBtnLabel}</button>
           <button class="btn btn-dark btn-sm" style="width:auto;" onclick="removeFromGoodsReceipt(${index})">Çıkar</button>
         </td>
       </tr>
@@ -5922,6 +5941,16 @@ function markFisItemAsNew(index) {
 
 function removeFromGoodsReceipt(index) {
   goodsReceiptCart.splice(index, 1);
+
+  // Silinen kalem şu an düzenlenen kalemse, düzenleme modunu iptal et.
+  if (fisEditingIndex === index) {
+    cancelFisEdit();
+    return; // cancelFisEdit() zaten renderGoodsReceiptCart() çağırıyor
+  } else if (fisEditingIndex !== null && index < fisEditingIndex) {
+    // Aradan bir kalem silindiği için düzenlenen kalemin index'i bir azaldı.
+    fisEditingIndex -= 1;
+  }
+
   renderGoodsReceiptCart();
 }
 
@@ -5929,8 +5958,10 @@ function editFisItem(index) {
   const item = goodsReceiptCart[index];
   if (!item) return;
 
-  goodsReceiptCart.splice(index, 1);
-  renderGoodsReceiptCart();
+  // ÖNEMLİ: Kalemi burada listeden SİLMİYORUZ. Sadece "düzenleme modu"na alıyoruz.
+  // Böylece kullanıcı formu doldururken vazgeçip başka bir kalemi düzenlemeye
+  // basarsa veya sayfadan ayrılırsa, ilk kalem fişten kaybolmuyor.
+  fisEditingIndex = index;
 
   document.getElementById('fis-product').value = item.isNew ? item.name : `${item.code} - ${item.name}`;
   document.getElementById('fis-qty').value = item.qty;
@@ -5948,9 +5979,46 @@ function editFisItem(index) {
     setFisPendingBarcode(item.code || '');
   }
 
+  const banner = document.getElementById('fis-edit-banner');
+  if (banner) banner.style.display = 'flex';
+  const addBtn = document.getElementById('fis-add-btn');
+  if (addBtn) addBtn.textContent = '💾 Düzenlemeyi Kaydet';
+
+  renderGoodsReceiptCart(); // düzenlenen satırı vurgulamak için yeniden çiz
+
   document.getElementById('fis-product').scrollIntoView({ behavior: 'smooth', block: 'center' });
   document.getElementById('fis-product').focus();
-  showToast("Malzeme düzenlemeniz için forma geri yüklendi. Değişiklik yapıp tekrar 'Fişe Malzeme Ekle' butonuna basın.");
+  showToast("Malzeme düzenlemeniz için forma yüklendi. Değişiklik yapıp '💾 Düzenlemeyi Kaydet' butonuna basın — kalem siz kaydedene kadar fişte kalmaya devam edecek.");
+}
+
+function cancelFisEdit() {
+  fisEditingIndex = null;
+  const banner = document.getElementById('fis-edit-banner');
+  if (banner) banner.style.display = 'none';
+  const addBtn = document.getElementById('fis-add-btn');
+  if (addBtn) addBtn.textContent = '+ Fişe Malzeme Ekle';
+
+  document.getElementById('fis-product').value = '';
+  document.getElementById('fis-qty').value = '1';
+  document.getElementById('fis-cost').value = '';
+  document.getElementById('fis-price').value = '';
+  document.getElementById('fis-unit').value = 'Adet';
+  document.getElementById('fis-category').value = 'Diğer';
+  document.getElementById('fis-vat').value = '';
+  document.getElementById('fis-profit').value = '';
+  const spEl = document.getElementById('fis-suggested-price');
+  if (spEl) { spEl.value = ''; spEl.dataset.value = ''; }
+  document.getElementById('fis-new-fields').style.display = 'none';
+  document.getElementById('fis-price-fields').style.display = 'none';
+  document.getElementById('fis-existing-update-check-wrap').style.display = 'none';
+  document.getElementById('fis-duplicate-warning').innerHTML = '';
+  document.getElementById('fis-duplicate-warning').style.display = 'none';
+  document.getElementById('fis-barcode-lookup').value = '';
+  document.getElementById('fis-barcode-lookup-status').innerHTML = '';
+  document.getElementById('fis-barcode-pending-code').value = '';
+  document.getElementById('fis-new-barcode').value = '';
+
+  renderGoodsReceiptCart();
 }
 
 async function completeGoodsReceipt() {
@@ -6075,6 +6143,11 @@ async function completeGoodsReceipt() {
       });
 
       goodsReceiptCart = [];
+      fisEditingIndex = null;
+      const editBanner = document.getElementById('fis-edit-banner');
+      if (editBanner) editBanner.style.display = 'none';
+      const fisAddBtn = document.getElementById('fis-add-btn');
+      if (fisAddBtn) fisAddBtn.textContent = '+ Fişe Malzeme Ekle';
       renderGoodsReceiptCart();
       document.getElementById('fis-wholesaler').value = '';
       document.getElementById('fis-no').value = '';
