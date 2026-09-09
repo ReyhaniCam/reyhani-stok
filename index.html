@@ -2930,6 +2930,7 @@ function updateAuthUI() {
     document.getElementById('add-plan-btn').style.display = 'inline-block';
     document.getElementById('brand-settings-card').classList.remove('disabled-action');
     document.getElementById('bulk-import-card').classList.remove('disabled-action');
+    document.getElementById('bulk-ai-stock-card').classList.remove('disabled-action');
     document.getElementById('barcode-fix-card').classList.remove('disabled-action');
     document.getElementById('recent-updates-card').classList.remove('disabled-action');
     document.getElementById('recent-updates-card').style.display = 'block';
@@ -2946,6 +2947,7 @@ function updateAuthUI() {
     document.getElementById('stand-form-card').style.display = 'none';
     document.getElementById('brand-settings-card').classList.add('disabled-action');
     document.getElementById('bulk-import-card').classList.add('disabled-action');
+    document.getElementById('bulk-ai-stock-card').classList.add('disabled-action');
     document.getElementById('barcode-fix-card').classList.add('disabled-action');
     document.getElementById('recent-updates-card').style.display = 'none';
   } else {
@@ -8755,7 +8757,7 @@ let bulkAddCart = [];
 async function processBulkStockPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
-  if (currentRole !== 'admin' && currentRole !== 'staff') {
+  if (currentRole !== 'admin') {
     alert("Bu işlem için yetkiniz yok.");
     event.target.value = '';
     return;
@@ -8898,7 +8900,7 @@ function removeBulkAddItem(index) {
 }
 
 async function completeBulkStockUpload() {
-  if (currentRole !== 'admin' && currentRole !== 'staff') return;
+  if (currentRole !== 'admin') return;
   if (bulkAddCart.length === 0) return;
   if (!confirm(`${bulkAddCart.length} yeni ürünü, girdiğiniz miktarlarla birlikte stoğa eklemek istediğinize emin misiniz?`)) return;
 
