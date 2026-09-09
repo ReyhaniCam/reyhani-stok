@@ -864,6 +864,30 @@
         <button class="btn btn-primary" id="add-btn" onclick="addProduct()">Ürünü Canlı Sisteme Kaydet</button>
       </div>
 
+      <div class="form-card disabled-action" id="bulk-ai-stock-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">🤖 AI ile Sistemde Olmayan Ürünleri Toplu Yükle</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Rafta/depoda fiziksel olarak duran ama sisteme henüz hiç girilmemiş ürünleriniz varsa — elle yazılmış bir liste, ürün etiketleri dizisi ya da raf fotoğrafı çekin. Yapay zeka ürün adlarını okur, <b>sistemde zaten kayıtlı olanları otomatik ayıklayıp atlar</b> (stok kirliliği olmasın diye), sadece gerçekten yeni olan ürünleri aşağıda listeler. Miktar/birim/sınıf/marka/fiyat bilgilerini gözden geçirip düzenledikten sonra tek tıkla hepsini stoğa ekleyebilirsiniz.</p>
+        <input type="file" accept="image/*" capture="environment" id="bulk-ai-stock-file" onchange="processBulkStockPhoto(event)" style="margin-top:10px;">
+        <div id="bulk-ai-stock-status" style="font-size:12px; margin-top:8px; display:none; font-weight:600;"></div>
+        <div id="bulk-ai-stock-container" style="display:none; margin-top:16px;">
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:640px;">
+              <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
+                <th style="padding-bottom:5px;">Ürün Adı</th>
+                <th>Miktar</th>
+                <th>Birim</th>
+                <th>Sınıf</th>
+                <th>Marka</th>
+                <th>Satış Fiyatı (₺)</th>
+                <th>İşlem</th>
+              </tr></thead>
+              <tbody id="bulk-ai-stock-items"></tbody>
+            </table>
+          </div>
+          <button class="btn btn-success" style="margin-top:14px;" onclick="completeBulkStockUpload()">✅ Listelenen Yeni Ürünleri Sisteme Ekle</button>
+        </div>
+      </div>
+
       <div class="form-card disabled-action" id="bulk-import-card">
         <h3 style="margin-top:0;font-family:'Oswald';">📥 Excel'den Toplu Ürün Aktar</h3>
         <p style="font-size:12px; color:var(--steel); margin-top:-8px;">Aktif Pos veya başka bir sistemden aldığınız Excel/CSV dosyasını <b>olduğu gibi</b> yükleyebilirsiniz — sütun isimleri farklı olsa bile, dosyanızın hangi sütununun bizim hangi alanımıza karşılık geldiğini aşağıda kendiniz eşleştirirsiniz. Sistem, sistemde zaten kayıtlı ürünlerle <b>barkod ve isim benzerliğine göre çakışma kontrolü</b> yapar; mükerrer kayıt oluşturmadan önce size sorar.</p>
@@ -1124,7 +1148,7 @@
             <div class="duplicate-warning-box" id="fis-duplicate-warning"></div>
           </div>
           <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any"></div>
-          <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit()"></div>
+          <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit(); updateCostCalc('fis', 'fis-cost');"></div>
         </div>
         <div id="fis-price-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
           <p id="fis-price-note" style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;"></p>
@@ -1157,7 +1181,7 @@
               <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Okut</button>
             </div>
           </div>
-          <div class="form-row" style="grid-template-columns:1fr 1fr;">
+          <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
             <div><label>Ölçü Birimi</label>
               <select id="fis-unit">
                 <option value="Adet">Adet</option>
@@ -1180,7 +1204,11 @@
                 <option value="Diğer" selected>Diğer</option>
               </select>
             </div>
+            <div><label>Marka / Katalog Grubu</label>
+              <select id="fis-brand" onchange="updateCostCalc('fis', 'fis-cost')"></select>
+            </div>
           </div>
+          <div class="cost-calc-box" id="fis-cost-calc"></div>
           <div style="display:flex; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
             <input type="checkbox" id="fis-create-now" checked style="width:auto; margin-top:2px;">
             <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu ürünü fişe eklerken <b>hemen stok listesine düşür</b> <span style="color:var(--steel); font-weight:normal;">— böylece fişi yarıda bırakıp silseniz bile ürün tanımı (isim, fiyat, barkod vb.) kaybolmaz, sadece o fişten gelecek stok miktarı işlenmemiş olur.</span></label>
@@ -2422,6 +2450,8 @@ dbBrandSettings.on('value', (snapshot) => {
   renderBrandSettings();
   const fBrandSel = document.getElementById('f-brand');
   if (fBrandSel) populateBrandSelect('f-brand', fBrandSel.value);
+  const fisBrandSel = document.getElementById('fis-brand');
+  if (fisBrandSel) populateBrandSelect('fis-brand', fisBrandSel.value);
   if (!brandSeedChecked) {
     brandSeedChecked = true;
     maybeSeedDefaultBrands();
@@ -4896,9 +4926,10 @@ function saveBrandSetting(brand) {
   });
 }
 
-function updateCostCalc(prefix) {
+function updateCostCalc(prefix, costFieldId) {
   const brand = document.getElementById(`${prefix}-brand`).value;
-  const costPrice = parseFloat(document.getElementById(`${prefix}-cost-price`).value);
+  const costInput = document.getElementById(costFieldId || `${prefix}-cost-price`);
+  const costPrice = costInput ? parseFloat(costInput.value) : NaN;
   const box = document.getElementById(`${prefix}-cost-calc`);
 
   if (!brand || isNaN(costPrice) || costPrice <= 0) {
@@ -5704,7 +5735,7 @@ async function createNewProductRecord(item, sourceLabel, extraUsedCodes) {
 
   await db.child(code).set({
     name: item.name, qty: 0, price: item.price || 0, unit: item.unit,
-    category: item.category || 'Diğer', brand: null, costPrice: item.cost || 0, vat: item.vat || 0,
+    category: item.category || 'Diğer', brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0,
     targetProfit: item.targetProfit || null, code, lastPriceUpdate: new Date().toISOString(),
     lastUpdatedBy: sourceLabel
   });
@@ -5714,7 +5745,7 @@ async function createNewProductRecord(item, sourceLabel, extraUsedCodes) {
   }
   productsData[code] = {
     code, name: item.name, qty: 0, unit: item.unit, price: item.price || 0,
-    category: item.category || 'Diğer', costPrice: item.cost || 0, vat: item.vat || 0, targetProfit: item.targetProfit || null
+    category: item.category || 'Diğer', brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0, targetProfit: item.targetProfit || null
   };
   return code;
 }
@@ -5754,10 +5785,11 @@ async function addToGoodsReceipt() {
     const salePrice = salePriceRaw === '' ? 0 : (parseFloat(salePriceRaw) || 0);
     const unit = document.getElementById('fis-unit').value || 'Adet';
     const category = document.getElementById('fis-category').value || 'Diğer';
+    const brand = document.getElementById('fis-brand').value || null;
     const vat = parseFloat(document.getElementById('fis-vat').value) || 0;
     const profit = parseFloat(document.getElementById('fis-profit').value) || 0;
     const pendingBarcode = document.getElementById('fis-barcode-pending-code').value.trim();
-    item = { code: pendingBarcode || null, name: inputVal, unit: unit, category: category, price: salePrice, vat: vat, targetProfit: profit || null, qty: qty, cost: cost, isNew: true };
+    item = { code: pendingBarcode || null, name: inputVal, unit: unit, category: category, brand: brand, price: salePrice, vat: vat, targetProfit: profit || null, qty: qty, cost: cost, isNew: true };
 
     const createNow = document.getElementById('fis-create-now').checked;
     if (createNow) {
@@ -5796,6 +5828,9 @@ async function addToGoodsReceipt() {
   document.getElementById('fis-price').value = '';
   document.getElementById('fis-unit').value = 'Adet';
   document.getElementById('fis-category').value = 'Diğer';
+  document.getElementById('fis-brand').value = '';
+  document.getElementById('fis-cost-calc').innerHTML = '';
+  document.getElementById('fis-cost-calc').classList.remove('active');
   document.getElementById('fis-vat').value = '';
   document.getElementById('fis-profit').value = '';
   document.getElementById('fis-suggested-price').value = '';
@@ -5973,9 +6008,11 @@ function editFisItem(index) {
     document.getElementById('fis-price').value = item.price || '';
     document.getElementById('fis-unit').value = item.unit || 'Adet';
     document.getElementById('fis-category').value = item.category || 'Diğer';
+    document.getElementById('fis-brand').value = item.brand || '';
     document.getElementById('fis-vat').value = item.vat || '';
     document.getElementById('fis-profit').value = item.targetProfit || '';
     updateFisProfit();
+    updateCostCalc('fis', 'fis-cost');
     setFisPendingBarcode(item.code || '');
   }
 
@@ -6062,14 +6099,14 @@ async function completeGoodsReceipt() {
 
         await db.child(code).set({
           name: item.name, qty: 0, price: item.price || 0, unit: item.unit,
-          category: item.category || 'Diğer', brand: null, costPrice: item.cost || 0, vat: item.vat || 0,
+          category: item.category || 'Diğer', brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0,
           targetProfit: item.targetProfit || null, code, lastPriceUpdate: new Date().toISOString(),
           lastUpdatedBy: 'Malzeme Fişi (' + wholesaler.name + ')'
         });
         if(!code.startsWith('RYH-')) {
           dbBarcodeCache.child(code).set({ name: item.name, source: 'manuel', savedAt: new Date().toISOString() });
         }
-        productsData[code] = { code, name: item.name, qty: 0, unit: item.unit };
+        productsData[code] = { code, name: item.name, qty: 0, unit: item.unit, brand: item.brand || null };
         finalItems.push(Object.assign({}, item, { code }));
       } else {
         finalItems.push(item);
@@ -8708,6 +8745,192 @@ async function processReceiptWithAI(event) {
 }
 
 // ============================================================
+// ÜRÜN EKLE — AI İLE SİSTEMDE OLMAYAN ÜRÜNLERİ TOPLU YÜKLEME
+// (processReceiptWithAI ile aynı okuma mantığı + aynı eşleştirme motoru,
+// ama burada amaç FİŞ değil; fiziksel stokta olup sisteme hiç girilmemiş
+// ürünleri tespit edip toplu olarak stoğa kaydetmek.)
+// ============================================================
+let bulkAddCart = [];
+
+async function processBulkStockPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (currentRole !== 'admin' && currentRole !== 'staff') {
+    alert("Bu işlem için yetkiniz yok.");
+    event.target.value = '';
+    return;
+  }
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Ürün listesini okuyabilmek için Google API Anahtarınızı girmelisiniz:");
+    if (!apiKey) { event.target.value = ''; return; }
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  const statusMsg = document.getElementById('bulk-ai-stock-status');
+  if (statusMsg) {
+    statusMsg.style.display = 'block';
+    statusMsg.style.color = '#F59E0B';
+    statusMsg.innerHTML = '⏳ Fotoğraf inceleniyor, bekleyin...';
+  }
+
+  try {
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = e => reject(e);
+    });
+    const pureBase64 = base64Data.split(',')[1];
+
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: "Görselde bir hırdavat/nalburiye dükkanının rafında duran ürünler ya da elle/bilgisayarla yazılmış bir ürün listesi var. Görebildiğin her ürünü/satırı tespit et: ürün adı (name), varsa görünen miktarı (qty, yoksa 1 yaz) ve varsa görünen satış fiyatını (price, yoksa 0 yaz). SADECE geçerli bir JSON dizisi döndür, başka hiçbir açıklama ekleme. Örnek: [{\"name\": \"Akfix Silikon 280ml\", \"qty\": 5, \"price\": 65}]" },
+            { inlineData: { mimeType: file.type || "image/jpeg", data: pureBase64 } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zeka görselden veri okuyamadı.");
+    }
+
+    let textResult = data.candidates[0].content.parts[0].text
+      .replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const parsedItems = JSON.parse(textResult);
+    if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw new Error("Ürün bulunamadı.");
+
+    let newCount = 0, skippedCount = 0;
+    parsedItems.forEach(item => {
+      const aiName = (item.name || '').trim();
+      if (!aiName) return;
+
+      // Aynı eşleştirme motorunu kullanıyoruz (fiş okumada da kullanılan) —
+      // sistemde zaten kayıtlı bir ürünle eşleşirse, stok kirliliği olmasın
+      // diye bu listeye HİÇ eklemiyoruz.
+      const { product: matchedProduct, score } = findBestProductMatch(aiName);
+      const isMatch = !!(matchedProduct && score >= FIS_MATCH_THRESHOLD);
+      if (isMatch) { skippedCount++; return; }
+
+      // Bu oturumda az önce eklenmiş aynı isimli bir kalemle de eşleşmeyi kontrol et
+      // (aynı fotoğrafta / farklı fotoğraflarda aynı ürün tekrar okunmuş olabilir)
+      const alreadyInCart = bulkAddCart.some(b => productNameSimilarity(b.name, aiName) >= FIS_MATCH_THRESHOLD);
+      if (alreadyInCart) { skippedCount++; return; }
+
+      bulkAddCart.push({
+        name: aiName,
+        qty: parseFloat(item.qty) || 0,
+        unit: 'Adet',
+        category: 'Diğer',
+        brand: null,
+        price: parseFloat(item.price) || 0,
+        vat: 0,
+        targetProfit: null
+      });
+      newCount++;
+    });
+
+    renderBulkAddCart();
+
+    if (statusMsg) {
+      statusMsg.style.color = '#10B981';
+      statusMsg.innerHTML = `✅ ${newCount} yeni ürün listeye eklendi.` + (skippedCount > 0 ? ` ℹ️ ${skippedCount} ürün zaten kayıtlı/tekrar olduğu için atlandı.` : '') + ` Eklemeden önce miktar/sınıf/marka/fiyat bilgilerini kontrol edin!`;
+    }
+  } catch (err) {
+    if (statusMsg) {
+      statusMsg.style.color = '#EF4444';
+      statusMsg.innerHTML = '❌ Liste okunamadı: ' + err.message;
+    }
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function renderBulkAddCart() {
+  const container = document.getElementById('bulk-ai-stock-container');
+  const tbody = document.getElementById('bulk-ai-stock-items');
+  if (!container || !tbody) return;
+
+  if (bulkAddCart.length === 0) { container.style.display = 'none'; return; }
+  container.style.display = 'block';
+
+  const categoryOptionsList = ['Banyo','Bahçe','Mutfak','Boya','Toz Grubu','Kapı Kolu Grubu','Cam & Aksesuar','Silikon & Mastik','Vida & Civata','El Aletleri','Diğer'];
+  const brandList = currentBrandList();
+
+  const parts = [];
+  bulkAddCart.forEach((item, index) => {
+    const categoryOptions = categoryOptionsList.map(c => `<option value="${c}" ${item.category === c ? 'selected' : ''}>${c}</option>`).join('');
+    const brandOptions = '<option value="">-</option>' + brandList.map(b => `<option value="${b}" ${item.brand === b ? 'selected' : ''}>${b}</option>`).join('');
+    parts.push(`
+      <tr style="border-bottom:1px dashed var(--steel-line);">
+        <td style="padding:8px 4px;"><input type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="min-width:150px;" oninput="bulkAddCart[${index}].name=this.value"></td>
+        <td style="padding:8px 4px;"><input type="number" value="${item.qty}" style="width:70px;" oninput="bulkAddCart[${index}].qty=parseFloat(this.value)||0"></td>
+        <td style="padding:8px 4px;">
+          <select onchange="bulkAddCart[${index}].unit=this.value" style="width:95px;">
+            <option value="Adet" ${item.unit === 'Adet' ? 'selected' : ''}>Adet</option>
+            <option value="Kilogram" ${item.unit === 'Kilogram' ? 'selected' : ''}>Kilogram</option>
+            <option value="Metre" ${item.unit === 'Metre' ? 'selected' : ''}>Metre</option>
+          </select>
+        </td>
+        <td style="padding:8px 4px;"><select onchange="bulkAddCart[${index}].category=this.value" style="min-width:130px;">${categoryOptions}</select></td>
+        <td style="padding:8px 4px;"><select onchange="bulkAddCart[${index}].brand=this.value||null" style="min-width:110px;">${brandOptions}</select></td>
+        <td style="padding:8px 4px;"><input type="number" value="${item.price}" style="width:85px;" oninput="bulkAddCart[${index}].price=parseFloat(this.value)||0"></td>
+        <td style="padding:8px 4px;"><button class="btn btn-dark btn-sm" style="width:auto;" onclick="removeBulkAddItem(${index})">Çıkar</button></td>
+      </tr>
+    `);
+  });
+  tbody.innerHTML = parts.join('');
+}
+
+function removeBulkAddItem(index) {
+  bulkAddCart.splice(index, 1);
+  renderBulkAddCart();
+}
+
+async function completeBulkStockUpload() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') return;
+  if (bulkAddCart.length === 0) return;
+  if (!confirm(`${bulkAddCart.length} yeni ürünü, girdiğiniz miktarlarla birlikte stoğa eklemek istediğinize emin misiniz?`)) return;
+
+  const usedCodes = new Set();
+  let successCount = 0;
+  const failed = [];
+
+  for (const item of bulkAddCart) {
+    try {
+      // Ürün kaydını, fiş akışıyla AYNI merkezi fonksiyonla oluşturuyoruz (tutarlılık için).
+      // Bu fonksiyon her zaman qty:0 ile oluşturur (fişte "gelecek mal" mantığı için tasarlandı),
+      // o yüzden burada gerçek fiziksel miktarı hemen ardından ayrıca yazıyoruz.
+      const code = await createNewProductRecord(item, 'AI Toplu Ürün Yükleme', usedCodes);
+      if (item.qty && item.qty > 0) {
+        await db.child(code).child('qty').set(item.qty);
+        if (productsData[code]) productsData[code].qty = item.qty;
+      }
+      successCount++;
+    } catch (err) {
+      failed.push(item.name + ': ' + (err.message || err));
+    }
+  }
+
+  bulkAddCart = [];
+  renderBulkAddCart();
+
+  let msg = `✅ ${successCount} ürün başarıyla sisteme eklendi.`;
+  if (failed.length > 0) msg += `\n\n❌ Eklenemeyenler:\n` + failed.join('\n');
+  alert(msg);
+}
+
+// ============================================================
 // AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
 // ============================================================
 let aiPendingImage = null; // { dataUrl, mimeType } // {role:'user'|'model', text:'...'}
@@ -8810,14 +9033,14 @@ async function sendAIChatMessage() {
 
   // Rol bilgisi
   let roleInfo = '';
-  if (currentRole === 'admin') roleInfo = 'Yönetici yetkisine sahipsin. Tüm modülleri kullanabilirsin: Borç, Toptancılar, Satış Sepeti, Malzeme Fişi, Raporlar, Yerleşim, Görevler, Stok.';
-  else if (currentRole === 'staff') roleInfo = 'Çalışan yetkisine sahipsin. Modüller: Satış Sepeti, Malzeme Fişi, Yerleşim, Raporlar, Görevler, Stok.';
+  if (currentRole === 'admin') roleInfo = 'Yönetici yetkisine sahipsin. Tüm modülleri kullanabilirsin: Borç, Toptancılar, Satış Sepeti, Malzeme Fişi, Yeni Ürün Ekle / AI ile Toplu Ürün Yükle, Raporlar, Yerleşim, Görevler, Stok.';
+  else if (currentRole === 'staff') roleInfo = 'Çalışan yetkisine sahipsin. Modüller: Satış Sepeti, Malzeme Fişi, Yerleşim, Raporlar, Görevler, Stok. (Yeni Ürün Ekle ve Toptancılar sadece yöneticiye açıktır.)';
   else roleInfo = 'Ziyaretçi yetkisine sahipsin. Sadece stok sorgulama yapabilirsin, işlem yapamazsın.';
 
   const inventoryContext = buildInventoryContextForAI(userMessage);
   const systemPrompt = `Sen Reyhani Cam Hırdavat deposunun akıllı asistanısın. Kullanıcıya yardım et.
 Kullanıcının rolü: ${roleInfo}
-${aiPendingImage ? 'Kullanıcı bir fotoğraf yükledi. Lütfen fotoğrafı analiz et ve hangi modülle ilgili olduğunu tahmin et. Ardından kullanıcıya hangi modülde işlem yapmak istediğini sor. Modül seçenekleri: borç, toptancılar, satış sepeti, malzeme fişi, stok, raporlar, yerleşim, görevler. Yetkisi yoksa bu modülleri önerme.' : ''}
+${aiPendingImage ? 'Kullanıcı bir fotoğraf yükledi. Lütfen fotoğrafı analiz et ve hangi modülle ilgili olduğunu tahmin et. Ardından kullanıcıya hangi modülde işlem yapmak istediğini sor. Modül seçenekleri: borç, toptancılar, satış sepeti, malzeme fişi, stok, raporlar, yerleşim, görevler, yeni ürün ekle (rafta/depoda olup sisteme hiç girilmemiş ürünleri toplu AI ile eklemek için). Fotoğraf bir mal giriş fişi ise "malzeme fişi", fotoğraf raf/ürün listesi gibi görünüyor ama fiş değilse "yeni ürün ekle" modülünü öner. Yetkisi yoksa bu modülleri önerme.' : ''}
 Sana güncel ürün listesi (JSON) verilecek. Sadece bu listeye ve kullanıcının söylediklerine dayanarak cevap ver, uydurma bilgi verme.
 
 Cevabını HER ZAMAN şu JSON formatında, başka hiçbir metin eklemeden ver:
@@ -8827,7 +9050,7 @@ veya kullanıcı bir ürünün stoğunu artırmak/azaltmak istiyorsa:
 veya kullanıcı bir ürünün fiyatını değiştirmek istiyorsa:
 {"action": "update_price", "code": "ÜRÜN_KODU", "price": sayı, "reply": "onay mesajı"}
 veya kullanıcıyı bir modüle yönlendirmek istiyorsan (önce kullanıcıdan onay al, sonra yönlendir):
-{"action": "navigate", "module": "borc|toptanci|siparis|fis|stok|raporlar|yerlesim|gorevler", "reply": "yönlendirme açıklaması"}
+{"action": "navigate", "module": "borc|toptanci|siparis|fis|stok|raporlar|yerlesim|gorevler|ekle", "reply": "yönlendirme açıklaması"}
 
 Kurallar:
 - Kullanıcı yetkisi yoksa (ziyaretçi), asla update_stock, update_price veya navigate yapma, sadece stok sorgulama yap.
@@ -8918,15 +9141,30 @@ ${inventoryContext}`;
         'stok': 'stok',
         'raporlar': 'raporlar',
         'yerlesim': 'yerlesim',
-        'gorevler': 'gorevler'
+        'gorevler': 'gorevler',
+        'ekle': 'ekle'
       };
       const tabName = tabMap[parsed.module];
       if (tabName) {
-        if (currentRole === 'guest' && ['toptanci','borc','acikhesap','siparis','fis','raporlar','yerlesim','gorevler'].includes(tabName)) {
+        // switchTab() zaten kendi içinde yetki kontrolü yapıp alert() ile uyarıyor,
+        // ama sohbette daha yumuşak bir bildirim vermek için burada da kontrol ediyoruz.
+        const adminOnlyTabs = ['ekle', 'toptanci', 'borc', 'acikhesap'];
+        const staffTabs = ['siparis', 'raporlar', 'gorevler', 'yerlesim', 'fis'];
+        let blocked = false;
+        if (adminOnlyTabs.includes(tabName) && currentRole !== 'admin') blocked = true;
+        if (staffTabs.includes(tabName) && currentRole !== 'admin' && currentRole !== 'staff') blocked = true;
+
+        if (blocked) {
           addAIChatBubble('bot', 'Bu modüle erişim yetkiniz yok. Lütfen giriş yapın.', 'error');
         } else {
           switchTab(tabName);
           showToast('Yönlendirildi: ' + tabName);
+          if (tabName === 'ekle') {
+            setTimeout(() => {
+              const el = document.getElementById('bulk-ai-stock-card');
+              if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 200);
+          }
         }
       } else {
         addAIChatBubble('bot', 'Geçersiz modül.', 'error');
