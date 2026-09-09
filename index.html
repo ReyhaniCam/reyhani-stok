@@ -1152,6 +1152,11 @@
         </div>
         <div id="fis-price-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
           <p id="fis-price-note" style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;"></p>
+          <div class="form-row" style="grid-template-columns:1fr; margin-bottom:10px;">
+            <div><label>Marka / Katalog Grubu</label>
+              <select id="fis-brand" onchange="updateCostCalc('fis', 'fis-cost')"></select>
+            </div>
+          </div>
           <div class="form-row" style="grid-template-columns:1fr 1fr;">
             <div><label>KDV Oranı (%)</label><input type="number" id="fis-vat" step="0.01" placeholder="0" oninput="updateFisProfit()"></div>
             <div><label>Hedef Kâr (%)</label><input type="number" id="fis-profit" step="0.01" placeholder="Örn: 25" oninput="updateFisProfit()"></div>
@@ -1168,7 +1173,7 @@
           </div>
           <div id="fis-existing-update-check-wrap" style="display:none; align-items:flex-start; gap:6px; margin-top:12px; padding-top:10px; border-top:1px dashed var(--steel-line);">
             <input type="checkbox" id="fis-update-existing-price" checked style="width:auto; margin-top:2px;">
-            <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu fişle bu ürünün <b>geliş fiyatını, KDV/kâr oranını ve satış fiyatını stokta güncelle</b> <span style="color:var(--steel); font-weight:normal;">— işaretli değilse sadece geliş fiyatı (maliyet) güncellenir, satış fiyatına dokunulmaz.</span></label>
+            <label style="margin:0; text-transform:none; font-size:11px; line-height:1.4;">Bu fişle bu ürünün <b>geliş fiyatını, KDV/kâr oranını, marka bilgisini ve satış fiyatını stokta güncelle</b> <span style="color:var(--steel); font-weight:normal;">— işaretli değilse sadece geliş fiyatı (maliyet) güncellenir, diğerlerine dokunulmaz.</span></label>
           </div>
         </div>
 
@@ -1181,7 +1186,7 @@
               <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Okut</button>
             </div>
           </div>
-          <div class="form-row" style="grid-template-columns:1fr 1fr 1fr;">
+          <div class="form-row" style="grid-template-columns:1fr 1fr;">
             <div><label>Ölçü Birimi</label>
               <select id="fis-unit">
                 <option value="Adet">Adet</option>
@@ -1203,9 +1208,6 @@
                 <option value="El Aletleri">El Aletleri</option>
                 <option value="Diğer" selected>Diğer</option>
               </select>
-            </div>
-            <div><label>Marka / Katalog Grubu</label>
-              <select id="fis-brand" onchange="updateCostCalc('fis', 'fis-cost')"></select>
             </div>
           </div>
           <div class="cost-calc-box" id="fis-cost-calc"></div>
@@ -5674,9 +5676,11 @@ function checkFisProductMatch() {
     const vatInput = document.getElementById('fis-vat');
     const profitInput = document.getElementById('fis-profit');
     const priceInput = document.getElementById('fis-price');
+    const brandInput = document.getElementById('fis-brand');
     if(vatInput && !vatInput.value && p.vat != null) vatInput.value = p.vat;
     if(profitInput && !profitInput.value && p.targetProfit != null) profitInput.value = p.targetProfit;
     if(priceInput && !priceInput.value) priceInput.value = p.price != null ? p.price : '';
+    if(brandInput && !brandInput.value) brandInput.value = p.brand || '';
     updateFisProfit();
   } else {
     if(priceFields) priceFields.style.display = 'block';
@@ -5777,6 +5781,8 @@ async function addToGoodsReceipt() {
 
     item = { code: p.code, name: p.name, unit: p.unit || 'Adet', qty: qty, cost: cost, isNew: false, updatePrices: updatePrices };
     if(updatePrices) {
+      const brandRaw = document.getElementById('fis-brand').value;
+      item.brand = brandRaw || null;
       if(vatRaw !== '') item.vat = parseFloat(vatRaw) || 0;
       if(profitRaw !== '') item.targetProfit = parseFloat(profitRaw) || 0;
       if(newPriceRaw !== '') item.newPrice = Math.max(0, parseFloat(newPriceRaw) || 0);
@@ -6144,6 +6150,7 @@ async function completeGoodsReceipt() {
       if(item.vat !== undefined) { priceUpdates.vat = item.vat; hasChange = true; }
       if(item.targetProfit !== undefined) { priceUpdates.targetProfit = item.targetProfit; hasChange = true; }
       if(item.newPrice !== undefined) { priceUpdates.price = item.newPrice; hasChange = true; }
+      if(item.brand !== undefined) { priceUpdates.brand = item.brand; hasChange = true; }
       if(hasChange) {
         db.child(item.code).update(priceUpdates);
       }
@@ -6576,6 +6583,7 @@ async function saveReceiptEdit() {
         if(item.vat !== undefined) { priceUpdates.vat = item.vat; hasChange = true; }
         if(item.targetProfit !== undefined) { priceUpdates.targetProfit = item.targetProfit; hasChange = true; }
         if(item.newPrice !== undefined) { priceUpdates.price = item.newPrice; hasChange = true; }
+        if(item.brand !== undefined) { priceUpdates.brand = item.brand; hasChange = true; }
         if(hasChange) db.child(item.code).update(priceUpdates);
       }
     });
