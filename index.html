@@ -552,24 +552,7 @@
 .cmdk-empty{ text-align:center; padding:30px 10px; color:var(--steel); font-size:13px; }
 
 
-
-  /* ============ MÜKERRER FİŞ / ÜRÜN DÜZELTME ARACI ============ */
-  .dedupe-product-list{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px;}
-  .dedupe-product-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--steel-line);border-radius:8px;background:#fff;}
-  .dedupe-product-item input[type="checkbox"]{width:20px;min-height:20px;flex-shrink:0;}
-  .dedupe-product-item .dpi-main{flex:1;min-width:0;}
-  .dedupe-product-item .dpi-name{font-weight:700;word-break:break-word;}
-  .dedupe-product-item .dpi-code{font:12px 'IBM Plex Mono';color:var(--steel);word-break:break-all;}
-  .dedupe-product-item .dpi-qty{font:12px 'IBM Plex Mono';font-weight:700;white-space:nowrap;}
-  .dedupe-receipt-list{display:grid;gap:8px;margin-top:10px;}
-  .dedupe-receipt-item{border:1px solid var(--steel-line);border-radius:8px;padding:10px 12px;background:#fff;}
-  .dedupe-receipt-item label{display:flex;align-items:flex-start;gap:10px;text-transform:none;font-size:12px;color:var(--charcoal);margin:0;cursor:pointer;}
-  .dedupe-receipt-item input[type="checkbox"]{width:20px;min-height:20px;flex-shrink:0;}
-  .dedupe-danger{background:#FFF1F2;border:1px solid #FDA4AF;color:#9F1239;padding:12px;border-radius:8px;font-size:12px;line-height:1.5;}
-  .dedupe-info{background:#EFF6FF;border:1px solid #93C5FD;color:#1E40AF;padding:12px;border-radius:8px;font-size:12px;line-height:1.5;}
-  .dedupe-success{background:#ECFDF5;border:1px solid #86EFAC;color:#166534;padding:12px;border-radius:8px;font-size:12px;line-height:1.5;}
-
-  /* ===== TEMİZ / ERİŞİLEBİLİR GÖRSEL TEMA — İŞLEVSEL KODDAN AYRI ===== */
+/* ===== TEMİZ / ERİŞİLEBİLİR GÖRSEL TEMA — İŞLEVSEL KODDAN AYRI ===== */
 :root{
     --bg:#EEF2F6; --paper:#FFFFFF; --charcoal:#1F2D3D; --steel:#536476;
     --steel-line:#D5DEE7; --safety:#B9D7E7; --rust:#D96C6C; --success:#4FAF82;
@@ -627,6 +610,43 @@
     .form-row{grid-template-columns:1fr!important;}
     .action-grid{grid-template-columns:1fr 1fr!important;}
   }
+
+
+  /* ============================================================
+     MÜKERRER ÜRÜN / FİŞ BİRLEŞTİRME ARACI
+     Sadece yönetici tarafından kullanılabilir.
+     Mevcut stok algoritmasına dokunmaz; yalnızca seçilen kayıtları
+     kontrollü şekilde düzeltir ve işlem geçmişine kayıt bırakır.
+     ============================================================ */
+  .merge-tool-card{background:#fff;border:1px solid var(--steel-line);border-radius:var(--radius);padding:20px;margin-bottom:16px;box-shadow:var(--shadow);}
+  .merge-warning{background:#FFF7ED;border:1px solid #FDBA74;border-left:5px solid #F59E0B;border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.55;color:#7C2D12;margin-bottom:14px;}
+  .merge-success{background:#ECFDF5;border:1px solid #A7F3D0;border-left:5px solid var(--success);border-radius:8px;padding:12px 14px;font-size:12px;line-height:1.55;color:#065F46;margin-bottom:14px;}
+  .merge-product-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .merge-product-panel{border:1px solid var(--steel-line);border-radius:8px;padding:14px;background:#FBFCFD;min-width:0;}
+  .merge-product-panel.target{border-color:#70BBD7;background:#F4FBFE;}
+  .merge-product-list{max-height:290px;overflow:auto;border:1px solid var(--steel-line);border-radius:8px;background:#fff;}
+  .merge-product-row{display:flex;align-items:flex-start;gap:10px;padding:10px;border-bottom:1px solid var(--steel-line);cursor:pointer;}
+  .merge-product-row:last-child{border-bottom:none;}
+  .merge-product-row:hover{background:#F4F8FA;}
+  .merge-product-row input{width:auto;min-height:auto;margin-top:3px;flex-shrink:0;}
+  .merge-product-main{min-width:0;flex:1;}
+  .merge-product-name{font-weight:700;font-size:13px;overflow-wrap:anywhere;}
+  .merge-product-meta{font-family:'IBM Plex Mono';font-size:10px;color:var(--steel);margin-top:3px;line-height:1.45;overflow-wrap:anywhere;}
+  .merge-receipt-list{max-height:330px;overflow:auto;border:1px solid var(--steel-line);border-radius:8px;background:#fff;}
+  .merge-receipt-row{padding:11px;border-bottom:1px solid var(--steel-line);}
+  .merge-receipt-row:last-child{border-bottom:none;}
+  .merge-receipt-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;}
+  .merge-receipt-title{font-weight:700;font-size:13px;}
+  .merge-receipt-meta{font-size:10px;color:var(--steel);margin-top:3px;line-height:1.4;}
+  .merge-receipt-items{font-size:10px;color:var(--steel);margin-top:6px;line-height:1.45;}
+  .merge-checkline{display:flex;align-items:center;gap:8px;font-size:12px;margin-top:7px;}
+  .merge-checkline input{width:auto;min-height:auto;}
+  .merge-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px;}
+  .merge-summary-box{border:1px solid var(--steel-line);border-radius:8px;padding:10px;background:#fff;text-align:center;}
+  .merge-summary-box b{display:block;font-family:'IBM Plex Mono';font-size:16px;margin-top:2px;}
+  .merge-status{margin-top:12px;font-size:12px;white-space:pre-wrap;line-height:1.5;}
+  @media(max-width:640px){.merge-product-grid{grid-template-columns:1fr;}.merge-summary{grid-template-columns:1fr;}.merge-product-list,.merge-receipt-list{max-height:240px;}}
+
 </style>
 
 
@@ -682,9 +702,9 @@
     <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış / Sepet</button>
     <button class="tab-btn" id="nav-yerlesim-btn" onclick="switchTab('yerlesim')" style="display:none;">🗺️ Yerleşim</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
-    <button class="tab-btn" id="nav-mukerrer-btn" onclick="switchTab('mukerrer')" style="display:none;">🧹 Mükerrer Düzelt</button>
     <button class="tab-btn" id="nav-borc-btn" onclick="switchTab('borc')" style="display:none;">💰 Müşteri Borç</button>
     <button class="tab-btn" id="nav-acikhesap-btn" onclick="switchTab('acikhesap')" style="display:none;">📖 Açık Hesap</button>
+    <button class="tab-btn" id="nav-mukerrer-btn" onclick="switchTab('mukerrer')" style="display:none;">🧹 Mükerrer Düzeltme</button>
   </div>
 
   <main>
@@ -1300,43 +1320,6 @@
       <div id="past-receipts-list" style="margin-top:10px;"></div>
     </div>
 
-    <!-- MÜKERRER FİŞ / ÜRÜN DÜZELTME TABI -->
-    <div id="tab-mukerrer" class="tab-content">
-      <div class="form-card">
-        <h3 style="margin-top:0;font-family:'Oswald';">🧹 Mükerrer Fiş / Ürün Düzeltme</h3>
-        <div class="dedupe-danger">
-          <strong>Dikkat — sadece mevcut hatalı kaydı düzeltmek için kullanın.</strong><br>
-          Bu araç bütün stoğu otomatik birleştirmez. Yalnızca sizin seçtiğiniz ürünleri ve mükerrer fişleri düzeltir.
-          Aynı malzeme fişi 4 kez kaydedildiyse amaç; <b>1 fişi bırakmak, diğer 3 fişi stoktan geri almak ve 3 mükerrer ürün kaydını temizlemektir.</b>
-        </div>
-        <div style="margin-top:16px;">
-          <label>1. Mükerrer ürünleri seçin</label>
-          <input type="text" id="dedupe-product-search" placeholder="Ürün adı, barkod veya kod ara..." oninput="renderDedupeProducts()">
-          <div id="dedupe-product-list" class="dedupe-product-list"></div>
-        </div>
-        <div id="dedupe-selected-summary" class="dedupe-info" style="display:none;margin-top:14px;"></div>
-        <div style="margin-top:16px;">
-          <label>2. Ana ürün</label>
-          <select id="dedupe-master-code" onchange="renderDedupeReceipts()">
-            <option value="">Önce ürünleri seçin</option>
-          </select>
-          <div style="font-size:11px;color:var(--steel);margin-top:5px;">
-            Ana ürünün mevcut barkodu/kodu ve mevcut stoğu korunur. Bu özel düzeltmede diğer ürünlerin stoğu ana ürüne eklenmez.
-          </div>
-        </div>
-        <div style="margin-top:16px;">
-          <label>3. İptal edilecek mükerrer fişleri seçin</label>
-          <div id="dedupe-receipt-list" class="dedupe-receipt-list">
-            <div class="dedupe-info">Önce ürünleri seçip ana ürünü belirleyin.</div>
-          </div>
-        </div>
-        <div id="dedupe-preview" style="margin-top:14px;"></div>
-        <button class="btn btn-danger" style="margin-top:14px;" onclick="executeDedupeRepair()">
-          🧹 Seçilen Mükerrer Fişleri Geri Al ve Ürünleri Temizle
-        </button>
-      </div>
-    </div>
-
     <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
     <div id="tab-siparis" class="tab-content">
       <!-- AI SATIŞ ASİSTANI KUTUSU (BAŞLANGIÇ) -->
@@ -1622,6 +1605,63 @@
       </div>
       <div id="ah-customer-list" style="margin-top:10px;"></div>
       <div id="ah-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px;"></div>
+    </div>
+
+      
+    <!-- MÜKERRER ÜRÜN / FİŞ DÜZELTME TABI -->
+    <div id="tab-mukerrer" class="tab-content">
+      <div class="merge-tool-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">🧹 Mükerrer Ürün / Fiş Düzeltme</h3>
+        <div class="merge-warning">
+          <b>Dikkat:</b> Bu araç sadece yanlışlıkla aynı malzeme fişinin birden fazla kez kaydedilmesi gibi durumlar içindir.
+          Önce korunacak <b>ana ürünü</b>, sonra yanlışlıkla oluşan <b>mükerrer ürünleri</b> seçin.
+          Silinecek mükerrer fişleri ayrıca seçmeden hiçbir fiş otomatik silinmez.
+        </div>
+
+        <div class="merge-product-grid">
+          <div class="merge-product-panel target">
+            <h4 style="margin:0 0 8px 0;font-family:'Oswald';">1) Ana Ürün — korunacak barkod</h4>
+            <input id="merge-product-search" type="text" placeholder="Ürün adı veya barkod ara..." oninput="renderMergeProductCandidates()">
+            <div id="merge-product-candidates" class="merge-product-list" style="margin-top:8px;"></div>
+          </div>
+
+          <div class="merge-product-panel">
+            <h4 style="margin:0 0 8px 0;font-family:'Oswald';">2) Mükerrer Ürünler</h4>
+            <p style="font-size:11px;color:var(--steel);margin:0 0 8px 0;">Aynı ürün için yanlışlıkla oluşan diğer barkodları işaretleyin.</p>
+            <div id="merge-duplicate-candidates" class="merge-product-list"></div>
+          </div>
+        </div>
+
+        <div id="merge-selected-summary" class="merge-summary">
+          <div class="merge-summary-box">Ana ürün<b id="merge-target-summary">Seçilmedi</b></div>
+          <div class="merge-summary-box">Mükerrer ürün<b id="merge-duplicate-count">0</b></div>
+          <div class="merge-summary-box">Mükerrer stok toplamı<b id="merge-duplicate-qty">0</b></div>
+        </div>
+      </div>
+
+      <div class="merge-tool-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div>
+            <h4 style="margin:0;font-family:'Oswald';">3) Mükerrer Fişleri Bul</h4>
+            <p style="font-size:11px;color:var(--steel);margin:4px 0 0 0;">Seçilen mükerrer ürünleri içeren benzer fişleri listeler. Sistem ilk fişi otomatik silmez; seçim size aittir.</p>
+          </div>
+          <button class="btn btn-info btn-sm" style="width:auto;" onclick="findMergeDuplicateReceipts()">🔎 Benzer Fişleri Bul</button>
+        </div>
+        <div id="merge-receipt-status" class="merge-status"></div>
+        <div id="merge-receipt-candidates" class="merge-receipt-list" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="merge-tool-card">
+        <h4 style="margin:0 0 8px 0;font-family:'Oswald';">4) Son Kontrol ve Birleştirme</h4>
+        <div class="merge-warning">
+          İşlem sırasında seçili mükerrer fişlerin stok girişleri geri alınır ve varsa toptancı borcuna karşı dengeleme hareketi yazılır.
+          Ardından mükerrer ürünlerin kalan stokları ana ürüne aktarılır ve ürün kayıtları kaldırılır.
+          Satış, açık hesap ve geçmiş fişlerdeki eski ürün kodları ana ürün koduna bağlanır.
+        </div>
+        <label class="merge-checkline"><input type="checkbox" id="merge-final-confirm"> Yapılacak işlemin geri alınamaz olduğunu ve seçtiğim kayıtların doğru olduğunu kontrol ettim.</label>
+        <button class="btn btn-danger" style="margin-top:12px;" onclick="executeMergeTool()">🧹 Seçili Kayıtları Birleştir ve Düzelt</button>
+        <div id="merge-execution-status" class="merge-status"></div>
+      </div>
     </div>
 
   </main>
@@ -2968,6 +3008,7 @@ function updateAuthUI() {
   document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-borc-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-acikhesap-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+  document.getElementById('nav-mukerrer-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   if (typeof renderDashboard === 'function') renderDashboard();
   
   const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
@@ -2976,7 +3017,6 @@ function updateAuthUI() {
   document.getElementById('nav-yerlesim-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
   document.getElementById('nav-reports-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
   document.getElementById('nav-gorevler-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
-  document.getElementById('nav-mukerrer-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
 
   if(currentRole === 'admin') {
     statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
@@ -5126,9 +5166,8 @@ function switchTab(tabName) {
   if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'borc' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'acikhesap' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  if(tabName === 'mukerrer' && currentRole !== 'admin') { alert("Bu araç sadece yönetici tarafından kullanılabilir!"); return; }
   if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'fis') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
-  if(tabName === 'mukerrer' && currentRole !== 'admin') { alert("Mükerrer düzeltme aracı yalnızca yöneticiye açıktır."); return; }
-  if(tabName === 'mukerrer') renderDedupeProducts();
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -9430,248 +9469,475 @@ async function sendPanelAIMessage(panelKey) {
   }
 }
 
-/* ============================================================
-   MÜKERRER FİŞ / ÜRÜN DÜZELTME ARACI
-   Otomatik/global deduplikasyon yapmaz; yalnızca yönetici tarafından
-   seçilen hatalı ürün ve fişleri düzeltir.
-   ============================================================ */
-function dedupeEsc(value) {
-  return String(value ?? '').replace(/[&<>"']/g, ch => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[ch]));
+// ============================================================
+// MÜKERRER ÜRÜN / FİŞ BİRLEŞTİRME ARACI
+// Sadece yönetici kullanır. Mevcut stok/fiyat algoritmasını değiştirmez.
+// ============================================================
+let mergeTargetCode = null;
+let mergeDuplicateCodes = new Set();
+let mergeReceiptKeys = new Set();
+
+function normalizeMergeText(value) {
+  return String(value || '')
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ı/g, 'i')
+    .replace(/[^a-z0-9ğüşöçıİĞÜŞÖÇ]+/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-function getDedupeSelectedCodes() {
-  return Array.from(document.querySelectorAll('#dedupe-product-list input[data-dedupe-code]:checked'))
-    .map(el => el.getAttribute('data-dedupe-code'))
-    .filter(code => code && productsData[code]);
+function mergeProductScore(product, query) {
+  const q = normalizeMergeText(query);
+  if (!q) return 0;
+  const name = normalizeMergeText(product.name);
+  const code = normalizeMergeText(product.code);
+  if (code === q) return 1000;
+  if (name === q) return 900;
+  if (code.includes(q)) return 700;
+  if (name.includes(q)) return 600;
+  const qWords = q.split(' ').filter(Boolean);
+  const hits = qWords.filter(w => name.includes(w) || code.includes(w)).length;
+  return hits ? 100 + hits : 0;
 }
 
-function renderDedupeProducts() {
-  const list = document.getElementById('dedupe-product-list');
-  if(!list) return;
-  const search = (document.getElementById('dedupe-product-search')?.value || '').trim().toLocaleLowerCase('tr-TR');
-  const selectedBefore = new Set(getDedupeSelectedCodes());
+function renderMergeProductCandidates() {
+  const targetBox = document.getElementById('merge-product-candidates');
+  const dupBox = document.getElementById('merge-duplicate-candidates');
+  const query = document.getElementById('merge-product-search')?.value || '';
+  if (!targetBox || !dupBox) return;
 
-  const all = Object.values(productsData || {}).filter(p => {
-    if(!search) return true;
-    const hay = `${p.name||''} ${p.code||''} ${p.brand||''} ${p.category||''}`.toLocaleLowerCase('tr-TR');
-    return hay.includes(search);
-  }).sort((a,b) => String(a.name||'').localeCompare(String(b.name||''),'tr'));
+  const all = Object.values(productsData || {});
+  const filtered = all
+    .map(p => ({ p, score: mergeProductScore(p, query) }))
+    .filter(x => !query || x.score > 0)
+    .sort((a,b) => b.score - a.score || (a.p.name || '').localeCompare(b.p.name || '', 'tr'))
+    .slice(0, 100)
+    .map(x => x.p);
 
-  list.innerHTML = all.length ? all.map(p => `
-    <label class="dedupe-product-item">
-      <input type="checkbox" data-dedupe-code="${dedupeEsc(p.code)}" ${selectedBefore.has(p.code)?'checked':''} onchange="updateDedupeSelection()">
-      <span class="dpi-main">
-        <span class="dpi-name">${dedupeEsc(p.name || 'İsimsiz Ürün')}</span><br>
-        <span class="dpi-code">${dedupeEsc(p.code || '-')}</span>
+  const list = filtered.length ? filtered : all.slice(0, 100);
+
+  targetBox.innerHTML = list.map(p => `
+    <label class="merge-product-row">
+      <input type="radio" name="merge-target-radio" value="${String(p.code).replace(/"/g,'&quot;')}" ${mergeTargetCode === p.code ? 'checked' : ''} onchange="setMergeTarget('${String(p.code).replace(/'/g, "\\'")}')">
+      <span class="merge-product-main">
+        <span class="merge-product-name">${p.name || 'İsimsiz ürün'}</span>
+        <span class="merge-product-meta">${p.code} · Stok: ${Number(p.qty || 0)} ${p.unit || 'Adet'}${p.costPrice != null ? ' · Geliş: ₺' + formatMoney(p.costPrice) : ''}</span>
       </span>
-      <span class="dpi-qty">${Number(p.qty||0)} ${dedupeEsc(p.unit||'Adet')}</span>
     </label>
-  `).join('') : '<div class="dedupe-info">Aramanıza uygun ürün bulunamadı.</div>';
+  `).join('') || '<p style="padding:12px;color:var(--steel);font-size:12px;">Ürün bulunamadı.</p>';
 
-  updateDedupeSelection();
+  const duplicates = all
+    .filter(p => p.code !== mergeTargetCode)
+    .filter(p => !query || mergeProductScore(p, query) > 0 || mergeDuplicateCodes.has(p.code))
+    .sort((a,b) => {
+      const aSel = mergeDuplicateCodes.has(a.code) ? 1 : 0;
+      const bSel = mergeDuplicateCodes.has(b.code) ? 1 : 0;
+      return bSel - aSel || (a.name || '').localeCompare(b.name || '', 'tr');
+    })
+    .slice(0, 150);
+
+  dupBox.innerHTML = duplicates.length ? duplicates.map(p => `
+    <label class="merge-product-row">
+      <input type="checkbox" value="${String(p.code).replace(/"/g,'&quot;')}" ${mergeDuplicateCodes.has(p.code) ? 'checked' : ''} onchange="toggleMergeDuplicate('${String(p.code).replace(/'/g, "\\'")}', this.checked)">
+      <span class="merge-product-main">
+        <span class="merge-product-name">${p.name || 'İsimsiz ürün'}</span>
+        <span class="merge-product-meta">${p.code} · Stok: ${Number(p.qty || 0)} ${p.unit || 'Adet'}${p.brand ? ' · ' + p.brand : ''}</span>
+      </span>
+    </label>
+  `).join('') : '<p style="padding:12px;color:var(--steel);font-size:12px;">Mükerrer olarak seçilebilecek ürün bulunamadı.</p>';
+
+  updateMergeSummary();
 }
 
-function updateDedupeSelection() {
-  const codes = getDedupeSelectedCodes();
-  const master = document.getElementById('dedupe-master-code');
-  const oldMaster = master?.value || '';
-  if(master) {
-    master.innerHTML = '<option value="">Ana ürünü seçin</option>' + codes.map(code => {
-      const p=productsData[code];
-      return `<option value="${dedupeEsc(code)}">${dedupeEsc(p.name||'İsimsiz')} — ${dedupeEsc(code)} (stok: ${Number(p.qty||0)})</option>`;
-    }).join('');
-    if(codes.includes(oldMaster)) master.value=oldMaster;
+function setMergeTarget(code) {
+  if (currentRole !== 'admin') return;
+  if (!productsData[code]) return;
+  if (mergeDuplicateCodes.has(code)) {
+    mergeDuplicateCodes.delete(code);
   }
-  const summary=document.getElementById('dedupe-selected-summary');
-  if(summary) {
-    if(codes.length<2) {
-      summary.style.display=codes.length?'block':'none';
-      summary.innerHTML=codes.length?'⚠️ En az <b>2 ürün</b> seçmelisiniz. 4 mükerrer kayıt varsa 4 ürünü de işaretleyin.':'';
-    } else {
-      summary.style.display='block';
-      summary.innerHTML=`✅ <b>${codes.length} ürün seçildi.</b> Ana ürün ve iptal edilecek mükerrer fişleri aşağıdan seçin.`;
-    }
-  }
-  renderDedupeReceipts();
+  mergeTargetCode = code;
+  renderMergeProductCandidates();
+  document.getElementById('merge-receipt-candidates').innerHTML = '';
+  document.getElementById('merge-receipt-status').textContent = '';
+  mergeReceiptKeys.clear();
 }
 
-function getDedupeReceipts() {
-  return Object.keys(globalPastReceipts||{}).map(receiptId => {
-    const x=globalPastReceipts[receiptId];
-    return {receiptId,date:x.date,receiptData:x.receiptData};
-  }).filter(x=>x.receiptData);
+function toggleMergeDuplicate(code, checked) {
+  if (currentRole !== 'admin') return;
+  if (!productsData[code] || code === mergeTargetCode) return;
+  if (checked) mergeDuplicateCodes.add(code);
+  else mergeDuplicateCodes.delete(code);
+  updateMergeSummary();
 }
 
-function renderDedupeReceipts() {
-  const box=document.getElementById('dedupe-receipt-list');
-  const preview=document.getElementById('dedupe-preview');
-  const master=document.getElementById('dedupe-master-code')?.value||'';
-  const selected=getDedupeSelectedCodes();
-  if(!box) return;
-  if(!master || selected.length<2) {
-    box.innerHTML='<div class="dedupe-info">En az 2 ürün seçip ana ürünü belirleyin.</div>';
-    if(preview) preview.innerHTML='';
+function updateMergeSummary() {
+  const target = document.getElementById('merge-target-summary');
+  const count = document.getElementById('merge-duplicate-count');
+  const qty = document.getElementById('merge-duplicate-qty');
+  if (!target || !count || !qty) return;
+
+  const targetProduct = mergeTargetCode ? productsData[mergeTargetCode] : null;
+  const dupProducts = [...mergeDuplicateCodes].map(c => productsData[c]).filter(Boolean);
+  const totalQty = dupProducts.reduce((sum, p) => sum + Number(p.qty || 0), 0);
+
+  target.textContent = targetProduct ? `${targetProduct.name} (${targetProduct.code})` : 'Seçilmedi';
+  count.textContent = String(dupProducts.length);
+  qty.textContent = String(totalQty);
+}
+
+function makeMergeReceiptKey(date, id) {
+  return `${date}::${id}`;
+}
+
+function getMergeReceiptEntries() {
+  const result = [];
+  const all = Object.values(globalPastReceipts || {});
+  const allowed = new Set(mergeDuplicateCodes);
+  all.forEach(entry => {
+    const rec = entry.receiptData || {};
+    const items = Array.isArray(rec.items) ? rec.items : [];
+    const matchingItems = items.filter(it => it && allowed.has(it.code));
+    if (!matchingItems.length) return;
+    result.push({
+      key: makeMergeReceiptKey(entry.date, entry.receiptId || ''),
+      receiptId: entry.receiptId || '',
+      date: entry.date,
+      receiptData: rec,
+      matchingItems
+    });
+  });
+  return result;
+}
+
+function findMergeDuplicateReceipts() {
+  if (currentRole !== 'admin') return;
+  if (!mergeTargetCode) { alert('Önce korunacak ana ürünü seçin.'); return; }
+  if (mergeDuplicateCodes.size === 0) { alert('En az bir mükerrer ürün seçin.'); return; }
+
+  const candidates = getMergeReceiptEntries();
+  const box = document.getElementById('merge-receipt-candidates');
+  const status = document.getElementById('merge-receipt-status');
+  mergeReceiptKeys.clear();
+
+  if (!candidates.length) {
+    status.textContent = 'Seçilen mükerrer ürünleri içeren kayıtlı fiş bulunamadı.';
+    box.innerHTML = '<p style="padding:12px;color:var(--steel);font-size:12px;">Eşleşen fiş yok.</p>';
     return;
   }
-  const duplicates=selected.filter(c=>c!==master);
-  const receipts=getDedupeReceipts().filter(r=>(r.receiptData.items||[]).some(it=>duplicates.includes(it.code)))
-    .sort((a,b)=>`${b.date} ${b.receiptData.time||''}`.localeCompare(`${a.date} ${a.receiptData.time||''}`));
 
-  if(!receipts.length) {
-    box.innerHTML='<div class="dedupe-danger">Seçilen mükerrer ürünlere ait fiş bulunamadı. Fiş 60 günlük arşiv sınırının dışındaysa burada görünmez.</div>';
-    if(preview) preview.innerHTML='';
-    return;
-  }
+  // Aynı fiş numarası + aynı toptancı + yakın zaman + aynı kalem yapısı olanları öneri olarak öne çıkar.
+  const signatures = {};
+  candidates.forEach(item => {
+    const r = item.receiptData;
+    const sig = [
+      normalizeMergeText(r.wholesalerName),
+      normalizeMergeText(r.fisNo || ''),
+      (r.items || []).map(it => `${normalizeMergeText(it.name)}:${Number(it.qty || 0)}:${Number(it.cost || 0).toFixed(2)}`).sort().join('|')
+    ].join('||');
+    signatures[sig] = (signatures[sig] || 0) + 1;
+    item.signature = sig;
+  });
 
-  box.innerHTML=receipts.map(r=>{
-    const matched=(r.receiptData.items||[]).filter(it=>selected.includes(it.code));
-    const names=matched.map(it=>`${it.name||'-'} (${it.qty||0})`).join(', ');
-    return `<div class="dedupe-receipt-item"><label>
-      <input type="checkbox" data-dedupe-receipt="${dedupeEsc(r.receiptId)}" data-dedupe-date="${dedupeEsc(r.date)}" onchange="updateDedupePreview()">
-      <span><b>${dedupeEsc(r.receiptData.wholesalerName||'Bilinmeyen Toptancı')}</b> — ${dedupeEsc(r.date)}
-      ${r.receiptData.fisNo?` — Fiş: ${dedupeEsc(r.receiptData.fisNo)}`:''}<br>
-      <span style="color:var(--steel);">₺${formatMoney(Number(r.receiptData.total||0))} · ${dedupeEsc(names)}</span>
-      ${r.receiptData.addedToDebt?'<br><span style="color:#9F1239;font-weight:700;">⚠️ Toptancı borcuna işlenmiş</span>':''}</span>
-    </label></div>`;
+  candidates.sort((a,b) => (signatures[b.signature] - signatures[a.signature]) || b.date.localeCompare(a.date));
+
+  box.innerHTML = candidates.map(item => {
+    const r = item.receiptData;
+    const dupCount = signatures[item.signature] || 1;
+    const suggested = dupCount > 1 ? 'checked' : '';
+    if (dupCount > 1) mergeReceiptKeys.add(item.key);
+    const itemSummary = item.matchingItems.map(it => `${it.name} (${Number(it.qty || 0)} ${it.unit || 'Adet'})`).join(', ');
+    const domKey = item.key.replace(/'/g, "\\'");
+    return `
+      <div class="merge-receipt-row">
+        <div class="merge-receipt-head">
+          <div>
+            <div class="merge-receipt-title">${r.wholesalerName || 'Bilinmeyen Toptancı'} — ${item.date}${r.fisNo ? ' · Fiş: ' + r.fisNo : ''}</div>
+            <div class="merge-receipt-meta">Saat: ${r.time || '-'} · Toplam: ₺${formatMoney(r.total || 0)} · Eşleşen fiş grubu: ${dupCount}</div>
+          </div>
+          <label class="merge-checkline" style="margin:0;white-space:nowrap;">
+            <input type="checkbox" ${suggested} onchange="toggleMergeReceipt('${domKey}', this.checked)">
+            Mükerrer
+          </label>
+        </div>
+        <div class="merge-receipt-items">Eşleşen kalemler: ${itemSummary}</div>
+      </div>
+    `;
   }).join('');
-  updateDedupePreview();
+
+  status.textContent = `${candidates.length} fiş bulundu. Aynı içerik/fiş bilgilerine göre ${mergeReceiptKeys.size} fiş mükerrer olarak önerildi. Silinecek fişleri mutlaka son kez kontrol edin.`;
 }
 
-function updateDedupePreview() {
-  const preview=document.getElementById('dedupe-preview');
-  if(!preview) return;
-  const els=Array.from(document.querySelectorAll('#dedupe-receipt-list input[data-dedupe-receipt]:checked'));
-  if(!els.length) {
-    preview.innerHTML='<div class="dedupe-info">Örneğin aynı fiş 4 kez kaydedildiyse 3 mükerrer fişi seçin; 1 fişi bırakın.</div>';
-    return;
-  }
-  let total=0,debt=0;
-  els.forEach(el=>{
-    const r=globalPastReceipts?.[el.getAttribute('data-dedupe-receipt')]?.receiptData;
-    if(r){total+=Number(r.total||0);if(r.addedToDebt)debt+=Number(r.total||0);}
-  });
-  preview.innerHTML=`<div class="dedupe-danger"><b>${els.length} fiş geri alınacak.</b> Bu fişlerdeki tüm stok girişleri geri düşülecek.
-    ${debt?`<br>Toptancı cari hesabından ₺${formatMoney(debt)} geri alınacak.`:''}
-    <br>Toplam geri alınacak fiş tutarı: <b>₺${formatMoney(total)}</b>.</div>`;
+function toggleMergeReceipt(key, checked) {
+  if (checked) mergeReceiptKeys.add(key);
+  else mergeReceiptKeys.delete(key);
 }
 
-async function executeDedupeRepair() {
-  if(currentRole!=='admin'){alert('Bu işlem yalnızca yöneticiye açıktır.');return;}
-  const selected=getDedupeSelectedCodes();
-  const master=document.getElementById('dedupe-master-code')?.value||'';
-  const duplicates=selected.filter(c=>c!==master);
-  const els=Array.from(document.querySelectorAll('#dedupe-receipt-list input[data-dedupe-receipt]:checked'));
-  if(!master||!productsData[master]){alert('Lütfen ana ürünü seçin.');return;}
-  if(!duplicates.length){alert('En az bir mükerrer ürün seçmelisiniz.');return;}
-  if(!els.length){alert('İptal edilecek mükerrer fişleri seçin.');return;}
+function findReceiptByMergeKey(key) {
+  const sep = key.indexOf('::');
+  if (sep < 0) return null;
+  const date = key.slice(0, sep);
+  const receiptId = key.slice(sep + 2);
+  return { date, receiptId };
+}
 
-  const receipts=els.map(el=>({
-    receiptId:el.getAttribute('data-dedupe-receipt'),
-    date:el.getAttribute('data-dedupe-date'),
-    receiptData:globalPastReceipts?.[el.getAttribute('data-dedupe-receipt')]?.receiptData
-  })).filter(r=>r.receiptData);
+function collectMergeAffectedRecords() {
+  const duplicateCodes = new Set(mergeDuplicateCodes);
+  const target = mergeTargetCode;
+  const affected = { orders: [], debts: [], receipts: [], movements: [] };
 
-  if(receipts.length!==els.length){alert('Seçilen fişlerden biri artık bulunamıyor. Listeyi yenileyip tekrar deneyin.');return;}
+  // Satışlar: eski ürün kodunu ana ürüne bağla. Stok tekrar değiştirilmez; satış miktarı geçmişte zaten düşmüştür.
+  Object.keys(globalPastOrders || {}).forEach(orderId => {
+    const entry = globalPastOrders[orderId];
+    const orderData = entry?.orderData;
+    if (!orderData || !Array.isArray(orderData.items)) return;
+    if (orderData.items.some(it => duplicateCodes.has(it.code))) affected.orders.push({ orderId, date: entry.date, orderData });
+  });
 
-  // Her duplicate ürünün en az bir seçili fişte bulunduğunu doğrula.
-  const covered=new Set();
-  receipts.forEach(r=>(r.receiptData.items||[]).forEach(it=>{if(duplicates.includes(it.code))covered.add(it.code);}));
-  const uncovered=duplicates.filter(c=>!covered.has(c));
-  if(uncovered.length){
-    alert('Şu mükerrer ürünler seçtiğiniz fişlerde bulunamadı:\n'+uncovered.map(c=>`${productsData[c]?.name||c} (${c})`).join('\n')+'\n\nYanlış kayıtları silmemek için işlem durduruldu.');
-    return;
+  // Müşteri borçları: ürün kalemlerindeki eski kodları ana ürüne çevir.
+  dbCustomerDebts.once('value', snap => {}); // Dinleyici varsa Firebase önbelleğini sıcak tutar; asıl okuma executeMergeTool içinde yapılır.
+  
+  // Fiş kayıtları: seçilerek silinecek olanlar ayrıca işlenecek; diğerleri kodu ana ürüne çevrilir.
+  Object.keys(globalPastReceipts || {}).forEach(receiptId => {
+    const entry = globalPastReceipts[receiptId];
+    const rec = entry?.receiptData;
+    if (!rec || !Array.isArray(rec.items)) return;
+    if (rec.items.some(it => duplicateCodes.has(it.code))) {
+      affected.receipts.push({ receiptId, date: entry.date, receiptData: rec });
+    }
+  });
+
+  // Günlük hareketler global olarak belleğe geldiği için eski kodları ana koda çevirmek yeterli.
+  Object.entries(movementsData || {}).forEach(([date, day]) => {
+    Object.entries(day || {}).forEach(([movementId, mv]) => {
+      if (mv && duplicateCodes.has(mv.code)) affected.movements.push({ date, movementId, movement: mv });
+    });
+  });
+
+  return affected;
+}
+
+function mergeReplaceItemsCode(items, duplicateCodes, targetProduct) {
+  if (!Array.isArray(items)) return items;
+  return items.map(item => {
+    if (!item || !duplicateCodes.has(item.code)) return item;
+    return Object.assign({}, item, {
+      code: targetProduct.code,
+      name: targetProduct.name,
+      unit: targetProduct.unit || item.unit || 'Adet'
+    });
+  });
+}
+
+async function mergeReverseReceipt(entry) {
+  const rec = entry.receiptData || {};
+  const items = Array.isArray(rec.items) ? rec.items : [];
+  const receiptCodes = new Set(mergeDuplicateCodes);
+  const matching = items.filter(it => it && receiptCodes.has(it.code));
+
+  // Seçilen mükerrer fişin yalnızca mükerrer ürünlerden oluşan stok girişlerini geri al.
+  for (const item of matching) {
+    const code = item.code;
+    const qty = Number(item.qty || 0);
+    if (!code || !productsData[code] || qty <= 0) continue;
+    await db.child(code).child('qty').transaction(cur => Number(cur || 0) - qty);
+    logMovement(code, productsData[code].name || item.name || code, -qty, 'MÜKERRER MALZEME FİŞİ GERİ ALMA: ' + (rec.fisNo || entry.receiptId));
   }
 
-  // Duplicate ürünlerde satış/çıkış varsa stok hesabını bozabilecek otomatik silmeyi engelle.
-  let outbound=false;
-  Object.values(movementsData||{}).forEach(day=>Object.values(day||{}).forEach(m=>{
-    if(duplicates.includes(m.code)&&Number(m.change||0)<0) outbound=true;
-  }));
-  if(outbound){alert('Mükerrer ürünlerden birinde stok çıkışı/satış bulundu. Güvenli otomatik düzeltme için işlem durduruldu.');return;}
-
-  // Seçilmeyen başka bir fişte duplicate ürün kullanılıyorsa ürün kaydını silemeyiz.
-  const selectedKeys=new Set(receipts.map(r=>`${r.date}/${r.receiptId}`));
-  let outside=false;
-  getDedupeReceipts().forEach(r=>{
-    if(selectedKeys.has(`${r.date}/${r.receiptId}`))return;
-    if((r.receiptData.items||[]).some(it=>duplicates.includes(it.code)))outside=true;
-  });
-  if(outside){alert('Seçtiğiniz mükerrer ürünlerden biri başka bir fişte de kullanılıyor. İlgili fişleri de kontrol etmeden silme yapılmayacak.');return;}
-
-  // Satış/borç geçmişinde duplicate ürün kullanılmışsa engelle.
-  try{
-    const [os,ds]=await Promise.all([dbOrders.once('value'),dbCustomerDebts.once('value')]);
-    let found=false;
-    const scan=obj=>{
-      if(!obj||typeof obj!=='object'||found)return;
-      if(obj.code&&duplicates.includes(obj.code)){found=true;return;}
-      Object.keys(obj).forEach(k=>{if(k!=='code')scan(obj[k]);});
-    };
-    scan(os.val()||{});scan(ds.val()||{});
-    if(found){alert('Mükerrer ürünlerden biri satış/borç kayıtlarında kullanılmış. Otomatik silme güvenlik nedeniyle durduruldu.');return;}
-  }catch(err){alert('Satış geçmişi kontrol edilemedi. Güvenlik için işlem durduruldu: '+(err.message||err));return;}
-
-  const receiptTotal=receipts.reduce((s,r)=>s+Number(r.receiptData.total||0),0);
-  const duplicateStock=duplicates.reduce((s,c)=>s+Number(productsData[c]?.qty||0),0);
-  const masterName=productsData[master].name||master;
-
-  if(!confirm(`MÜKERRER DÜZELTME ONAYI\n\nAna ürün: ${masterName} (${master})\nSilinecek mükerrer ürün: ${duplicates.length}\nGeri alınacak fiş: ${receipts.length}\nFiş toplamı: ₺${formatMoney(receiptTotal)}\nMükerrer ürünlerdeki mevcut stok: ${duplicateStock}\n\nAna ürünün mevcut stoğu korunacak.\nSeçilen fişlerin stok girişleri geri alınacak ve fişler arşivden silinecek.\nMükerrer ürün kayıtları, görselleri ve barkod önbellekleri silinecek.\n\nDevam edilsin mi?`))return;
-
-  try{
-    // Önce tüm seçili mükerrer fişlerin stok etkisini geri al.
-    for(const r of receipts){
-      for(const item of (r.receiptData.items||[])){
-        if(!item.code||!productsData[item.code])throw new Error(`'${item.code||item.name||'-'}' kodlu fiş kalemi artık stokta bulunmuyor.`);
-        const qty=Number(item.qty||0); if(!qty)continue;
-        await new Promise((resolve,reject)=>{
-          db.child(item.code).child('qty').transaction(cur=>Number(cur||0)-qty,(err,committed)=>{
-            if(err){reject(err);return;}
-            if(committed)logMovement(item.code,productsData[item.code].name||item.name||item.code,-qty,'MÜKERRER FİŞ GERİ ALMA: '+(r.receiptData.fisNo||r.receiptId));
-            resolve();
+  // Borç kaydı oluşturulmuşsa, daha önce düşülen bakiyeyi karşı hareketle geri koy.
+  if (rec.addedToDebt && rec.wholesalerKey && Number(rec.total || 0) > 0 && wholesalersData[rec.wholesalerKey]) {
+    const amount = Number(rec.total || 0);
+    await new Promise(resolve => {
+      dbWholesalers.child(rec.wholesalerKey).child('balance').transaction(cur => Number(cur || 0) + amount, err => {
+        if (!err) {
+          dbWholesalers.child(rec.wholesalerKey).child('transactions').push({
+            desc: 'Mükerrer Malzeme Fişi Geri Alma: ' + (rec.fisNo || entry.receiptId),
+            amount,
+            type: 'odeme',
+            date: new Date().toLocaleString('tr-TR')
           });
-        });
-      }
-      if(r.receiptData.addedToDebt&&r.receiptData.wholesalerKey){
-        const total=Number(r.receiptData.total||0);
-        if(total)await new Promise((resolve,reject)=>{
-          dbWholesalers.child(r.receiptData.wholesalerKey).child('balance').transaction(cur=>Number(cur||0)+total,(err,committed)=>{
-            if(err){reject(err);return;}
-            if(committed)dbWholesalers.child(r.receiptData.wholesalerKey).child('transactions').push({
-              desc:'Mükerrer Malzeme Fişi Geri Alma: '+(r.receiptData.fisNo||r.receiptId),
-              amount:total,type:'odeme',date:new Date().toLocaleString('tr-TR')
-            });
-            resolve();
-          });
-        });
-      }
-      await dbGoodsReceipts.child(r.date).child(r.receiptId).remove();
-    }
+        }
+        resolve();
+      });
+    });
+  }
 
-    // Duplicate ürünleri sil. Ana ürünün kodu/barkodu ve stoğu korunur.
-    for(const code of duplicates){
-      await db.child(code).remove();
-      await dbProductImages.child(code).remove();
-      await dbBarcodeCache.child(code).remove();
-      delete productsData[code];
-    }
+  await dbGoodsReceipts.child(entry.date).child(entry.receiptId).remove();
+}
 
-    dbNotifications.push({
-      text:`Mükerrer düzeltme: ${receipts.length} fiş geri alındı, ${duplicates.length} mükerrer ürün temizlendi. Ana ürün: ${masterName} (${master}).`,
-      time:new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})
+async function executeMergeTool() {
+  if (currentRole !== 'admin') return;
+  const confirmBox = document.getElementById('merge-final-confirm');
+  const status = document.getElementById('merge-execution-status');
+  if (!mergeTargetCode) { alert('Ana ürünü seçin.'); return; }
+  if (mergeDuplicateCodes.size === 0) { alert('En az bir mükerrer ürün seçin.'); return; }
+  if (mergeDuplicateCodes.has(mergeTargetCode)) { alert('Ana ürün mükerrer ürünler arasında olamaz.'); return; }
+  if (!confirmBox.checked) { alert('Son kontrol onay kutusunu işaretleyin.'); return; }
+
+  const targetProduct = productsData[mergeTargetCode];
+  const dupCodes = [...mergeDuplicateCodes].filter(c => productsData[c]);
+  if (!targetProduct || !dupCodes.length) return;
+
+  const dupNames = dupCodes.map(c => `${productsData[c].name} (${c})`).join('\n');
+  const receiptCount = mergeReceiptKeys.size;
+  const finalConfirm = confirm(
+    'Son onay:\n\n' +
+    `Ana ürün: ${targetProduct.name} (${targetProduct.code})\n\n` +
+    `Mükerrer ürünler:\n${dupNames}\n\n` +
+    `Geri alınacak mükerrer fiş sayısı: ${receiptCount}\n\n` +
+    'Bu işlem seçilen mükerrer ürünlerin kalan stoklarını ana ürüne aktaracak, seçilen mükerrer fişlerin girişlerini geri alacak ve eski ürün kodlarını geçmiş kayıtlarda ana koda bağlayacaktır.\n\nDEVAM EDİLSİN Mİ?'
+  );
+  if (!finalConfirm) return;
+
+  status.style.color = 'var(--steel)';
+  status.textContent = '⏳ Birleştirme başlatıldı... Kayıtlar kontrol ediliyor.';
+
+  try {
+    // 1) Önce kullanıcı tarafından seçilen mükerrer fişleri geri al.
+    const selectedReceiptObjects = [];
+    mergeReceiptKeys.forEach(key => {
+      const parts = findReceiptByMergeKey(key);
+      if (!parts) return;
+      const recEntry = globalPastReceipts[parts.receiptId];
+      if (recEntry && recEntry.date === parts.date) {
+        selectedReceiptObjects.push({ receiptId: parts.receiptId, date: parts.date, receiptData: recEntry.receiptData });
+      }
     });
 
-    document.getElementById('dedupe-product-search').value='';
-    renderDedupeProducts();
-    document.getElementById('dedupe-master-code').value='';
-    document.getElementById('dedupe-receipt-list').innerHTML='<div class="dedupe-success">✅ Düzeltme tamamlandı. Ana ürün korundu; seçilen mükerrer fişler geri alındı ve mükerrer ürün kayıtları temizlendi.</div>';
-    document.getElementById('dedupe-preview').innerHTML='';
-    showToast('Mükerrer fiş/ürün düzeltmesi başarıyla tamamlandı.');
-  }catch(err){
-    alert('Mükerrer düzeltme sırasında hata oluştu. İşlemin bir kısmı yapılmış olabilir; tekrar çalıştırmadan önce stok ve fişleri kontrol edin.\n\nHata: '+(err.message||err));
+    // Aynı fiş iki kez seçilmişse tekilleştir.
+    const selectedUnique = [];
+    const seenReceipt = new Set();
+    selectedReceiptObjects.forEach(r => {
+      const k = makeMergeReceiptKey(r.date, r.receiptId);
+      if (!seenReceipt.has(k)) { seenReceipt.add(k); selectedUnique.push(r); }
+    });
+
+    for (const receipt of selectedUnique) {
+      status.textContent = `⏳ Mükerrer fiş geri alınıyor: ${receipt.receiptData.fisNo || receipt.receiptId}...`;
+      await mergeReverseReceipt(receipt);
+    }
+
+    // 2) Mükerrer ürünlerin kalan stoklarını ana ürüne aktar.
+    let transferredQty = 0;
+    for (const code of dupCodes) {
+      const currentDupSnap = await db.child(code).once('value');
+      const currentDup = currentDupSnap.val();
+      if (!currentDup) continue;
+      const qty = Number(currentDup.qty || 0);
+      if (qty !== 0) {
+        await db.child(mergeTargetCode).child('qty').transaction(cur => Number(cur || 0) + qty);
+        transferredQty += qty;
+        logMovement(mergeTargetCode, targetProduct.name, qty, 'MÜKERRER ÜRÜN BİRLEŞTİRME: ' + code);
+      }
+    }
+
+    // 3) Tüm geçmiş satış/borç/fiş/hareket kayıtlarında eski kodları ana koda çevir.
+    const dupSet = new Set(dupCodes);
+    const updates = {};
+
+    // Geçmiş satışlar
+    for (const [orderId, entry] of Object.entries(globalPastOrders || {})) {
+      const orderData = entry?.orderData;
+      if (!orderData || !Array.isArray(orderData.items)) continue;
+      const changed = orderData.items.some(it => dupSet.has(it.code));
+      if (!changed) continue;
+      const newItems = mergeReplaceItemsCode(orderData.items, dupSet, targetProduct);
+      updates[`orders/${entry.date}/${orderId}/items`] = newItems;
+    }
+
+    // Geçmiş fişler — geri alınmayanlar ana ürüne bağlanır.
+    const selectedReceiptSet = new Set(selectedUnique.map(r => makeMergeReceiptKey(r.date, r.receiptId)));
+    for (const [receiptId, entry] of Object.entries(globalPastReceipts || {})) {
+      const rec = entry?.receiptData;
+      if (!rec || !Array.isArray(rec.items)) continue;
+      const key = makeMergeReceiptKey(entry.date, receiptId);
+      if (selectedReceiptSet.has(key)) continue;
+      const changed = rec.items.some(it => dupSet.has(it.code));
+      if (!changed) continue;
+      updates[`goods_receipts/${entry.date}/${receiptId}/items`] = mergeReplaceItemsCode(rec.items, dupSet, targetProduct);
+    }
+
+    // Müşteri borçları — veritabanından tek seferde oku.
+    const debtSnap = await dbCustomerDebts.once('value');
+    const debts = debtSnap.val() || {};
+    Object.entries(debts).forEach(([debtId, debt]) => {
+      if (!debt || !Array.isArray(debt.items)) return;
+      if (!debt.items.some(it => dupSet.has(it.code))) return;
+      updates[`customer_debts/${debtId}/items`] = mergeReplaceItemsCode(debt.items, dupSet, targetProduct);
+    });
+
+    // Günlük hareketler: geçmiş hareketlerin ürün kodunu değiştirmek stok miktarını tekrar etkilemez.
+    Object.entries(movementsData || {}).forEach(([date, day]) => {
+      Object.entries(day || {}).forEach(([movementId, mv]) => {
+        if (!mv || !dupSet.has(mv.code)) return;
+        updates[`daily_movements/${date}/${movementId}/code`] = targetProduct.code;
+        updates[`daily_movements/${date}/${movementId}/name`] = targetProduct.name;
+      });
+    });
+
+    if (Object.keys(updates).length) {
+      await dbRoot.update(updates);
+    }
+
+    // 4) Ürün fotoğraflarından ana üründe olmayan varsa taşı, sonra mükerrer ürünü temizle.
+    for (const code of dupCodes) {
+      try {
+        const targetImg = await dbProductImages.child(mergeTargetCode).once('value');
+        const dupImg = await dbProductImages.child(code).once('value');
+        if (!targetImg.exists() && dupImg.exists()) {
+          await dbProductImages.child(mergeTargetCode).set(dupImg.val());
+        }
+      } catch (e) { /* fotoğraf taşıma başarısızsa ana işlem devam eder */ }
+
+      try {
+        await dbBarcodeCache.child(code).remove();
+        await dbProductImages.child(code).remove();
+        await db.child(code).remove();
+      } catch (e) {
+        console.error('Mükerrer ürün temizleme hatası', code, e);
+      }
+    }
+
+    // 5) Denetim kaydı oluştur.
+    const logRef = dbRoot.child('merge_logs').push();
+    await logRef.set({
+      type: 'duplicate_product_merge',
+      targetCode: targetProduct.code,
+      targetName: targetProduct.name,
+      duplicateCodes: dupCodes,
+      duplicateReceiptKeys: selectedUnique.map(r => makeMergeReceiptKey(r.date, r.receiptId)),
+      transferredQty,
+      updatedRecordCount: Object.keys(updates).length,
+      performedBy: 'Yönetici',
+      performedAt: new Date().toISOString()
+    });
+
+    mergeDuplicateCodes.clear();
+    mergeReceiptKeys.clear();
+    mergeTargetCode = null;
+    confirmBox.checked = false;
+
+    status.style.color = 'var(--success)';
+    status.textContent = `✅ Birleştirme tamamlandı.\nAna ürün korunuyor. ${dupCodes.length} mükerrer ürün temizlendi.\nAna ürüne aktarılan kalan stok: ${transferredQty}\nGeri alınan mükerrer fiş: ${selectedUnique.length}\nGüncellenen geçmiş kayıt alanı: ${Object.keys(updates).length}`;
+
+    document.getElementById('merge-product-search').value = '';
+    document.getElementById('merge-receipt-candidates').innerHTML = '';
+    document.getElementById('merge-receipt-status').textContent = '';
+    renderMergeProductCandidates();
+    renderGrid();
+  } catch (err) {
+    console.error('Mükerrer birleştirme hatası:', err);
+    status.style.color = 'var(--rust)';
+    status.textContent = '❌ Birleştirme sırasında hata oluştu: ' + (err.message || err);
   }
 }
+
+
+// Mükerrer araç sekmesi yönetici açtığında ürün listesini hazırlar.
+document.addEventListener('DOMContentLoaded', () => {
+  renderMergeProductCandidates();
+});
 
 </script>
 </body>
