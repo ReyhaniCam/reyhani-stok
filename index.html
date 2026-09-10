@@ -552,7 +552,24 @@
 .cmdk-empty{ text-align:center; padding:30px 10px; color:var(--steel); font-size:13px; }
 
 
-/* ===== TEMİZ / ERİŞİLEBİLİR GÖRSEL TEMA — İŞLEVSEL KODDAN AYRI ===== */
+
+  /* ============ MÜKERRER FİŞ / ÜRÜN DÜZELTME ARACI ============ */
+  .dedupe-product-list{display:grid;grid-template-columns:1fr;gap:8px;margin-top:10px;}
+  .dedupe-product-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--steel-line);border-radius:8px;background:#fff;}
+  .dedupe-product-item input[type="checkbox"]{width:20px;min-height:20px;flex-shrink:0;}
+  .dedupe-product-item .dpi-main{flex:1;min-width:0;}
+  .dedupe-product-item .dpi-name{font-weight:700;word-break:break-word;}
+  .dedupe-product-item .dpi-code{font:12px 'IBM Plex Mono';color:var(--steel);word-break:break-all;}
+  .dedupe-product-item .dpi-qty{font:12px 'IBM Plex Mono';font-weight:700;white-space:nowrap;}
+  .dedupe-receipt-list{display:grid;gap:8px;margin-top:10px;}
+  .dedupe-receipt-item{border:1px solid var(--steel-line);border-radius:8px;padding:10px 12px;background:#fff;}
+  .dedupe-receipt-item label{display:flex;align-items:flex-start;gap:10px;text-transform:none;font-size:12px;color:var(--charcoal);margin:0;cursor:pointer;}
+  .dedupe-receipt-item input[type="checkbox"]{width:20px;min-height:20px;flex-shrink:0;}
+  .dedupe-danger{background:#FFF1F2;border:1px solid #FDA4AF;color:#9F1239;padding:12px;border-radius:8px;font-size:12px;line-height:1.5;}
+  .dedupe-info{background:#EFF6FF;border:1px solid #93C5FD;color:#1E40AF;padding:12px;border-radius:8px;font-size:12px;line-height:1.5;}
+  .dedupe-success{background:#ECFDF5;border:1px solid #86EFAC;color:#166534;padding:12px;border-radius:8px;font-size:12px;line-height:1.5;}
+
+  /* ===== TEMİZ / ERİŞİLEBİLİR GÖRSEL TEMA — İŞLEVSEL KODDAN AYRI ===== */
 :root{
     --bg:#EEF2F6; --paper:#FFFFFF; --charcoal:#1F2D3D; --steel:#536476;
     --steel-line:#D5DEE7; --safety:#B9D7E7; --rust:#D96C6C; --success:#4FAF82;
@@ -665,6 +682,7 @@
     <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış / Sepet</button>
     <button class="tab-btn" id="nav-yerlesim-btn" onclick="switchTab('yerlesim')" style="display:none;">🗺️ Yerleşim</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
+    <button class="tab-btn" id="nav-mukerrer-btn" onclick="switchTab('mukerrer')" style="display:none;">🧹 Mükerrer Düzelt</button>
     <button class="tab-btn" id="nav-borc-btn" onclick="switchTab('borc')" style="display:none;">💰 Müşteri Borç</button>
     <button class="tab-btn" id="nav-acikhesap-btn" onclick="switchTab('acikhesap')" style="display:none;">📖 Açık Hesap</button>
   </div>
@@ -1282,6 +1300,43 @@
       <div id="past-receipts-list" style="margin-top:10px;"></div>
     </div>
 
+    <!-- MÜKERRER FİŞ / ÜRÜN DÜZELTME TABI -->
+    <div id="tab-mukerrer" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">🧹 Mükerrer Fiş / Ürün Düzeltme</h3>
+        <div class="dedupe-danger">
+          <strong>Dikkat — sadece mevcut hatalı kaydı düzeltmek için kullanın.</strong><br>
+          Bu araç bütün stoğu otomatik birleştirmez. Yalnızca sizin seçtiğiniz ürünleri ve mükerrer fişleri düzeltir.
+          Aynı malzeme fişi 4 kez kaydedildiyse amaç; <b>1 fişi bırakmak, diğer 3 fişi stoktan geri almak ve 3 mükerrer ürün kaydını temizlemektir.</b>
+        </div>
+        <div style="margin-top:16px;">
+          <label>1. Mükerrer ürünleri seçin</label>
+          <input type="text" id="dedupe-product-search" placeholder="Ürün adı, barkod veya kod ara..." oninput="renderDedupeProducts()">
+          <div id="dedupe-product-list" class="dedupe-product-list"></div>
+        </div>
+        <div id="dedupe-selected-summary" class="dedupe-info" style="display:none;margin-top:14px;"></div>
+        <div style="margin-top:16px;">
+          <label>2. Ana ürün</label>
+          <select id="dedupe-master-code" onchange="renderDedupeReceipts()">
+            <option value="">Önce ürünleri seçin</option>
+          </select>
+          <div style="font-size:11px;color:var(--steel);margin-top:5px;">
+            Ana ürünün mevcut barkodu/kodu ve mevcut stoğu korunur. Bu özel düzeltmede diğer ürünlerin stoğu ana ürüne eklenmez.
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <label>3. İptal edilecek mükerrer fişleri seçin</label>
+          <div id="dedupe-receipt-list" class="dedupe-receipt-list">
+            <div class="dedupe-info">Önce ürünleri seçip ana ürünü belirleyin.</div>
+          </div>
+        </div>
+        <div id="dedupe-preview" style="margin-top:14px;"></div>
+        <button class="btn btn-danger" style="margin-top:14px;" onclick="executeDedupeRepair()">
+          🧹 Seçilen Mükerrer Fişleri Geri Al ve Ürünleri Temizle
+        </button>
+      </div>
+    </div>
+
     <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
     <div id="tab-siparis" class="tab-content">
       <!-- AI SATIŞ ASİSTANI KUTUSU (BAŞLANGIÇ) -->
@@ -1759,11 +1814,7 @@
       </div>
     </div>
 
-    <div id="re-add-edit-banner" style="display:none; background:#FEF3C7; border:1px solid #F59E0B; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px; color:#92400E; font-weight:600; align-items:center; justify-content:space-between; gap:8px;">
-      <span>✏️ Bu kalemi düzenliyorsunuz. Geliş/satış fiyatı, yüzde, miktar — ne değiştirdiyseniz aşağıdaki butonla kaydedin.</span>
-      <a href="javascript:void(0)" onclick="cancelReceiptEditItemEdit()" style="color:#92400E; text-decoration:underline; flex-shrink:0;">İptal</a>
-    </div>
-    <button type="button" class="btn btn-primary" id="re-add-btn" style="width:100%;" onclick="addReceiptEditItem()">+ Listeye Ekle</button>
+    <button type="button" class="btn btn-primary" style="width:100%;" onclick="addReceiptEditItem()">+ Listeye Ekle</button>
 
     <div style="text-align:right; font-family:'IBM Plex Mono'; font-weight:bold; font-size:16px; margin:18px 0 14px;">Yeni Toplam: ₺<span id="re-total">0.00</span></div>
     <button class="btn btn-success" style="width:100%;" onclick="saveReceiptEdit()">✅ Değişiklikleri Kaydet</button>
@@ -2925,6 +2976,7 @@ function updateAuthUI() {
   document.getElementById('nav-yerlesim-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
   document.getElementById('nav-reports-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
   document.getElementById('nav-gorevler-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
+  document.getElementById('nav-mukerrer-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
 
   if(currentRole === 'admin') {
     statusBadge.textContent = "Yönetici"; statusBadge.className = "admin-badge role-admin"; authBtn.textContent = "Çıkış Yap";
@@ -5075,6 +5127,8 @@ function switchTab(tabName) {
   if(tabName === 'borc' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'acikhesap' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'fis') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  if(tabName === 'mukerrer' && currentRole !== 'admin') { alert("Mükerrer düzeltme aracı yalnızca yöneticiye açıktır."); return; }
+  if(tabName === 'mukerrer') renderDedupeProducts();
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -6250,7 +6304,6 @@ async function downloadReceiptById(receiptId) {
 // ============================================================
 let receiptEditItems = [];
 let receiptEditTarget = null;
-let reEditingIndex = null; // null = yeni kalem ekleme modu; sayı ise o index'teki kalem düzenleniyor demektir
 let _reAddMatchDebounce = null;
 
 function openReceiptEditModal(receiptId) {
@@ -6276,7 +6329,6 @@ function closeReceiptEditModal() {
   document.getElementById('receipt-edit-modal').style.display = 'none';
   receiptEditItems = [];
   receiptEditTarget = null;
-  reEditingIndex = null;
 }
 
 function populateReceiptEditProductList() {
@@ -6300,62 +6352,6 @@ function resetReceiptAddForm() {
   const priceFields = document.getElementById('re-add-price-fields'); if(priceFields) priceFields.style.display = 'none';
   const newFields = document.getElementById('re-add-new-fields'); if(newFields) newFields.style.display = 'none';
   const warnBox = document.getElementById('re-add-duplicate-warning'); if(warnBox) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; }
-  const updateCheck = document.getElementById('re-add-update-existing-price'); if(updateCheck) updateCheck.checked = true;
-
-  // Düzenleme modundan çıkılıyorsa (iptal / kaydetme sonrası) formu ve butonu eski haline döndür.
-  reEditingIndex = null;
-  const banner = document.getElementById('re-add-edit-banner'); if(banner) banner.style.display = 'none';
-  const addBtn = document.getElementById('re-add-btn'); if(addBtn) addBtn.textContent = '+ Listeye Ekle';
-}
-
-function cancelReceiptEditItemEdit() {
-  resetReceiptAddForm();
-  renderReceiptEditItems();
-}
-
-// Fişteki mevcut bir kalemin GELİŞ FİYATI, SATIŞ FİYATI, KDV/KÂR YÜZDESİ, MİKTARI,
-// BİRİMİ ve SINIFI dahil tüm özelliklerini düzenlemek için "Kaleme Ekle" formuna yükler.
-// editFisItem'ın (yeni fiş ekranındaki) bu modaldaki karşılığıdır.
-function editReceiptEditItem(idx) {
-  const item = receiptEditItems[idx];
-  if(!item) return;
-
-  reEditingIndex = idx;
-
-  document.getElementById('re-add-product').value = item.isNew ? item.name : `${item.code} - ${item.name}`;
-  document.getElementById('re-add-qty').value = item.qty;
-  document.getElementById('re-add-cost').value = item.cost;
-
-  checkReceiptEditProductMatch();
-
-  // checkReceiptEditProductMatch() sadece boş alanları stoktaki mevcut değerlerle doldurur;
-  // bu kalemde daha önce girilmiş kendi değerleri varsa (isNew ya da updatePrices ile
-  // kaydedilmiş) onların üzerine yazıp gösteriyoruz ki gerçekten düzenlediğiniz şey bu olsun.
-  if(item.isNew) {
-    document.getElementById('re-add-price').value = item.price || '';
-    document.getElementById('re-add-unit').value = item.unit || 'Adet';
-    document.getElementById('re-add-category').value = item.category || 'Diğer';
-    document.getElementById('re-add-vat').value = (item.vat != null) ? item.vat : '';
-    document.getElementById('re-add-profit').value = (item.targetProfit != null) ? item.targetProfit : '';
-    updateFisProfit('re-add');
-    const barcodeEl = document.getElementById('re-add-barcode'); if(barcodeEl) barcodeEl.value = item.code || '';
-    const barcodePendingEl = document.getElementById('re-add-barcode-pending'); if(barcodePendingEl) barcodePendingEl.value = item.code || '';
-  } else if(item.updatePrices) {
-    if(item.vat != null) document.getElementById('re-add-vat').value = item.vat;
-    if(item.targetProfit != null) document.getElementById('re-add-profit').value = item.targetProfit;
-    if(item.newPrice != null) document.getElementById('re-add-price').value = item.newPrice;
-    const updateCheck = document.getElementById('re-add-update-existing-price'); if(updateCheck) updateCheck.checked = true;
-    updateFisProfit('re-add');
-  }
-
-  const banner = document.getElementById('re-add-edit-banner'); if(banner) banner.style.display = 'flex';
-  const addBtn = document.getElementById('re-add-btn'); if(addBtn) addBtn.textContent = '💾 Düzenlemeyi Kaydet';
-
-  renderReceiptEditItems(); // düzenlenen satırı vurgulamak için yeniden çiz
-
-  const productInput = document.getElementById('re-add-product');
-  if(productInput) { productInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); productInput.focus(); }
-  showToast("Kalem düzenlemeniz için forma yüklendi. Geliş/satış fiyatı, yüzde, miktar — ne değiştirdiyseniz '💾 Düzenlemeyi Kaydet' butonuna basın.");
 }
 
 // checkFisProductMatch'in aynısı — sadece 're-add-' alanlarına ve bu modalın
@@ -6432,12 +6428,12 @@ function renderReceiptEditItems() {
     box.innerHTML = '<p style="color:var(--steel); font-size:12px; text-align:center; padding:10px 0;">Listede hiç kalem yok. Aşağıdan ekleyebilirsiniz.</p>';
   } else {
     box.innerHTML = receiptEditItems.map((it, idx) => `
-      <div style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--steel-line); flex-wrap:wrap; ${idx === reEditingIndex ? 'background:#FFF7E0; border-radius:6px; outline:2px solid var(--warning, #E0A800);' : ''}">
+      <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--steel-line); flex-wrap:wrap;">
         <div style="flex:2; min-width:160px;">
-          <strong>${it.name}</strong>${it.isNew ? ' <span style="color:var(--info); font-size:10px; font-weight:600;">(YENİ ÜRÜN' + (it.category ? ' — ' + it.category : '') + ')</span>' : ''}${idx === reEditingIndex ? ' <span style="color:#E0A800; font-size:10px; font-weight:600;">(DÜZENLENİYOR)</span>' : ''}<br>
+          <strong>${it.name}</strong>${it.isNew ? ' <span style="color:var(--info); font-size:10px; font-weight:600;">(YENİ ÜRÜN' + (it.category ? ' — ' + it.category : '') + ')</span>' : ''}<br>
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${it.isNew ? (it.code || 'Kod otomatik atanacak') : (it.code || '-')} ${it.unit ? '· ' + it.unit : ''}</small>
           ${it.isNew && it.price ? `<br><small style="color:var(--steel);">Satış: ₺${formatMoney(it.price)}${it.vat?' · KDV %'+it.vat:''}${it.targetProfit!=null && it.targetProfit!==''?' · Kâr %'+it.targetProfit:''}</small>` : ''}
-          ${!it.isNew && it.updatePrices ? `<br><small style="color:var(--success);">↻ Geliş ₺${formatMoney(it.cost||0)}${it.newPrice!=null?' · Satış ₺'+formatMoney(it.newPrice):''}${it.vat!=null?' · KDV %'+it.vat:''}${it.targetProfit!=null?' · Kâr %'+it.targetProfit:''} stokta güncellenecek</small>` : ''}
+          ${!it.isNew && it.updatePrices ? `<br><small style="color:var(--success);">↻ Fiyat/kâr stokta güncellenecek</small>` : ''}
         </div>
         <div style="width:90px;">
           <label style="font-size:9px; text-transform:uppercase; color:var(--steel);">Miktar</label>
@@ -6448,7 +6444,6 @@ function renderReceiptEditItems() {
           <input type="number" step="0.01" value="${it.cost || 0}" oninput="updateReceiptEditItem(${idx}, 'cost', this.value)">
         </div>
         <div id="re-line-total-${idx}" style="width:90px; text-align:right; font-family:'IBM Plex Mono'; font-weight:bold;">₺${formatMoney((Number(it.qty)||0) * (Number(it.cost)||0))}</div>
-        <button type="button" class="btn btn-info btn-sm" style="width:auto; flex-shrink:0;" title="Geliş/satış fiyatı, yüzde, birim gibi tüm özellikleri düzenle" onclick="editReceiptEditItem(${idx})">✏️ Düzenle</button>
         <button type="button" class="btn btn-danger btn-sm" style="width:auto; flex-shrink:0;" onclick="removeReceiptEditItem(${idx})">🗑</button>
       </div>
     `).join('');
@@ -6502,16 +6497,6 @@ function addReceiptEditItem() {
       if(newPriceRaw !== '') newEntry.newPrice = Math.max(0, parseFloat(newPriceRaw) || 0);
     }
 
-    // Düzenleme modundaysak (bir kalemin ✏️ Düzenle'sine basılmışsa), yeni bir satır
-    // açmak yerine düzenlenen kalemin yerine koyuyoruz — kod farklı bir ürüne
-    // değiştirilmiş olsa bile bu geçerli, çünkü "elle eşleştir" ile ürün de değişebilir.
-    if(reEditingIndex !== null && receiptEditItems[reEditingIndex]) {
-      receiptEditItems[reEditingIndex] = newEntry;
-      resetReceiptAddForm();
-      renderReceiptEditItems();
-      return;
-    }
-
     // Aynı mevcut üründen fişte zaten varsa ayrı satır açmak yerine miktarını artır.
     const existingIdx = receiptEditItems.findIndex(it => !it.isNew && it.code === p.code);
     if(existingIdx > -1) {
@@ -6532,8 +6517,7 @@ function addReceiptEditItem() {
     const category = document.getElementById('re-add-category').value;
 
     if(rawBarcode) {
-      const usedElsewhere = receiptEditItems.some((it, i) => it.code === rawBarcode && i !== reEditingIndex);
-      if(productsData[rawBarcode] || usedElsewhere) {
+      if(productsData[rawBarcode] || receiptEditItems.some(it => it.code === rawBarcode)) {
         alert(`'${rawBarcode}' barkodu zaten kullanılıyor. Lütfen kontrol edin.`);
         return;
       }
@@ -6545,11 +6529,7 @@ function addReceiptEditItem() {
     };
   }
 
-  if(reEditingIndex !== null && receiptEditItems[reEditingIndex]) {
-    receiptEditItems[reEditingIndex] = newEntry;
-  } else {
-    receiptEditItems.push(newEntry);
-  }
+  receiptEditItems.push(newEntry);
   resetReceiptAddForm();
   renderReceiptEditItems();
 }
@@ -9449,6 +9429,250 @@ async function sendPanelAIMessage(panelKey) {
     panelAIBusy[panelKey] = false;
   }
 }
+
+/* ============================================================
+   MÜKERRER FİŞ / ÜRÜN DÜZELTME ARACI
+   Otomatik/global deduplikasyon yapmaz; yalnızca yönetici tarafından
+   seçilen hatalı ürün ve fişleri düzeltir.
+   ============================================================ */
+function dedupeEsc(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[ch]));
+}
+
+function getDedupeSelectedCodes() {
+  return Array.from(document.querySelectorAll('#dedupe-product-list input[data-dedupe-code]:checked'))
+    .map(el => el.getAttribute('data-dedupe-code'))
+    .filter(code => code && productsData[code]);
+}
+
+function renderDedupeProducts() {
+  const list = document.getElementById('dedupe-product-list');
+  if(!list) return;
+  const search = (document.getElementById('dedupe-product-search')?.value || '').trim().toLocaleLowerCase('tr-TR');
+  const selectedBefore = new Set(getDedupeSelectedCodes());
+
+  const all = Object.values(productsData || {}).filter(p => {
+    if(!search) return true;
+    const hay = `${p.name||''} ${p.code||''} ${p.brand||''} ${p.category||''}`.toLocaleLowerCase('tr-TR');
+    return hay.includes(search);
+  }).sort((a,b) => String(a.name||'').localeCompare(String(b.name||''),'tr'));
+
+  list.innerHTML = all.length ? all.map(p => `
+    <label class="dedupe-product-item">
+      <input type="checkbox" data-dedupe-code="${dedupeEsc(p.code)}" ${selectedBefore.has(p.code)?'checked':''} onchange="updateDedupeSelection()">
+      <span class="dpi-main">
+        <span class="dpi-name">${dedupeEsc(p.name || 'İsimsiz Ürün')}</span><br>
+        <span class="dpi-code">${dedupeEsc(p.code || '-')}</span>
+      </span>
+      <span class="dpi-qty">${Number(p.qty||0)} ${dedupeEsc(p.unit||'Adet')}</span>
+    </label>
+  `).join('') : '<div class="dedupe-info">Aramanıza uygun ürün bulunamadı.</div>';
+
+  updateDedupeSelection();
+}
+
+function updateDedupeSelection() {
+  const codes = getDedupeSelectedCodes();
+  const master = document.getElementById('dedupe-master-code');
+  const oldMaster = master?.value || '';
+  if(master) {
+    master.innerHTML = '<option value="">Ana ürünü seçin</option>' + codes.map(code => {
+      const p=productsData[code];
+      return `<option value="${dedupeEsc(code)}">${dedupeEsc(p.name||'İsimsiz')} — ${dedupeEsc(code)} (stok: ${Number(p.qty||0)})</option>`;
+    }).join('');
+    if(codes.includes(oldMaster)) master.value=oldMaster;
+  }
+  const summary=document.getElementById('dedupe-selected-summary');
+  if(summary) {
+    if(codes.length<2) {
+      summary.style.display=codes.length?'block':'none';
+      summary.innerHTML=codes.length?'⚠️ En az <b>2 ürün</b> seçmelisiniz. 4 mükerrer kayıt varsa 4 ürünü de işaretleyin.':'';
+    } else {
+      summary.style.display='block';
+      summary.innerHTML=`✅ <b>${codes.length} ürün seçildi.</b> Ana ürün ve iptal edilecek mükerrer fişleri aşağıdan seçin.`;
+    }
+  }
+  renderDedupeReceipts();
+}
+
+function getDedupeReceipts() {
+  return Object.keys(globalPastReceipts||{}).map(receiptId => {
+    const x=globalPastReceipts[receiptId];
+    return {receiptId,date:x.date,receiptData:x.receiptData};
+  }).filter(x=>x.receiptData);
+}
+
+function renderDedupeReceipts() {
+  const box=document.getElementById('dedupe-receipt-list');
+  const preview=document.getElementById('dedupe-preview');
+  const master=document.getElementById('dedupe-master-code')?.value||'';
+  const selected=getDedupeSelectedCodes();
+  if(!box) return;
+  if(!master || selected.length<2) {
+    box.innerHTML='<div class="dedupe-info">En az 2 ürün seçip ana ürünü belirleyin.</div>';
+    if(preview) preview.innerHTML='';
+    return;
+  }
+  const duplicates=selected.filter(c=>c!==master);
+  const receipts=getDedupeReceipts().filter(r=>(r.receiptData.items||[]).some(it=>duplicates.includes(it.code)))
+    .sort((a,b)=>`${b.date} ${b.receiptData.time||''}`.localeCompare(`${a.date} ${a.receiptData.time||''}`));
+
+  if(!receipts.length) {
+    box.innerHTML='<div class="dedupe-danger">Seçilen mükerrer ürünlere ait fiş bulunamadı. Fiş 60 günlük arşiv sınırının dışındaysa burada görünmez.</div>';
+    if(preview) preview.innerHTML='';
+    return;
+  }
+
+  box.innerHTML=receipts.map(r=>{
+    const matched=(r.receiptData.items||[]).filter(it=>selected.includes(it.code));
+    const names=matched.map(it=>`${it.name||'-'} (${it.qty||0})`).join(', ');
+    return `<div class="dedupe-receipt-item"><label>
+      <input type="checkbox" data-dedupe-receipt="${dedupeEsc(r.receiptId)}" data-dedupe-date="${dedupeEsc(r.date)}" onchange="updateDedupePreview()">
+      <span><b>${dedupeEsc(r.receiptData.wholesalerName||'Bilinmeyen Toptancı')}</b> — ${dedupeEsc(r.date)}
+      ${r.receiptData.fisNo?` — Fiş: ${dedupeEsc(r.receiptData.fisNo)}`:''}<br>
+      <span style="color:var(--steel);">₺${formatMoney(Number(r.receiptData.total||0))} · ${dedupeEsc(names)}</span>
+      ${r.receiptData.addedToDebt?'<br><span style="color:#9F1239;font-weight:700;">⚠️ Toptancı borcuna işlenmiş</span>':''}</span>
+    </label></div>`;
+  }).join('');
+  updateDedupePreview();
+}
+
+function updateDedupePreview() {
+  const preview=document.getElementById('dedupe-preview');
+  if(!preview) return;
+  const els=Array.from(document.querySelectorAll('#dedupe-receipt-list input[data-dedupe-receipt]:checked'));
+  if(!els.length) {
+    preview.innerHTML='<div class="dedupe-info">Örneğin aynı fiş 4 kez kaydedildiyse 3 mükerrer fişi seçin; 1 fişi bırakın.</div>';
+    return;
+  }
+  let total=0,debt=0;
+  els.forEach(el=>{
+    const r=globalPastReceipts?.[el.getAttribute('data-dedupe-receipt')]?.receiptData;
+    if(r){total+=Number(r.total||0);if(r.addedToDebt)debt+=Number(r.total||0);}
+  });
+  preview.innerHTML=`<div class="dedupe-danger"><b>${els.length} fiş geri alınacak.</b> Bu fişlerdeki tüm stok girişleri geri düşülecek.
+    ${debt?`<br>Toptancı cari hesabından ₺${formatMoney(debt)} geri alınacak.`:''}
+    <br>Toplam geri alınacak fiş tutarı: <b>₺${formatMoney(total)}</b>.</div>`;
+}
+
+async function executeDedupeRepair() {
+  if(currentRole!=='admin'){alert('Bu işlem yalnızca yöneticiye açıktır.');return;}
+  const selected=getDedupeSelectedCodes();
+  const master=document.getElementById('dedupe-master-code')?.value||'';
+  const duplicates=selected.filter(c=>c!==master);
+  const els=Array.from(document.querySelectorAll('#dedupe-receipt-list input[data-dedupe-receipt]:checked'));
+  if(!master||!productsData[master]){alert('Lütfen ana ürünü seçin.');return;}
+  if(!duplicates.length){alert('En az bir mükerrer ürün seçmelisiniz.');return;}
+  if(!els.length){alert('İptal edilecek mükerrer fişleri seçin.');return;}
+
+  const receipts=els.map(el=>({
+    receiptId:el.getAttribute('data-dedupe-receipt'),
+    date:el.getAttribute('data-dedupe-date'),
+    receiptData:globalPastReceipts?.[el.getAttribute('data-dedupe-receipt')]?.receiptData
+  })).filter(r=>r.receiptData);
+
+  if(receipts.length!==els.length){alert('Seçilen fişlerden biri artık bulunamıyor. Listeyi yenileyip tekrar deneyin.');return;}
+
+  // Her duplicate ürünün en az bir seçili fişte bulunduğunu doğrula.
+  const covered=new Set();
+  receipts.forEach(r=>(r.receiptData.items||[]).forEach(it=>{if(duplicates.includes(it.code))covered.add(it.code);}));
+  const uncovered=duplicates.filter(c=>!covered.has(c));
+  if(uncovered.length){
+    alert('Şu mükerrer ürünler seçtiğiniz fişlerde bulunamadı:\n'+uncovered.map(c=>`${productsData[c]?.name||c} (${c})`).join('\n')+'\n\nYanlış kayıtları silmemek için işlem durduruldu.');
+    return;
+  }
+
+  // Duplicate ürünlerde satış/çıkış varsa stok hesabını bozabilecek otomatik silmeyi engelle.
+  let outbound=false;
+  Object.values(movementsData||{}).forEach(day=>Object.values(day||{}).forEach(m=>{
+    if(duplicates.includes(m.code)&&Number(m.change||0)<0) outbound=true;
+  }));
+  if(outbound){alert('Mükerrer ürünlerden birinde stok çıkışı/satış bulundu. Güvenli otomatik düzeltme için işlem durduruldu.');return;}
+
+  // Seçilmeyen başka bir fişte duplicate ürün kullanılıyorsa ürün kaydını silemeyiz.
+  const selectedKeys=new Set(receipts.map(r=>`${r.date}/${r.receiptId}`));
+  let outside=false;
+  getDedupeReceipts().forEach(r=>{
+    if(selectedKeys.has(`${r.date}/${r.receiptId}`))return;
+    if((r.receiptData.items||[]).some(it=>duplicates.includes(it.code)))outside=true;
+  });
+  if(outside){alert('Seçtiğiniz mükerrer ürünlerden biri başka bir fişte de kullanılıyor. İlgili fişleri de kontrol etmeden silme yapılmayacak.');return;}
+
+  // Satış/borç geçmişinde duplicate ürün kullanılmışsa engelle.
+  try{
+    const [os,ds]=await Promise.all([dbOrders.once('value'),dbCustomerDebts.once('value')]);
+    let found=false;
+    const scan=obj=>{
+      if(!obj||typeof obj!=='object'||found)return;
+      if(obj.code&&duplicates.includes(obj.code)){found=true;return;}
+      Object.keys(obj).forEach(k=>{if(k!=='code')scan(obj[k]);});
+    };
+    scan(os.val()||{});scan(ds.val()||{});
+    if(found){alert('Mükerrer ürünlerden biri satış/borç kayıtlarında kullanılmış. Otomatik silme güvenlik nedeniyle durduruldu.');return;}
+  }catch(err){alert('Satış geçmişi kontrol edilemedi. Güvenlik için işlem durduruldu: '+(err.message||err));return;}
+
+  const receiptTotal=receipts.reduce((s,r)=>s+Number(r.receiptData.total||0),0);
+  const duplicateStock=duplicates.reduce((s,c)=>s+Number(productsData[c]?.qty||0),0);
+  const masterName=productsData[master].name||master;
+
+  if(!confirm(`MÜKERRER DÜZELTME ONAYI\n\nAna ürün: ${masterName} (${master})\nSilinecek mükerrer ürün: ${duplicates.length}\nGeri alınacak fiş: ${receipts.length}\nFiş toplamı: ₺${formatMoney(receiptTotal)}\nMükerrer ürünlerdeki mevcut stok: ${duplicateStock}\n\nAna ürünün mevcut stoğu korunacak.\nSeçilen fişlerin stok girişleri geri alınacak ve fişler arşivden silinecek.\nMükerrer ürün kayıtları, görselleri ve barkod önbellekleri silinecek.\n\nDevam edilsin mi?`))return;
+
+  try{
+    // Önce tüm seçili mükerrer fişlerin stok etkisini geri al.
+    for(const r of receipts){
+      for(const item of (r.receiptData.items||[])){
+        if(!item.code||!productsData[item.code])throw new Error(`'${item.code||item.name||'-'}' kodlu fiş kalemi artık stokta bulunmuyor.`);
+        const qty=Number(item.qty||0); if(!qty)continue;
+        await new Promise((resolve,reject)=>{
+          db.child(item.code).child('qty').transaction(cur=>Number(cur||0)-qty,(err,committed)=>{
+            if(err){reject(err);return;}
+            if(committed)logMovement(item.code,productsData[item.code].name||item.name||item.code,-qty,'MÜKERRER FİŞ GERİ ALMA: '+(r.receiptData.fisNo||r.receiptId));
+            resolve();
+          });
+        });
+      }
+      if(r.receiptData.addedToDebt&&r.receiptData.wholesalerKey){
+        const total=Number(r.receiptData.total||0);
+        if(total)await new Promise((resolve,reject)=>{
+          dbWholesalers.child(r.receiptData.wholesalerKey).child('balance').transaction(cur=>Number(cur||0)+total,(err,committed)=>{
+            if(err){reject(err);return;}
+            if(committed)dbWholesalers.child(r.receiptData.wholesalerKey).child('transactions').push({
+              desc:'Mükerrer Malzeme Fişi Geri Alma: '+(r.receiptData.fisNo||r.receiptId),
+              amount:total,type:'odeme',date:new Date().toLocaleString('tr-TR')
+            });
+            resolve();
+          });
+        });
+      }
+      await dbGoodsReceipts.child(r.date).child(r.receiptId).remove();
+    }
+
+    // Duplicate ürünleri sil. Ana ürünün kodu/barkodu ve stoğu korunur.
+    for(const code of duplicates){
+      await db.child(code).remove();
+      await dbProductImages.child(code).remove();
+      await dbBarcodeCache.child(code).remove();
+      delete productsData[code];
+    }
+
+    dbNotifications.push({
+      text:`Mükerrer düzeltme: ${receipts.length} fiş geri alındı, ${duplicates.length} mükerrer ürün temizlendi. Ana ürün: ${masterName} (${master}).`,
+      time:new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})
+    });
+
+    document.getElementById('dedupe-product-search').value='';
+    renderDedupeProducts();
+    document.getElementById('dedupe-master-code').value='';
+    document.getElementById('dedupe-receipt-list').innerHTML='<div class="dedupe-success">✅ Düzeltme tamamlandı. Ana ürün korundu; seçilen mükerrer fişler geri alındı ve mükerrer ürün kayıtları temizlendi.</div>';
+    document.getElementById('dedupe-preview').innerHTML='';
+    showToast('Mükerrer fiş/ürün düzeltmesi başarıyla tamamlandı.');
+  }catch(err){
+    alert('Mükerrer düzeltme sırasında hata oluştu. İşlemin bir kısmı yapılmış olabilir; tekrar çalıştırmadan önce stok ve fişleri kontrol edin.\n\nHata: '+(err.message||err));
+  }
+}
+
 </script>
 </body>
 </html>
