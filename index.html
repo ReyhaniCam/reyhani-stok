@@ -1280,6 +1280,7 @@
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">
         <h3 style="font-family:'Oswald'; margin:0;">Geçmiş Malzeme Fişleri</h3>
       </div>
+      <div id="duplicate-receipts-box" style="margin-top:10px;"></div>
       <div id="past-receipts-list" style="margin-top:10px;"></div>
     </div>
 
@@ -1788,6 +1789,19 @@
     <div id="merge-summary-box" style="margin-top:14px;"></div>
 
     <button type="button" class="btn btn-danger" style="width:100%; margin-top:14px;" id="merge-execute-btn" onclick="executeMergeProducts()" disabled>🔗 Seçilenleri Birleştir</button>
+  </div>
+</div>
+
+<!-- MÜKERRER FİŞ İNCELEME/BİRLEŞTİRME MODALI -->
+<div class="modal-overlay" id="duplicate-receipt-modal" style="display:none;">
+  <div class="modal-content" style="max-width:680px;">
+    <button class="modal-close" onclick="closeDuplicateReceiptModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">🚨 Mükerrer Fiş İncelemesi</h3>
+    <p style="font-size:12px; color:var(--steel); margin-top:-6px;">
+      Bu fişler aynı toptancıya, aynı ürünlere, aynı miktar/fiyata ve aynı toplama sahip — büyük olasılıkla aynı fiş yanlışlıkla birden fazla kez kaydedilmiş. Birini tutup diğerlerini iptal edebilirsiniz: stok miktarları geri alınır, toptancı borcu düzeltilir ve sadece bu mükerrer kayıtlar için oluşturulmuş ürün kartları silinir.
+    </p>
+    <div id="duplicate-receipt-detail"></div>
+    <button type="button" class="btn btn-danger" style="width:100%; margin-top:14px;" id="duplicate-receipt-execute-btn" onclick="executeDuplicateReceiptMerge()">🔗 Seçileni Tut, Diğerlerini İptal Et</button>
   </div>
 </div>
 
@@ -2443,6 +2457,7 @@ dbGoodsReceipts.on('value', snapshot => {
   });
 
   listDiv.innerHTML = hasReceipts ? __receiptParts.join('') : '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz kaydedilmiş malzeme fişi bulunamadı.</p>';
+  if(typeof renderDuplicateReceiptsBox === 'function') renderDuplicateReceiptsBox();
 });
 
 dbMovements.on('value', (snapshot) => {
@@ -6519,6 +6534,215 @@ async function executeMergeProducts() {
     alert("Birleştirme sırasında bir hata oluştu: " + (err.message || err) + "\n\nBazı adımlar uygulanmış olabilir, lütfen stok listesini kontrol edin.");
   } finally {
     if(execBtn) { execBtn.disabled = false; execBtn.textContent = '🔗 Seçilenleri Birleştir'; }
+  }
+}
+
+// ============================================================
+// MÜKERRER FİŞ TESPİTİ (Malzeme Fişi geçmişi ekranında otomatik) —
+// aynı toptancı + aynı ürünler + aynı miktar/fiyat + aynı toplamla
+// kaydedilmiş (yani gerçekten bire bir aynı) fişleri bulur.
+// ============================================================
+let duplicateReceiptGroups = [];
+let activeDuplicateGroupIndex = null;
+let duplicateReceiptCanonicalId = null;
+
+function buildReceiptFingerprint(rec) {
+  const itemsSig = (rec.items || [])
+    .map(it => `${normalizeProductNameForMerge(it.name)}|${Number(it.qty)||0}|${Number(it.cost)||0}`)
+    .sort()
+    .join(';');
+  return `${rec.wholesalerKey || ''}::${(Number(rec.total)||0).toFixed(2)}::${itemsSig}`;
+}
+
+function detectDuplicateReceiptGroups() {
+  const groups = {};
+  Object.entries(globalPastReceipts).forEach(([receiptId, entry]) => {
+    const rec = entry.receiptData;
+    if(!rec || !Array.isArray(rec.items) || rec.items.length === 0) return;
+    const fp = buildReceiptFingerprint(rec);
+    if(!groups[fp]) groups[fp] = [];
+    groups[fp].push({ receiptId, date: entry.date, rec });
+  });
+  return Object.values(groups)
+    .filter(g => g.length > 1)
+    .sort((a,b) => b.length - a.length);
+}
+
+function renderDuplicateReceiptsBox() {
+  const box = document.getElementById('duplicate-receipts-box');
+  if(!box) return;
+  duplicateReceiptGroups = detectDuplicateReceiptGroups();
+
+  if(duplicateReceiptGroups.length === 0) {
+    box.innerHTML = '';
+    return;
+  }
+
+  box.innerHTML = duplicateReceiptGroups.map((group, idx) => {
+    const rec = group[0].rec;
+    const dates = group.map(g => `${g.date} ${g.rec.time || ''}`).join(' / ');
+    return `
+      <div style="background:#FEE2E2; border:1px solid #DC2626; border-radius:8px; padding:12px; margin-bottom:10px;">
+        <div style="font-weight:700; color:#991B1B; font-size:13px; margin-bottom:4px;">🚨 ${group.length} kere kaydedilmiş, birbirinin aynısı bir fiş bulundu</div>
+        <div style="font-size:12px; color:#7F1D1D;">🚚 ${rec.wholesalerName || 'Bilinmeyen Toptancı'} · 📦 ${(rec.items||[]).length} kalem · ₺${formatMoney(rec.total)}<br>🕒 ${dates}</div>
+        <button type="button" class="btn btn-danger btn-sm" style="width:auto; margin-top:8px;" onclick="openDuplicateReceiptModal(${idx})">🔍 İncele ve Mükerrerleri İptal Et</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function openDuplicateReceiptModal(idx) {
+  if(currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  activeDuplicateGroupIndex = idx;
+  const group = duplicateReceiptGroups[idx];
+  if(!group) return;
+  // Varsayılan olarak en eski (ilk girilen) fişi "gerçek/tutulacak" fiş kabul et.
+  duplicateReceiptCanonicalId = group.slice().sort((a,b) => (a.date+  (a.rec.time||'')).localeCompare(b.date + (b.rec.time||'')))[0].receiptId;
+  renderDuplicateReceiptDetail();
+  document.getElementById('duplicate-receipt-modal').style.display = 'flex';
+}
+
+function closeDuplicateReceiptModal() {
+  document.getElementById('duplicate-receipt-modal').style.display = 'none';
+  activeDuplicateGroupIndex = null;
+  duplicateReceiptCanonicalId = null;
+}
+
+function setDuplicateReceiptCanonical(receiptId) {
+  duplicateReceiptCanonicalId = receiptId;
+  renderDuplicateReceiptDetail();
+}
+
+function renderDuplicateReceiptDetail() {
+  const box = document.getElementById('duplicate-receipt-detail');
+  if(!box) return;
+  const group = duplicateReceiptGroups[activeDuplicateGroupIndex];
+  if(!group) return;
+
+  const rec0 = group[0].rec;
+  const itemsTable = `
+    <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--steel); margin:10px 0 4px;">Fişteki ürünler (tümünde birebir aynı)</div>
+    <table style="width:100%; font-size:12px; border-collapse:collapse;">
+      <tr style="border-bottom:1px solid var(--steel-line); text-align:left;"><th style="padding:4px;">Ürün</th><th style="padding:4px;">Miktar</th><th style="padding:4px;">Alış Fiyatı</th></tr>
+      ${(rec0.items||[]).map(it => `<tr style="border-bottom:1px solid var(--steel-line);"><td style="padding:4px;">${it.name}</td><td style="padding:4px;">${it.qty} ${it.unit||'Adet'}</td><td style="padding:4px;">₺${formatMoney(it.cost||0)}</td></tr>`).join('')}
+    </table>
+  `;
+
+  const receiptChoices = `
+    <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--steel); margin:14px 0 4px;">Hangisi tutulsun? (diğerleri iptal edilecek)</div>
+    ${group.map(g => `
+      <label style="display:flex; align-items:center; gap:8px; padding:6px; border:1px solid var(--steel-line); border-radius:6px; margin-bottom:6px; cursor:pointer; ${duplicateReceiptCanonicalId === g.receiptId ? 'background:#ECFDF5; border-color:#10B981;' : ''}">
+        <input type="radio" name="dup-canonical" value="${g.receiptId}" ${duplicateReceiptCanonicalId === g.receiptId ? 'checked' : ''} onchange="setDuplicateReceiptCanonical('${g.receiptId}')">
+        <span style="font-size:12px;">📄 ${g.rec.fisNo || g.receiptId} — ${g.date} ${g.rec.time||''}${duplicateReceiptCanonicalId === g.receiptId ? ' <strong style=\"color:#10B981;\">(tutulacak)</strong>' : ' <span style=\"color:#DC2626;\">(iptal edilecek)</span>'}</span>
+      </label>
+    `).join('')}
+  `;
+
+  box.innerHTML = itemsTable + receiptChoices;
+}
+
+async function reverseWholesalerDebtForReceipt(rec, receiptId) {
+  if(!rec.addedToDebt || !rec.wholesalerKey || !rec.total) return;
+  const wKey = rec.wholesalerKey;
+  await dbWholesalers.child(wKey).child('balance').transaction(cur => (cur || 0) + (Number(rec.total)||0));
+  try {
+    const snap = await dbWholesalers.child(wKey).child('transactions').once('value');
+    const txs = snap.val() || {};
+    const matchKey = Object.keys(txs).find(tid => {
+      const t = txs[tid];
+      return t.type === 'borc' && Math.abs((Number(t.amount)||0) - (Number(rec.total)||0)) < 0.01 &&
+             t.desc && (t.desc.includes(receiptId) || (rec.fisNo && t.desc.includes(rec.fisNo)));
+    });
+    if(matchKey) {
+      await dbWholesalers.child(wKey).child('transactions').child(matchKey).remove();
+    } else {
+      await dbWholesalers.child(wKey).child('transactions').push({
+        desc: 'Mükerrer Fiş İptali (Düzeltme): ' + (rec.fisNo || receiptId),
+        amount: Number(rec.total)||0,
+        type: 'odeme',
+        date: new Date().toLocaleString('tr-TR')
+      });
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function executeDuplicateReceiptMerge() {
+  const group = duplicateReceiptGroups[activeDuplicateGroupIndex];
+  if(!group || !duplicateReceiptCanonicalId) return;
+  const canonical = group.find(g => g.receiptId === duplicateReceiptCanonicalId);
+  const duplicates = group.filter(g => g.receiptId !== duplicateReceiptCanonicalId);
+  if(!canonical || duplicates.length === 0) return;
+
+  if(!confirm(`"${canonical.rec.fisNo || canonical.receiptId}" (${canonical.date}) tutulacak.\n\n${duplicates.length} mükerrer fiş iptal edilecek: stok miktarları geri alınacak, toptancı borcu düzeltilecek ve sadece bu mükerrer kayıtlar için oluşturulmuş ürün kartları silinecek.\n\nBu işlem GERİ ALINAMAZ. Onaylıyor musunuz?`)) {
+    return;
+  }
+
+  const btn = document.getElementById('duplicate-receipt-execute-btn');
+  if(btn) { btn.disabled = true; btn.textContent = '⏳ İşleniyor...'; }
+
+  let removedProductCount = 0;
+  let partialReversalCount = 0;
+
+  try {
+    // Bu grup dışındaki tüm fişlerde hangi ürün kodlarının kullanıldığını
+    // önceden çıkaralım — bir ürün kartını tamamen silmek güvenli mi diye
+    // kontrol etmek için (başka bir fişte / harekette geçmiyor olmalı).
+    const codesUsedElsewhere = new Set();
+    Object.entries(globalPastReceipts).forEach(([rid, entry]) => {
+      if(group.some(g => g.receiptId === rid)) return; // bu grubun kendisini sayma
+      (entry.receiptData.items || []).forEach(it => { if(it.code) codesUsedElsewhere.add(it.code); });
+    });
+
+    for(const dup of duplicates) {
+      const rec = dup.rec;
+
+      for(const item of (rec.items || [])) {
+        if(!item.code) continue;
+        const canonicalItem = (canonical.rec.items || []).find(ci => normalizeProductNameForMerge(ci.name) === normalizeProductNameForMerge(item.name));
+        const isSharedWithCanonical = canonicalItem && canonicalItem.code === item.code;
+
+        if(isSharedWithCanonical) {
+          // Aynı ürün kodu canonical fişte de kullanılmış — bu mükerrer fişin eklediği
+          // miktarı geri al, ürün kaydını SİLME (canonical hâlâ ona ihtiyaç duyuyor).
+          await db.child(item.code).child('qty').transaction(cur => Number(cur||0) - (Number(item.qty)||0));
+          if(productsData[item.code]) productsData[item.code].qty = (Number(productsData[item.code].qty)||0) - (Number(item.qty)||0);
+          logMovement(item.code, item.name, -(Number(item.qty)||0), 'MÜKERRER FİŞ İPTALİ: geri alındı');
+        } else if(productsData[item.code]) {
+          // Bu ürün kodu büyük olasılıkla sadece bu mükerrer fiş yüzünden oluşturuldu.
+          const safeToDelete = !codesUsedElsewhere.has(item.code) &&
+            Math.abs((Number(productsData[item.code].qty)||0) - (Number(item.qty)||0)) < 0.001;
+          if(safeToDelete) {
+            await db.child(item.code).remove();
+            await dbProductImages.child(item.code).remove();
+            await dbBarcodeCache.child(item.code).remove();
+            delete productsData[item.code];
+            removedProductCount++;
+          } else {
+            // Bu kod başka yerde de kullanılmış veya miktarı sonradan değişmiş —
+            // güvenli olması için sadece bu fişin eklediği miktarı geri alıyoruz,
+            // kartı silmiyoruz; admin isterse Stok Listesi'ndeki "Mükerrer Ürünleri
+            // Birleştir" aracıyla elle inceleyebilir.
+            await db.child(item.code).child('qty').transaction(cur => Number(cur||0) - (Number(item.qty)||0));
+            if(productsData[item.code]) productsData[item.code].qty = (Number(productsData[item.code].qty)||0) - (Number(item.qty)||0);
+            logMovement(item.code, item.name, -(Number(item.qty)||0), 'MÜKERRER FİŞ İPTALİ: kısmi geri alım (kart korundu)');
+            partialReversalCount++;
+          }
+        }
+      }
+
+      await reverseWholesalerDebtForReceipt(rec, dup.receiptId);
+      await dbGoodsReceipts.child(dup.date).child(dup.receiptId).remove();
+    }
+
+    let msg = `✅ ${duplicates.length} mükerrer fiş iptal edildi. ${removedProductCount} sadece bu kayıtlar için oluşmuş ürün kartı silindi.`;
+    if(partialReversalCount > 0) msg += ` ⚠️ ${partialReversalCount} kalemde kart korunup sadece miktar geri alındı (başka hareketi olduğu için) — "Mükerrer Ürünleri Birleştir" aracından kontrol edin.`;
+    showToast(msg);
+    closeDuplicateReceiptModal();
+    if(typeof renderGrid === 'function') renderGrid();
+  } catch(err) {
+    alert("Mükerrer fiş iptali sırasında bir hata oluştu: " + (err.message || err) + "\n\nBazı adımlar uygulanmış olabilir, lütfen stok ve toptancı bakiyesini kontrol edin.");
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = '🔗 Seçileni Tut, Diğerlerini İptal Et'; }
   }
 }
 
