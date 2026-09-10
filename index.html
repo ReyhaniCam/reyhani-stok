@@ -654,6 +654,7 @@
   .merge-actions .btn{width:100%;}
 }
 
+
 </style>
 
 
@@ -1320,8 +1321,7 @@
         <button class="btn btn-success" style="margin-top:10px;" onclick="completeGoodsReceipt()">✅ Fişi Onayla ve Stoğa İşle</button>
       </div>
 
-
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:8px; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex-wrap:wrap; gap:8px;">
         <h3 style="font-family:'Oswald'; margin:0;">Geçmiş Malzeme Fişleri</h3>
         <button type="button" class="btn btn-warning btn-sm merge-repair-btn" onclick="openDuplicateReceiptMerge()">🧹 Mükerrer Fişleri Düzelt</button>
       </div>
@@ -1724,7 +1724,6 @@
   </div>
 </div>
 
-
 <div class="modal-overlay" id="duplicate-receipt-merge-modal" style="display:none;">
   <div class="modal-content merge-modal-content">
     <button class="modal-close" onclick="closeDuplicateReceiptMerge()">X</button>
@@ -1768,6 +1767,7 @@
     </div>
   </div>
 </div>
+
 
 <div class="modal-overlay" id="receipt-edit-modal" style="display:none;">
   <div class="modal-content" style="max-width:920px; max-height:88vh; overflow-y:auto;">
@@ -9032,9 +9032,6 @@ async function completeBulkStockUpload() {
 }
 
 // ============================================================
-
-
-// ============================================================
 // MÜKERRER MALZEME FİŞİ BİRLEŞTİRME ARACI
 // ============================================================
 let mergeReceiptRecords = {};
@@ -9704,6 +9701,7 @@ async function applyDuplicateReceiptMerge() {
     alert('Mükerrer fiş birleştirme sırasında hata oluştu:\n\n' + (err.message || err) + '\n\nGüvenli işlem kontrolü durdu. Arşiv oluşturulmuşsa geri alma kaydı korunur.');
   }
 }
+
 
 // AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
 // ============================================================
