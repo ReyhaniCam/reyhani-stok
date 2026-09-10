@@ -783,6 +783,7 @@
         <button class="btn btn-dark btn-sm disabled-action" id="backup-btn" onclick="exportBackup()" title="Tüm Stoğu Excel Olarak İndir">📊 Excel İndir</button>
         <button class="btn btn-info btn-sm disabled-action" id="auto-update-btn" onclick="enableAutoStockUpdate()" title="Her stok giriş/çıkışında bu klasördeki dosyayı otomatik günceller">🔄 Otomatik Güncellemeyi Aç</button>
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
+        <button class="btn btn-warning btn-sm" id="merge-products-btn" onclick="openMergeProductsModal()" style="display:none;" title="Yanlışlıkla birden fazla barkodla kaydedilmiş aynı ürünleri tek kayıtta birleştirir">🔗 Mükerrer Ürünleri Birleştir</button>
       </div>
       <div id="grid" class="grid"></div>
       <div id="grid-load-more-wrap" style="text-align:center; margin-top:20px;"></div>
@@ -1767,6 +1768,26 @@
 
     <div style="text-align:right; font-family:'IBM Plex Mono'; font-weight:bold; font-size:16px; margin:18px 0 14px;">Yeni Toplam: ₺<span id="re-total">0.00</span></div>
     <button class="btn btn-success" style="width:100%;" onclick="saveReceiptEdit()">✅ Değişiklikleri Kaydet</button>
+  </div>
+</div>
+
+<!-- MÜKERRER ÜRÜN BİRLEŞTİRME MODALI -->
+<div class="modal-overlay" id="merge-products-modal" style="display:none;">
+  <div class="modal-content" style="max-width:640px;">
+    <button class="modal-close" onclick="closeMergeProductsModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">🔗 Mükerrer Ürünleri Birleştir</h3>
+    <p style="font-size:12px; color:var(--steel); margin-top:-6px;">
+      Aynı ürün yanlışlıkla birden fazla kez farklı barkotlarla kaydedildiyse (örn. aynı fiş birden fazla kez işlendiyse), burada seçip tek bir kayıtta birleştirebilirsiniz. Seçtiğiniz ürünlerin miktarları toplanır, geçmiş fiş kayıtlarındaki ürün kodları ana ürüne güncellenir ve diğer kayıtlar silinir. <strong>Bu işlem geri alınamaz.</strong>
+    </p>
+
+    <div id="merge-suggestions-box" style="margin-bottom:14px;"></div>
+
+    <input type="text" id="merge-search" placeholder="Birleştirilecek ürünleri aramak için yazın..." oninput="renderMergeProductList()" style="margin-bottom:8px;">
+    <div id="merge-product-list" style="max-height:220px; overflow-y:auto; border:1px solid var(--steel-line); border-radius:6px; padding:6px;"></div>
+
+    <div id="merge-summary-box" style="margin-top:14px;"></div>
+
+    <button type="button" class="btn btn-danger" style="width:100%; margin-top:14px;" id="merge-execute-btn" onclick="executeMergeProducts()" disabled>🔗 Seçilenleri Birleştir</button>
   </div>
 </div>
 
@@ -2917,6 +2938,8 @@ function updateAuthUI() {
   document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-borc-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-acikhesap-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+  const mergeProductsBtn = document.getElementById('merge-products-btn');
+  if(mergeProductsBtn) mergeProductsBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   if (typeof renderDashboard === 'function') renderDashboard();
   
   const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
@@ -6279,6 +6302,226 @@ function closeReceiptEditModal() {
   reEditingIndex = null;
 }
 
+// ============================================================
+// MÜKERRER ÜRÜN BİRLEŞTİRME (aynı ürünün yanlışlıkla birden fazla
+// barkotla/kayıtla oluşturulduğu durumları düzeltmek için — örn. aynı
+// malzeme fişi AI'a birden fazla kez gönderilip her seferinde "yeni ürün"
+// olarak kaydedilmişse)
+// ============================================================
+let mergeSelectedCodes = new Set();
+let mergeCanonicalCode = null;
+
+function normalizeProductNameForMerge(name) {
+  return (name || '').toLocaleLowerCase('tr-TR').trim().replace(/\s+/g, ' ');
+}
+
+function openMergeProductsModal() {
+  if(currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  mergeSelectedCodes = new Set();
+  mergeCanonicalCode = null;
+  document.getElementById('merge-search').value = '';
+  renderMergeSuggestions();
+  renderMergeProductList();
+  renderMergeSummary();
+  document.getElementById('merge-products-modal').style.display = 'flex';
+}
+
+function closeMergeProductsModal() {
+  document.getElementById('merge-products-modal').style.display = 'none';
+  mergeSelectedCodes = new Set();
+  mergeCanonicalCode = null;
+}
+
+// Aynı isimdeki ürünleri otomatik grupla ve "muhtemel mükerrer" olarak öner.
+function renderMergeSuggestions() {
+  const box = document.getElementById('merge-suggestions-box');
+  if(!box) return;
+  const groups = {};
+  Object.values(productsData).forEach(p => {
+    const key = normalizeProductNameForMerge(p.name);
+    if(!key) return;
+    if(!groups[key]) groups[key] = [];
+    groups[key].push(p);
+  });
+  const dupGroups = Object.values(groups).filter(g => g.length > 1);
+
+  if(dupGroups.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel);">Aynı isimle kayıtlı, otomatik tespit edilen mükerrer ürün grubu bulunamadı. Aşağıdaki arama kutusundan elle seçebilirsiniz.</p>`;
+    return;
+  }
+
+  box.innerHTML = `<div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--steel); margin-bottom:6px;">⚠️ Aynı isimle kayıtlı olası mükerrer gruplar (${dupGroups.length})</div>` +
+    dupGroups.map(g => {
+      const codes = g.map(p => p.code);
+      const totalQty = g.reduce((s,p) => s + (Number(p.qty)||0), 0);
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; background:#FFF7E0; border:1px solid #F5C542; border-radius:6px; padding:8px 10px; margin-bottom:6px; flex-wrap:wrap;">
+          <div style="font-size:12px;"><strong>${g[0].name}</strong> — ${g.length} farklı kayıt, toplam ${totalQty} adet <br><small style="color:var(--steel); font-family:'IBM Plex Mono';">${codes.join(', ')}</small></div>
+          <button type="button" class="btn btn-warning btn-sm" style="width:auto;" onclick='loadMergeGroup(${JSON.stringify(codes)})'>Bu Grubu Seç</button>
+        </div>
+      `;
+    }).join('');
+}
+
+function loadMergeGroup(codes) {
+  mergeSelectedCodes = new Set(codes.filter(c => productsData[c]));
+  // Miktarı en çok olanı varsayılan "ana ürün" yap (genelde en çok işlem gören/asıl kayıt budur).
+  let best = null;
+  mergeSelectedCodes.forEach(c => {
+    const p = productsData[c];
+    if(!best || (Number(p.qty)||0) > (Number(productsData[best].qty)||0)) best = c;
+  });
+  mergeCanonicalCode = best;
+  renderMergeProductList();
+  renderMergeSummary();
+}
+
+function renderMergeProductList() {
+  const listBox = document.getElementById('merge-product-list');
+  if(!listBox) return;
+  const term = (document.getElementById('merge-search').value || '').toLocaleLowerCase('tr-TR').trim();
+  const all = Object.values(productsData)
+    .filter(p => !term || p.name.toLocaleLowerCase('tr-TR').includes(term) || (p.code||'').toLocaleLowerCase('tr-TR').includes(term))
+    .sort((a,b) => a.name.localeCompare(b.name, 'tr-TR'));
+
+  if(all.length === 0) {
+    listBox.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; margin:10px 0;">Ürün bulunamadı.</p>`;
+    return;
+  }
+
+  listBox.innerHTML = all.map(p => `
+    <label style="display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; ${mergeSelectedCodes.has(p.code) ? 'background:#FFF7E0;' : ''}">
+      <input type="checkbox" ${mergeSelectedCodes.has(p.code) ? 'checked' : ''} onchange="toggleMergeCode('${p.code}')">
+      <span style="flex:1; font-size:13px;">${p.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}, ${p.qty||0} ${p.unit||'Adet'}, ₺${formatMoney(p.price||0)})</small></span>
+    </label>
+  `).join('');
+}
+
+function toggleMergeCode(code) {
+  if(mergeSelectedCodes.has(code)) {
+    mergeSelectedCodes.delete(code);
+    if(mergeCanonicalCode === code) mergeCanonicalCode = mergeSelectedCodes.size ? Array.from(mergeSelectedCodes)[0] : null;
+  } else {
+    mergeSelectedCodes.add(code);
+    if(!mergeCanonicalCode) mergeCanonicalCode = code;
+  }
+  renderMergeSummary();
+}
+
+function setMergeCanonical(code) {
+  mergeCanonicalCode = code;
+  renderMergeSummary();
+}
+
+function renderMergeSummary() {
+  const box = document.getElementById('merge-summary-box');
+  const execBtn = document.getElementById('merge-execute-btn');
+  if(!box) return;
+
+  const selected = Array.from(mergeSelectedCodes).map(c => productsData[c]).filter(Boolean);
+  if(selected.length < 2) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel);">Birleştirmek için en az 2 ürün seçin.</p>`;
+    if(execBtn) execBtn.disabled = true;
+    return;
+  }
+
+  const totalQty = selected.reduce((s,p) => s + (Number(p.qty)||0), 0);
+
+  box.innerHTML = `
+    <div style="border:1px solid var(--steel-line); border-radius:6px; padding:10px;">
+      <div style="font-size:11px; font-weight:600; text-transform:uppercase; color:var(--steel); margin-bottom:8px;">Ana ürün olarak kalacak kayıt:</div>
+      ${selected.map(p => `
+        <label style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer;">
+          <input type="radio" name="merge-canonical" value="${p.code}" ${mergeCanonicalCode === p.code ? 'checked' : ''} onchange="setMergeCanonical('${p.code}')">
+          <span style="font-size:13px;">${p.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}, ${p.qty||0} ${p.unit||'Adet'})</small></span>
+        </label>
+      `).join('')}
+      <div style="margin-top:8px; padding-top:8px; border-top:1px solid var(--steel-line); font-size:13px;">
+        Birleştirmeden sonra <strong>${totalQty} ${selected[0].unit || 'Adet'}</strong> olarak tek kayıtta toplanacak. Diğer ${selected.length - 1} kayıt silinecek ve geçmiş fiş kayıtlarındaki ürün kodları ana ürüne güncellenecek.
+      </div>
+    </div>
+  `;
+  if(execBtn) execBtn.disabled = !mergeCanonicalCode;
+}
+
+async function executeMergeProducts() {
+  const selectedCodes = Array.from(mergeSelectedCodes);
+  if(selectedCodes.length < 2 || !mergeCanonicalCode || !productsData[mergeCanonicalCode]) {
+    alert("Lütfen en az 2 ürün ve bir ana ürün seçin.");
+    return;
+  }
+  const duplicateCodes = selectedCodes.filter(c => c !== mergeCanonicalCode);
+  const canonical = productsData[mergeCanonicalCode];
+  const duplicates = duplicateCodes.map(c => productsData[c]).filter(Boolean);
+  const addedQty = duplicates.reduce((s,p) => s + (Number(p.qty)||0), 0);
+  const newTotalQty = (Number(canonical.qty)||0) + addedQty;
+
+  if(!confirm(`"${canonical.name}" (${mergeCanonicalCode}) ana ürün olarak kalacak.\n\n${duplicates.map(p => `- ${p.name} (${p.code}, ${p.qty||0} ${p.unit||'Adet'})`).join('\n')}\n\nBu ${duplicates.length} kayıt silinecek, toplam miktar ${newTotalQty} ${canonical.unit||'Adet'} olacak ve geçmiş fiş kayıtlarında bu kodlar ana ürüne güncellenecek.\n\nBu işlem GERİ ALINAMAZ. Onaylıyor musunuz?`)) {
+    return;
+  }
+
+  const execBtn = document.getElementById('merge-execute-btn');
+  if(execBtn) { execBtn.disabled = true; execBtn.textContent = '⏳ Birleştiriliyor...'; }
+
+  try {
+    const dupSet = new Set(duplicateCodes);
+
+    // 1) Geçmiş fiş kayıtlarında bu kodlara referans veren kalemleri ana ürüne güncelle.
+    const receiptUpdates = [];
+    Object.entries(globalPastReceipts).forEach(([receiptId, entry]) => {
+      const rec = entry.receiptData;
+      if(!rec || !Array.isArray(rec.items)) return;
+      let changed = false;
+      const newItems = rec.items.map(it => {
+        if(it.code && dupSet.has(it.code)) {
+          changed = true;
+          return Object.assign({}, it, { code: mergeCanonicalCode, name: canonical.name });
+        }
+        return it;
+      });
+      if(changed) {
+        receiptUpdates.push(
+          dbGoodsReceipts.child(entry.date).child(receiptId).update({
+            items: newItems,
+            lastEditedAt: new Date().toISOString(),
+            lastEditedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Ürün Birleştirme)'
+          })
+        );
+      }
+    });
+    await Promise.all(receiptUpdates);
+
+    // 2) Ana üründe miktarı topla.
+    await db.child(mergeCanonicalCode).update({
+      qty: newTotalQty,
+      lastPriceUpdate: new Date().toISOString(),
+      lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Ürün Birleştirme)'
+    });
+    productsData[mergeCanonicalCode].qty = newTotalQty;
+
+    // 3) Mükerrer kayıtları sil.
+    for(const code of duplicateCodes) {
+      await db.child(code).remove();
+      await dbProductImages.child(code).remove();
+      await dbBarcodeCache.child(code).remove();
+      delete productsData[code];
+    }
+
+    // 4) Denetim izi için stok hareketine not düş.
+    if(addedQty !== 0) {
+      logMovement(mergeCanonicalCode, canonical.name, addedQty, 'ÜRÜN BİRLEŞTİRME: ' + duplicateCodes.join(', ') + ' kodlarından taşındı');
+    }
+
+    showToast(`✅ Birleştirme tamamlandı: "${canonical.name}" artık tek kayıt (${mergeCanonicalCode}, ${newTotalQty} ${canonical.unit||'Adet'}). ${duplicateCodes.length} mükerrer kayıt silindi, ${receiptUpdates.length} geçmiş fiş kaydı güncellendi.`);
+    closeMergeProductsModal();
+    if(typeof renderGrid === 'function') renderGrid();
+  } catch(err) {
+    alert("Birleştirme sırasında bir hata oluştu: " + (err.message || err) + "\n\nBazı adımlar uygulanmış olabilir, lütfen stok listesini kontrol edin.");
+  } finally {
+    if(execBtn) { execBtn.disabled = false; execBtn.textContent = '🔗 Seçilenleri Birleştir'; }
+  }
+}
+
 function populateReceiptEditProductList() {
   const dl = document.getElementById('receipt-edit-product-list');
   if(!dl) return;
@@ -8459,14 +8702,40 @@ function loadHistory(key) {
             <div>${t.desc}</div>
             <div class="ru-time">${t.date}</div>
           </div>
-          <div style="font-family:'IBM Plex Mono'; font-weight:bold; color:${t.type === 'borc' ? 'var(--rust)' : 'var(--success)'}">
-            ${t.type === 'borc' ? '+' : '-'}₺${formatMoney(t.amount)}
+          <div style="display:flex; align-items:center; gap:8px;">
+            <div style="font-family:'IBM Plex Mono'; font-weight:bold; color:${t.type === 'borc' ? 'var(--rust)' : 'var(--success)'}">
+              ${t.type === 'borc' ? '+' : '-'}₺${formatMoney(t.amount)}
+            </div>
+            ${isAdmin ? `<button class="btn btn-danger btn-sm" style="width:auto; padding:3px 8px; font-size:11px;" title="Bu hareketi sil ve bakiyeyi düzelt (örn. mükerrer fiş kaydından oluşan borç)" onclick="deleteWholesalerTransaction('${tId}')">🗑</button>` : ''}
           </div>
         </div>
       `;
     }).join('') || '<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hareket kaydı yok.</p>';
 
     list.innerHTML = html + manualBalanceBlock + `<div class="balance-box ${balance < 0 ? 'balance-negative' : 'balance-positive'}">Güncel Bakiye: ₺${formatMoney(balance)}</div>` + rows;
+  });
+}
+
+// Mükerrer/hatalı bir hareketi (örn. aynı fiş 4 kere kaydedilince oluşan 3 fazladan
+// "borç" girişi) silmek ve bakiyeyi otomatik olarak düzeltmek için.
+async function deleteWholesalerTransaction(tId) {
+  if (currentRole !== 'admin' || !activeWholesalerKey) return;
+  const key = activeWholesalerKey;
+  const snap = await dbWholesalers.child(key).child('transactions').child(tId).once('value');
+  const t = snap.val();
+  if (!t) { showToast("İşlem bulunamadı (zaten silinmiş olabilir)."); return; }
+
+  const ok = confirm(`Bu hareketi silmek istediğinize emin misiniz?\n\n${t.desc}\n${t.type === 'borc' ? '+' : '-'}₺${formatMoney(t.amount)}  (${t.date})\n\nSilindiğinde bu tutar bakiyeden geri alınacak/eklenecek.`);
+  if (!ok) return;
+
+  // 'borc' eklenirken bakiye düşürülmüştü (cur - amount); silince tersine bakiyeye geri ekliyoruz.
+  // 'odeme' eklenirken bakiye artırılmıştı (cur + amount); silince tersine bakiyeden düşüyoruz.
+  const reverseMult = t.type === 'borc' ? 1 : -1;
+  dbWholesalers.child(key).child('balance').transaction(cur => (cur || 0) + (Number(t.amount) || 0) * reverseMult, (err) => {
+    if (err) { showToast("Bakiye güncellenemedi: " + err.message); return; }
+    dbWholesalers.child(key).child('transactions').child(tId).remove(() => {
+      showToast("Hareket silindi ve bakiye düzeltildi.");
+    });
   });
 }
 
