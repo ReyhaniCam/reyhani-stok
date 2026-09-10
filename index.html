@@ -1755,12 +1755,16 @@
     <div id="merge-receipt-candidates" class="merge-candidates"></div>
 
     <div class="merge-danger-note">
-      ⚠️ <b>Dikkat:</b> Birleştirme geri alma butonu içermez. Ancak işlemden önce mükerrer fişlerin tam kopyası <b>receipt_merge_archive</b> altında arşivlenir. İşlem sırasında ürün kodları, stok ve ilgili geçmiş kayıtları yeniden kontrol edilir. Bu araçta gerçek birleştirme işlemi yalnızca <b>yönetici</b> tarafından yapılabilir.
+      ⚠️ <b>Dikkat:</b> Birleştirme artık geri alınabilir şekilde arşivlenir. İşlemden önce etkilenecek ürünler, fişler, geçmiş kayıtlar ve toptancı bakiyeleri için geri yükleme kaydı oluşturulur. İşlem tamamlandıktan sonra <b>Son Birleştirmeyi Geri Al</b> butonu ile son işlemi geri çevirebilirsiniz. Gerçek birleştirme ve geri alma işlemi yalnızca <b>yönetici</b> tarafından yapılabilir.
     </div>
 
     <div id="merge-receipt-actions" class="merge-actions" style="display:none;">
       <button type="button" class="btn btn-success" onclick="applyDuplicateReceiptMerge()">✅ Seçilen Mükerrer Fişleri Birleştir ve Düzelt</button>
       <button type="button" class="btn btn-dark" onclick="resetDuplicateReceiptMerge()">↺ Analizi Temizle</button>
+    </div>
+    <div id="merge-undo-panel" style="display:none;margin-top:10px;padding:10px;border:1px solid var(--steel-line);border-radius:7px;background:#F8FAFC;">
+      <div id="merge-undo-info" style="font-size:11px;color:var(--steel);margin-bottom:8px;"></div>
+      <button type="button" class="btn btn-warning" style="width:100%;" onclick="undoLastDuplicateReceiptMerge()">↩️ Son Birleştirmeyi Geri Al</button>
     </div>
   </div>
 </div>
@@ -9179,6 +9183,7 @@ async function openDuplicateReceiptMerge() {
   document.getElementById('duplicate-receipt-merge-modal').style.display = 'flex';
   resetDuplicateReceiptMerge();
   await loadMergeReceiptRecords();
+  await refreshMergeUndoInfo();
   const actions = document.getElementById('merge-receipt-actions');
   if (actions && currentRole !== 'admin') actions.style.display = 'none';
 }
@@ -9336,46 +9341,157 @@ function buildMergeRecursiveCodeRemap(value, codeMap) {
   return out;
 }
 
-async function updateMergeHistoricalReferences(codeMap, excludedReceiptKeys) {
-  if (!Object.keys(codeMap).length) return;
+async function collectMergeHistoricalChanges(codeMap, excludedReceiptKeys) {
+  const changes = [];
 
-  // Satış geçmişi
-  try {
-    const ordersSnap = await dbOrders.once('value');
-    const orders = ordersSnap.val() || {};
+  const collectTree = async (ref, rootName, excludeFn) => {
+    const snap = await ref.once('value');
+    const data = snap.val() || {};
     const writes = {};
-    Object.keys(orders).forEach(date => {
-      Object.keys(orders[date] || {}).forEach(id => {
-        const original = orders[date][id];
-        const changed = buildMergeRecursiveCodeRemap(original,codeMap);
-        if (JSON.stringify(original)!==JSON.stringify(changed)) writes[`${date}/${id}`]=changed;
-      });
-    });
-    for (const [path,val] of Object.entries(writes)) await dbOrders.child(path).set(val);
-  } catch(e) { console.warn('Sipariş geçmişi kod dönüşümü tamamlanamadı:',e); }
-
-  // Müşteri borçları/açık hesap
-  try {
-    const debtSnap = await dbCustomerDebts.once('value');
-    const debts = debtSnap.val() || {};
-    for (const [id,original] of Object.entries(debts)) {
-      const changed = buildMergeRecursiveCodeRemap(original,codeMap);
-      if (JSON.stringify(original)!==JSON.stringify(changed)) await dbCustomerDebts.child(id).set(changed);
-    }
-  } catch(e) { console.warn('Müşteri borç geçmişi kod dönüşümü tamamlanamadı:',e); }
-
-  // Mükerrer fişlerin dışındaki kayıtlar
-  try {
-    const recSnap = await dbGoodsReceipts.once('value');
-    const receipts = recSnap.val() || {};
-    for (const [date,day] of Object.entries(receipts)) {
-      for (const [receiptId,original] of Object.entries(day || {})) {
-        if (excludedReceiptKeys.has(`${date}/${receiptId}`)) continue;
-        const changed = buildMergeRecursiveCodeRemap(original,codeMap);
-        if (JSON.stringify(original)!==JSON.stringify(changed)) await dbGoodsReceipts.child(date).child(receiptId).set(changed);
+    Object.entries(data || {}).forEach(([k, v]) => {
+      if (excludeFn && excludeFn(k, v)) return;
+      const changed = buildMergeRecursiveCodeRemap(v, codeMap);
+      if (JSON.stringify(v) !== JSON.stringify(changed)) {
+        changes.push({ path: `${rootName}/${k}`, value: v });
+        writes[`${rootName}/${k}`] = changed;
       }
+    });
+    return writes;
+  };
+
+  const ordersSnap = await dbOrders.once('value');
+  const orders = ordersSnap.val() || {};
+  const orderWrites = {};
+  Object.entries(orders).forEach(([date, day]) => {
+    Object.entries(day || {}).forEach(([id, original]) => {
+      const changed = buildMergeRecursiveCodeRemap(original, codeMap);
+      if (JSON.stringify(original) !== JSON.stringify(changed)) {
+        changes.push({path:`orders/${date}/${id}`, value:original});
+        orderWrites[`orders/${date}/${id}`] = changed;
+      }
+    });
+  });
+
+  const debtSnap = await dbCustomerDebts.once('value');
+  const debts = debtSnap.val() || {};
+  const debtWrites = {};
+  Object.entries(debts).forEach(([id, original]) => {
+    const changed = buildMergeRecursiveCodeRemap(original, codeMap);
+    if (JSON.stringify(original) !== JSON.stringify(changed)) {
+      changes.push({path:`customer_debts/${id}`, value:original});
+      debtWrites[`customer_debts/${id}`] = changed;
     }
-  } catch(e) { console.warn('Fiş geçmişi kod dönüşümü tamamlanamadı:',e); }
+  });
+
+  const recSnap = await dbGoodsReceipts.once('value');
+  const receipts = recSnap.val() || {};
+  const receiptWrites = {};
+  Object.entries(receipts).forEach(([date, day]) => {
+    Object.entries(day || {}).forEach(([receiptId, original]) => {
+      if (excludedReceiptKeys.has(`${date}/${receiptId}`)) return;
+      const changed = buildMergeRecursiveCodeRemap(original, codeMap);
+      if (JSON.stringify(original) !== JSON.stringify(changed)) {
+        changes.push({path:`goods_receipts/${date}/${receiptId}`, value:original});
+        receiptWrites[`goods_receipts/${date}/${receiptId}`] = changed;
+      }
+    });
+  });
+
+  return { changes, writes: Object.assign({}, orderWrites, debtWrites, receiptWrites) };
+}
+
+async function loadLatestMergeArchive() {
+  const snap = await dbRoot.child('receipt_merge_archive').once('value');
+  const data = snap.val() || {};
+  const entries = Object.entries(data).filter(([,v]) => v && (v.status === 'completed' || v.status === 'prepared') && !v.undoneAt);
+  entries.sort((a,b) => String(b[1].completedAt || b[1].createdAt || '').localeCompare(String(a[1].completedAt || a[1].createdAt || '')));
+  return entries.length ? {id:entries[0][0], data:entries[0][1]} : null;
+}
+
+async function refreshMergeUndoInfo() {
+  const box = document.getElementById('merge-undo-info');
+  const panel = document.getElementById('merge-undo-panel');
+  if (!box || !panel) return;
+  if (currentRole !== 'admin') { panel.style.display='none'; return; }
+  try {
+    const latest = await loadLatestMergeArchive();
+    if (!latest) {
+      panel.style.display='none';
+      box.textContent='';
+      return;
+    }
+    const d = latest.data;
+    const count = Array.isArray(d.removedReceipts) ? d.removedReceipts.length : 0;
+    panel.style.display='block';
+    box.innerHTML = `↩️ Geri alınabilir son işlem: <b>${count} mükerrer fiş</b> · ${escapeMergeHtml(d.completedAt || d.createdAt || '')}`;
+  } catch (e) {
+    panel.style.display='none';
+  }
+}
+
+async function undoLastDuplicateReceiptMerge() {
+  if (currentRole !== 'admin') {
+    alert('Geri alma işlemi yalnızca yönetici tarafından yapılabilir.');
+    return;
+  }
+
+  if (!confirm('Son tamamlanan mükerrer fiş birleştirmesi geri alınacak. Ürünler, fişler, geçmiş kodları ve toptancı kayıtları işlem öncesindeki duruma döndürülecek. Devam edilsin mi?')) return;
+
+  const status = document.getElementById('merge-receipt-status');
+  const setStatus = t => { if(status) status.textContent=t; };
+
+  try {
+    setStatus('⏳ Son birleştirme arşivi okunuyor...');
+    const latest = await loadLatestMergeArchive();
+    if (!latest) throw new Error('Geri alınabilecek tamamlanmış bir birleştirme bulunamadı.');
+
+    const archive = latest.data;
+    const restoreChanges = Array.isArray(archive.restoreChanges) ? archive.restoreChanges : [];
+    if (!restoreChanges.length) throw new Error('Bu işlem için geri yükleme kaydı bulunamadı.');
+
+    const restoreUpdates = {};
+    restoreChanges.forEach(change => { restoreUpdates[change.path] = change.value; });
+
+    setStatus('⏳ İşlem öncesi kayıtlar geri yükleniyor...');
+    await dbRoot.update(restoreUpdates);
+
+    // Birleştirme sırasında eklenen hareket kayıtları silinmez; bunun yerine
+    // denetim izi korunur ve ters hareket kaydı eklenir.
+    const reverseMovements = Array.isArray(archive.movementEntries) ? archive.movementEntries : [];
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0,10);
+    for (const m of reverseMovements) {
+      await dbMovements.child(dateStr).push({
+        time: now.toLocaleTimeString('tr-TR'),
+        code: m.code,
+        name: m.name,
+        change: -mergeNum(m.change),
+        type: 'MÜKERRER FİŞ BİRLEŞTİRME GERİ ALMA'
+      });
+    }
+
+    await dbRoot.child('receipt_merge_archive').child(latest.id).update({
+      undoneAt: new Date().toISOString(),
+      undoneBy: 'Yönetici'
+    });
+
+    await dbNotifications.push({
+      text: 'Mükerrer malzeme fişi birleştirme işlemi geri alındı.',
+      time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+    });
+
+    productsData = (await db.once('value')).val() || {};
+    mergeReceiptAnalysis = null;
+    await loadMergeReceiptRecords();
+    resetDuplicateReceiptMerge();
+    setStatus('✅ Son mükerrer fiş birleştirme işlemi geri alındı.');
+    showToast('✅ Son birleştirme geri alındı.');
+    await refreshMergeUndoInfo();
+  } catch (err) {
+    console.error('Mükerrer fiş geri alma hatası:', err);
+    setStatus('❌ Geri alma durdu: ' + (err.message || err));
+    alert('Geri alma sırasında hata oluştu:\n\n' + (err.message || err) + '\n\nMevcut kayıtlar silinmedi.');
+  }
 }
 
 async function applyDuplicateReceiptMerge() {
@@ -9394,180 +9510,200 @@ async function applyDuplicateReceiptMerge() {
     return;
   }
 
-  // İşlem öncesi tekrar Firebase'den oku; kullanıcı beklerken kayıt değişmişse işlem yapma.
-  const latestSnap = await dbGoodsReceipts.once('value');
-  const latestData = latestSnap.val() || {};
-  const latest = {};
-  Object.entries(latestData).forEach(([date,day]) => {
-    Object.entries(day || {}).forEach(([id,receipt]) => {
-      latest[id] = {date,receipt};
-    });
-  });
-
-  const masterId = mergeReceiptAnalysis.masterReceiptId;
-  const masterEntry = latest[masterId];
-  if (!masterEntry) { alert('Ana fiş artık bulunamadı. İşlem iptal edildi.'); return; }
-  for (const id of selectedIds) {
-    if (!latest[id]) { alert(`${id} numaralı fiş artık bulunamıyor. İşlem iptal edildi.`); return; }
-  }
-
-  const masterItems = masterEntry.receipt.items || [];
-  const codeMap = {};
-  const sourceQtyByCode = {};
-  const archiveItems = [];
-  const problems = [];
-
-  // Seçilen her fişi yeniden eşleştir ve tüm kaynak ürün kodlarının hedefini doğrula.
-  for (const receiptId of selectedIds) {
-    const entry = latest[receiptId];
-    const rec = entry.receipt || {};
-    const sourceItems = rec.items || [];
-    if (sourceItems.length !== masterItems.length) {
-      problems.push(`${receiptId}: kalem sayısı ana fişle aynı değil.`);
-      continue;
-    }
-    const used = new Set();
-    const mappings = [];
-    for (const sourceItem of sourceItems) {
-      let best = null;
-      masterItems.forEach((targetItem,targetIndex) => {
-        if (used.has(targetIndex)) return;
-        const cmp = compareMergeItem(sourceItem,targetItem);
-        if (!best || cmp.score > best.result.score) best = {targetItem,targetIndex,result:cmp};
-      });
-      if (!best || best.result.level !== 'ok') {
-        problems.push(`${receiptId}: "${sourceItem.name || '-'}" tam eşleşmedi.`);
-        continue;
-      }
-      used.add(best.targetIndex);
-      const sourceCode = sourceItem.code;
-      const targetCode = best.targetItem?.code;
-      if (!sourceCode || !targetCode) {
-        problems.push(`${receiptId}: ürün kodu eksik.`);
-        continue;
-      }
-      if (sourceCode !== targetCode) {
-        if (codeMap[sourceCode] && codeMap[sourceCode] !== targetCode) {
-          problems.push(`${receiptId}: ${sourceCode} iki farklı ana ürüne eşleşti.`);
-          continue;
-        }
-        codeMap[sourceCode] = targetCode;
-        sourceQtyByCode[sourceCode] = (sourceQtyByCode[sourceCode] || 0) + mergeNum(sourceItem.qty);
-      }
-      mappings.push({sourceCode,targetCode,qty:mergeNum(sourceItem.qty),name:sourceItem.name || ''});
-    }
-    if (mappings.length !== sourceItems.length) problems.push(`${receiptId}: tüm kalemler güvenli eşleştirilemedi.`);
-    archiveItems.push({receiptId,date:entry.date,receipt:rec,mappings});
-  }
-
-  // Yıkıcı işlemden önce kaynak/hedef ürünlerin gerçekten mevcut olduğunu doğrula.
-  for (const [sourceCode,targetCode] of Object.entries(codeMap)) {
-    const [sourceSnap,targetSnap] = await Promise.all([db.child(sourceCode).once('value'),db.child(targetCode).once('value')]);
-    if (!sourceSnap.exists()) problems.push(`${sourceCode}: mükerrer ürün stokta bulunamadı.`);
-    if (!targetSnap.exists()) problems.push(`${targetCode}: ana ürün stokta bulunamadı.`);
-  }
-  if (problems.length) {
-    alert('Güvenli birleştirme doğrulaması başarısız oldu. Hiçbir veri değiştirilmedi.\n\n' + problems.slice(0,15).join('\n'));
-    return;
-  }
-
-  const masterLabel = mergeReceiptLabel(masterId,masterEntry);
-  if (!confirm(`${selectedIds.length} mükerrer fiş düzeltilecek.\n\nKORUNACAK ANA FİŞ:\n${masterLabel}\n\nSeçilen mükerrer fiş sayısı: ${selectedIds.length}\n\nMükerrer ürün stoklarının mevcut miktarı ana ürüne taşınacak; geçmiş kodlar ana koda bağlanacak; mükerrer fişlerin cari borç etkisi ters kayıtla düzeltilecek.\n\nDevam edilsin mi?`)) return;
-
   const status = document.getElementById('merge-receipt-status');
-  if (status) status.textContent = '⏳ İşlem uygulanıyor... Lütfen sayfayı yenilemeyin.';
+  const setStatus = (text) => { if (status) status.textContent = text; };
+  setStatus('⏳ Firebase üzerindeki güncel fişler ve ürünler yeniden kontrol ediliyor...');
 
   try {
-    // Önce tam arşiv: geri inceleme için orijinal mükerrer fişler saklanır.
-    const archiveRef = dbRoot.child('receipt_merge_archive').push();
-    await archiveRef.set({
-      createdAt:new Date().toISOString(),
-      createdBy:'Yönetici',
-      keptReceiptId:masterId,
-      keptReceiptDate:masterEntry.date,
-      removedReceipts:archiveItems
-    });
+    const [receiptsSnap, productsSnap] = await Promise.all([dbGoodsReceipts.once('value'), db.once('value')]);
+    const receiptData = receiptsSnap.val() || {};
+    const productData = productsSnap.val() || {};
+    const latestReceipts = {};
+    Object.entries(receiptData).forEach(([date, day]) => Object.entries(day || {}).forEach(([receiptId, receipt]) => {
+      latestReceipts[receiptId] = {date, receipt};
+    }));
 
-    // Geçmiş referansları ana koda bağla.
+    const masterId = mergeReceiptAnalysis.masterReceiptId;
+    const masterEntry = latestReceipts[masterId];
+    if (!masterEntry) throw new Error('Ana fiş artık bulunamıyor. Sayfayı yenileyip tekrar deneyin.');
+    for (const id of selectedIds) if (!latestReceipts[id]) throw new Error(`${id} numaralı mükerrer fiş artık bulunamıyor. İşlem iptal edildi.`);
+
+    const masterReceipt = masterEntry.receipt || {};
+    const masterItems = masterReceipt.items || [];
+    const codeMap = {};
+    const archiveItems = [];
+    const problems = [];
+
+    for (const receiptId of selectedIds) {
+      const entry = latestReceipts[receiptId];
+      const rec = entry.receipt || {};
+      const sourceItems = rec.items || [];
+      if (!sourceItems.length || sourceItems.length !== masterItems.length) {
+        problems.push(`${receiptId}: kalem sayısı ana fişle aynı değil.`); continue;
+      }
+      const usedTargetIndexes = new Set();
+      const mappings = [];
+      for (const sourceItem of sourceItems) {
+        let best = null;
+        masterItems.forEach((targetItem,targetIndex) => {
+          if (usedTargetIndexes.has(targetIndex)) return;
+          const cmp = compareMergeItem(sourceItem,targetItem);
+          if (!best || cmp.score > best.result.score) best = {targetItem,targetIndex,result:cmp};
+        });
+        if (!best || best.result.level !== 'ok') {
+          problems.push(`${receiptId}: "${sourceItem.name || '-'}" ana fişte tam eşleşmedi.`); continue;
+        }
+        usedTargetIndexes.add(best.targetIndex);
+        const sourceCode = String(sourceItem.code || '').trim();
+        const targetCode = String(best.targetItem?.code || '').trim();
+        if (!sourceCode || !targetCode) { problems.push(`${receiptId}: "${sourceItem.name || '-'}" için ürün kodu eksik.`); continue; }
+        if (sourceCode !== targetCode) {
+          if (codeMap[sourceCode] && codeMap[sourceCode] !== targetCode) {
+            problems.push(`${receiptId}: ${sourceCode} iki farklı ana ürüne eşleşti.`); continue;
+          }
+          codeMap[sourceCode] = targetCode;
+        }
+        mappings.push({sourceCode,targetCode,receiptQty:mergeNum(sourceItem.qty),name:sourceItem.name || ''});
+      }
+      if (mappings.length !== sourceItems.length || usedTargetIndexes.size !== masterItems.length) {
+        problems.push(`${receiptId}: fişteki tüm kalemler güvenli biçimde eşleştirilemedi.`); continue;
+      }
+      archiveItems.push({receiptId,date:entry.date,receipt:rec,mappings});
+    }
+
+    if (problems.length) {
+      alert('Güvenli birleştirme kontrolü tamamlanamadı. Hiçbir veri değiştirilmedi.\n\n' + problems.slice(0,20).join('\n'));
+      return;
+    }
+
+    const targets = Object.values(codeMap);
+    const sourceCodes = Object.keys(codeMap);
+    if (sourceCodes.some(code => targets.includes(code))) throw new Error('Birleştirme haritasında zincirleme ürün kodu çakışması tespit edildi.');
+
+    for (const [sourceCode,targetCode] of Object.entries(codeMap)) {
+      if (!productData[sourceCode]) problems.push(`${sourceCode}: mükerrer ürün stoğu bulunamadı.`);
+      if (!productData[targetCode]) problems.push(`${targetCode}: ana ürün stoğu bulunamadı.`);
+    }
+    if (problems.length) {
+      alert('Ürün doğrulaması başarısız. Hiçbir veri değiştirilmedi.\n\n' + problems.slice(0,20).join('\n'));
+      return;
+    }
+
+    const masterLabel = mergeReceiptLabel(masterId, masterEntry);
+    const confirmText = `${selectedIds.length} mükerrer fiş birleştirilecek.\n\nKORUNACAK ANA FİŞ:\n${masterLabel}\n\nBirleştirilecek farklı ürün kodu: ${sourceCodes.length}\n\nİşlemden önce tüm etkilenen kayıtlar geri dönüş için arşivlenecek.\n\nDevam edilsin mi?`;
+    if (!confirm(confirmText)) return;
+
+    setStatus('⏳ Geri dönüş için işlem öncesi kayıtlar hazırlanıyor...');
+
     const excludedKeys = new Set([`${masterEntry.date}/${masterId}`]);
     archiveItems.forEach(x => excludedKeys.add(`${x.date}/${x.receiptId}`));
-    await updateMergeHistoricalReferences(codeMap,excludedKeys);
+    const historical = await collectMergeHistoricalChanges(codeMap, excludedKeys);
 
-    // Fotoğrafları mümkünse ana üründe koru.
-    for (const [sourceCode,targetCode] of Object.entries(codeMap)) {
-      try {
-        const [sourceImg,targetImg] = await Promise.all([dbProductImages.child(sourceCode).once('value'),dbProductImages.child(targetCode).once('value')]);
-        if (!targetImg.exists() && sourceImg.exists()) await dbProductImages.child(targetCode).set(sourceImg.val());
-      } catch(e) { console.warn('Fotoğraf taşınamadı:',sourceCode,e); }
+    const restoreChanges = [];
+    const addRestore = async (path, value) => { restoreChanges.push({path, value}); };
+
+    // Ürünlerin işlem öncesi tam halleri
+    sourceCodes.forEach(code => restoreChanges.push({path:`products/${code}`, value:productData[code]}));
+    const targetCodes = [...new Set(Object.values(codeMap))];
+    targetCodes.forEach(code => restoreChanges.push({path:`products/${code}`, value:productData[code]}));
+
+    // Mükerrer fişlerin tam halleri
+    archiveItems.forEach(x => restoreChanges.push({path:`goods_receipts/${x.date}/${x.receiptId}`, value:x.receipt}));
+
+    // Değişecek tarihçe kayıtlarının eski halleri
+    historical.changes.forEach(x => restoreChanges.push(x));
+
+    // Görsel ve barkod cache eski halleri
+    const imageSnapshots = {};
+    const barcodeSnapshots = {};
+    for (const sourceCode of sourceCodes) {
+      const [imgSnap, barcodeSnap] = await Promise.all([
+        dbProductImages.child(sourceCode).once('value'),
+        dbBarcodeCache.child(sourceCode).once('value')
+      ]);
+      imageSnapshots[sourceCode] = imgSnap.exists() ? imgSnap.val() : null;
+      barcodeSnapshots[sourceCode] = barcodeSnap.exists() ? barcodeSnap.val() : null;
+      restoreChanges.push({path:`product_images/${sourceCode}`, value:imageSnapshots[sourceCode]});
+      restoreChanges.push({path:`barcode_cache/${sourceCode}`, value:barcodeSnapshots[sourceCode]});
     }
 
-    // En önemli stok düzeltmesi:
-    // Kaynak ürünün O ANKİ mevcut stoğunun tamamı ana ürüne eklenir.
-    // Böylece mükerrer üründen sonradan satış yapılmışsa o satış kaybolmaz.
-    for (const [sourceCode,targetCode] of Object.entries(codeMap)) {
-      const sourceSnap = await db.child(sourceCode).once('value');
-      const sourceProduct = sourceSnap.val();
-      if (!sourceProduct) throw new Error(`${sourceCode} kaynak ürünü işlem sırasında kayboldu.`);
-      const movedQty = mergeNum(sourceProduct.qty);
-
-      await db.child(targetCode).child('qty').transaction(cur => mergeNum(cur) + movedQty);
-      await logMovement(targetCode, sourceProduct.name || targetCode, movedQty, 'MÜKERRER FİŞ BİRLEŞTİRME');
-
-      await db.child(sourceCode).remove();
-      try { await dbProductImages.child(sourceCode).remove(); } catch(e) {}
-      try { await dbBarcodeCache.child(sourceCode).remove(); } catch(e) {}
-    }
-
-    // Aynı ürün kodu zaten ana koda işaret ediyorsa ayrı stok taşıma olmaz; fakat
-    // böyle bir kayıt seçilmişse mükerrer fişin giriş miktarı stoktan düşülür.
-    const sameCodeReduce = {};
-    archiveItems.forEach(item => item.mappings.forEach(m => {
-      if (m.sourceCode && m.sourceCode === m.targetCode) sameCodeReduce[m.targetCode] = (sameCodeReduce[m.targetCode] || 0) + mergeNum(m.qty);
-    }));
-    for (const [code,qty] of Object.entries(sameCodeReduce)) {
-      await db.child(code).child('qty').transaction(cur => Math.max(0,mergeNum(cur)-qty));
-      const p = productsData[code];
-      if (p) await logMovement(code,p.name,-qty,'MÜKERRER FİŞ STOK GERİ ALMA');
-    }
-
-    // Mükerrer fişlerin toptancı cari hesabı etkisini tersine çevir.
-    for (const item of archiveItems) {
-      const rec = item.receipt || {};
-      const total = mergeNum(rec.total);
-      if (rec.addedToDebt && rec.wholesalerKey && total > 0) {
-        await dbWholesalers.child(rec.wholesalerKey).child('balance').transaction(cur => mergeNum(cur) + total);
-        await dbWholesalers.child(rec.wholesalerKey).child('transactions').push({
-          desc:'Mükerrer Malzeme Fişi Geri Alma: ' + (rec.fisNo || item.receiptId),
-          amount:total,
-          type:'odeme',
-          date:new Date().toLocaleString('tr-TR'),
-          note:'Mükerrer fiş birleştirme düzeltmesi'
-        });
-      }
-    }
-
-    // Fiş kayıtlarını en sonda kaldır. Arşiv zaten yazıldı.
-    for (const item of archiveItems) await dbGoodsReceipts.child(item.date).child(item.receiptId).remove();
-
-    // Bellek güncellemesi
-    Object.keys(codeMap).forEach(sourceCode => { delete productsData[sourceCode]; });
-
-    await dbNotifications.push({
-      text:`Mükerrer malzeme fişi düzeltmesi: ${selectedIds.length} fiş ana fiş ile birleştirildi.`,
-      time:new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})
+    // Toptancı bakiyeleri + transaction düğümlerinin tamamı yedeklenir.
+    const wholesalerSnapshots = {};
+    const debtTotals = {};
+    archiveItems.forEach(x => {
+      const rec=x.receipt||{};
+      if (rec.addedToDebt && rec.wholesalerKey && mergeNum(rec.total)>0) debtTotals[rec.wholesalerKey]=(debtTotals[rec.wholesalerKey]||0)+mergeNum(rec.total);
     });
+    for (const [wKey] of Object.entries(debtTotals)) {
+      const wsnap = await dbWholesalers.child(wKey).once('value');
+      const wdata = wsnap.val() || {};
+      wholesalerSnapshots[wKey] = {balance:mergeNum(wdata.balance), transactions:wdata.transactions || null};
+      restoreChanges.push({path:`wholesalers/${wKey}/balance`, value:wholesalerSnapshots[wKey].balance});
+      restoreChanges.push({path:`wholesalers/${wKey}/transactions`, value:wholesalerSnapshots[wKey].transactions});
+    }
 
-    if (status) status.textContent = `✅ ${selectedIds.length} mükerrer fiş başarıyla birleştirildi ve stok/geçmiş kayıtları düzeltildi.`;
-    showToast(`✅ ${selectedIds.length} mükerrer fiş düzeltildi.`);
+    // Arşiv kaydının kendisi de saklanır; geri alma bunun üzerinden çalışır.
+    setStatus('⏳ Arşiv kaydı oluşturuluyor...');
+    const archiveRef = dbRoot.child('receipt_merge_archive').push();
+    const createdAt = new Date().toISOString();
+    const archiveBase = {
+      createdAt, createdBy:'Yönetici', keptReceiptId:masterId, keptReceiptDate:masterEntry.date,
+      removedReceipts:archiveItems, codeMap, restoreChanges, movementEntries:[], status:'prepared'
+    };
+    await archiveRef.set(archiveBase);
+
+    // Tek bir root update: ürün silme + stok ekleme + tarihçe dönüşümleri + fiş silme.
+    const updates = {};
+    Object.entries(historical.writes).forEach(([path,val]) => updates[path]=val);
+    archiveItems.forEach(x => { updates[`goods_receipts/${x.date}/${x.receiptId}`]=null; });
+
+    const movementEntries = [];
+    for (const [sourceCode,targetCode] of Object.entries(codeMap)) {
+      const sourceQty=mergeNum(productData[sourceCode]?.qty);
+      const targetQty=mergeNum(productData[targetCode]?.qty);
+      updates[`products/${targetCode}/qty`] = targetQty + sourceQty;
+      updates[`products/${sourceCode}`] = null;
+      movementEntries.push({code:targetCode,name:productData[targetCode]?.name||productData[sourceCode]?.name||targetCode,change:sourceQty});
+      updates[`product_images/${sourceCode}`]=null;
+      updates[`barcode_cache/${sourceCode}`]=null;
+    }
+
+    // Mükerrer fişin borca etkisini aynı root update içinde düzelt.
+    for (const [wKey,total] of Object.entries(debtTotals)) {
+      const currentBalance=mergeNum(wholesalerSnapshots[wKey].balance);
+      updates[`wholesalers/${wKey}/balance`] = currentBalance + total;
+      const txRef = dbWholesalers.child(wKey).child('transactions').push();
+      updates[`wholesalers/${wKey}/transactions/${txRef.key}`] = {
+        desc:'Mükerrer Malzeme Fişi Geri Alma: ' + (masterId),
+        amount:total,type:'odeme',date:new Date().toLocaleString('tr-TR'),note:'Mükerrer fiş birleştirme düzeltmesi'
+      };
+    }
+
+    setStatus('⏳ Birleştirme tek güvenli Firebase işlemiyle uygulanıyor...');
+    await dbRoot.update(updates);
+
+    // Hareket kayıtları ve arşivin completed bilgisi, veri değişiminden sonra yazılır.
+    for (const m of movementEntries) if(Math.abs(mergeNum(m.change))>0.000001) logMovement(m.code,m.name,m.change,'MÜKERRER FİŞ BİRLEŞTİRME');
+    await archiveRef.update({movementEntries,status:'completed',completedAt:new Date().toISOString()});
+
+    try {
+      await dbNotifications.push({text:`Mükerrer malzeme fişi düzeltmesi: ${selectedIds.length} fiş ana fiş ile birleştirildi.`,time:new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})});
+    } catch(notificationErr) {
+      console.warn('Birleştirme tamamlandı ancak bildirim yazılamadı:', notificationErr);
+    }
+
+    Object.keys(codeMap).forEach(sourceCode => { delete productsData[sourceCode]; });
+    setStatus(`✅ ${selectedIds.length} mükerrer fiş başarıyla birleştirildi. ${sourceCodes.length} mükerrer ürün ana ürünlere bağlandı.`);
+    showToast(`✅ ${selectedIds.length} mükerrer fiş başarıyla birleştirildi.`);
     await loadMergeReceiptRecords();
     resetDuplicateReceiptMerge();
-  } catch(err) {
-    console.error('Mükerrer fiş birleştirme hatası:',err);
-    if (status) status.textContent = '❌ İşlem sırasında hata oluştu: ' + (err.message || err);
-    alert('Mükerrer fiş birleştirme sırasında hata oluştu:\n\n' + (err.message || err) + '\n\nİşlemin hangi adımda kaldığını geliştirici konsolundan kontrol edin.');
+    await refreshMergeUndoInfo();
+  } catch (err) {
+    console.error('Mükerrer fiş birleştirme hatası:', err);
+    setStatus('❌ Birleştirme durdu: ' + (err.message || err));
+    alert('Mükerrer fiş birleştirme sırasında hata oluştu:\n\n' + (err.message || err) + '\n\nGüvenli işlem kontrolü durdu. Arşiv oluşturulmuşsa geri alma kaydı korunur.');
   }
 }
-
 
 // AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
 // ============================================================
