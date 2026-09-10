@@ -1759,7 +1759,11 @@
       </div>
     </div>
 
-    <button type="button" class="btn btn-primary" style="width:100%;" onclick="addReceiptEditItem()">+ Listeye Ekle</button>
+    <div id="re-add-edit-banner" style="display:none; background:#FEF3C7; border:1px solid #F59E0B; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px; color:#92400E; font-weight:600; align-items:center; justify-content:space-between; gap:8px;">
+      <span>✏️ Bu kalemi düzenliyorsunuz. Geliş/satış fiyatı, yüzde, miktar — ne değiştirdiyseniz aşağıdaki butonla kaydedin.</span>
+      <a href="javascript:void(0)" onclick="cancelReceiptEditItemEdit()" style="color:#92400E; text-decoration:underline; flex-shrink:0;">İptal</a>
+    </div>
+    <button type="button" class="btn btn-primary" id="re-add-btn" style="width:100%;" onclick="addReceiptEditItem()">+ Listeye Ekle</button>
 
     <div style="text-align:right; font-family:'IBM Plex Mono'; font-weight:bold; font-size:16px; margin:18px 0 14px;">Yeni Toplam: ₺<span id="re-total">0.00</span></div>
     <button class="btn btn-success" style="width:100%;" onclick="saveReceiptEdit()">✅ Değişiklikleri Kaydet</button>
@@ -6246,6 +6250,7 @@ async function downloadReceiptById(receiptId) {
 // ============================================================
 let receiptEditItems = [];
 let receiptEditTarget = null;
+let reEditingIndex = null; // null = yeni kalem ekleme modu; sayı ise o index'teki kalem düzenleniyor demektir
 let _reAddMatchDebounce = null;
 
 function openReceiptEditModal(receiptId) {
@@ -6271,6 +6276,7 @@ function closeReceiptEditModal() {
   document.getElementById('receipt-edit-modal').style.display = 'none';
   receiptEditItems = [];
   receiptEditTarget = null;
+  reEditingIndex = null;
 }
 
 function populateReceiptEditProductList() {
@@ -6294,6 +6300,62 @@ function resetReceiptAddForm() {
   const priceFields = document.getElementById('re-add-price-fields'); if(priceFields) priceFields.style.display = 'none';
   const newFields = document.getElementById('re-add-new-fields'); if(newFields) newFields.style.display = 'none';
   const warnBox = document.getElementById('re-add-duplicate-warning'); if(warnBox) { warnBox.innerHTML = ''; warnBox.style.display = 'none'; }
+  const updateCheck = document.getElementById('re-add-update-existing-price'); if(updateCheck) updateCheck.checked = true;
+
+  // Düzenleme modundan çıkılıyorsa (iptal / kaydetme sonrası) formu ve butonu eski haline döndür.
+  reEditingIndex = null;
+  const banner = document.getElementById('re-add-edit-banner'); if(banner) banner.style.display = 'none';
+  const addBtn = document.getElementById('re-add-btn'); if(addBtn) addBtn.textContent = '+ Listeye Ekle';
+}
+
+function cancelReceiptEditItemEdit() {
+  resetReceiptAddForm();
+  renderReceiptEditItems();
+}
+
+// Fişteki mevcut bir kalemin GELİŞ FİYATI, SATIŞ FİYATI, KDV/KÂR YÜZDESİ, MİKTARI,
+// BİRİMİ ve SINIFI dahil tüm özelliklerini düzenlemek için "Kaleme Ekle" formuna yükler.
+// editFisItem'ın (yeni fiş ekranındaki) bu modaldaki karşılığıdır.
+function editReceiptEditItem(idx) {
+  const item = receiptEditItems[idx];
+  if(!item) return;
+
+  reEditingIndex = idx;
+
+  document.getElementById('re-add-product').value = item.isNew ? item.name : `${item.code} - ${item.name}`;
+  document.getElementById('re-add-qty').value = item.qty;
+  document.getElementById('re-add-cost').value = item.cost;
+
+  checkReceiptEditProductMatch();
+
+  // checkReceiptEditProductMatch() sadece boş alanları stoktaki mevcut değerlerle doldurur;
+  // bu kalemde daha önce girilmiş kendi değerleri varsa (isNew ya da updatePrices ile
+  // kaydedilmiş) onların üzerine yazıp gösteriyoruz ki gerçekten düzenlediğiniz şey bu olsun.
+  if(item.isNew) {
+    document.getElementById('re-add-price').value = item.price || '';
+    document.getElementById('re-add-unit').value = item.unit || 'Adet';
+    document.getElementById('re-add-category').value = item.category || 'Diğer';
+    document.getElementById('re-add-vat').value = (item.vat != null) ? item.vat : '';
+    document.getElementById('re-add-profit').value = (item.targetProfit != null) ? item.targetProfit : '';
+    updateFisProfit('re-add');
+    const barcodeEl = document.getElementById('re-add-barcode'); if(barcodeEl) barcodeEl.value = item.code || '';
+    const barcodePendingEl = document.getElementById('re-add-barcode-pending'); if(barcodePendingEl) barcodePendingEl.value = item.code || '';
+  } else if(item.updatePrices) {
+    if(item.vat != null) document.getElementById('re-add-vat').value = item.vat;
+    if(item.targetProfit != null) document.getElementById('re-add-profit').value = item.targetProfit;
+    if(item.newPrice != null) document.getElementById('re-add-price').value = item.newPrice;
+    const updateCheck = document.getElementById('re-add-update-existing-price'); if(updateCheck) updateCheck.checked = true;
+    updateFisProfit('re-add');
+  }
+
+  const banner = document.getElementById('re-add-edit-banner'); if(banner) banner.style.display = 'flex';
+  const addBtn = document.getElementById('re-add-btn'); if(addBtn) addBtn.textContent = '💾 Düzenlemeyi Kaydet';
+
+  renderReceiptEditItems(); // düzenlenen satırı vurgulamak için yeniden çiz
+
+  const productInput = document.getElementById('re-add-product');
+  if(productInput) { productInput.scrollIntoView({ behavior: 'smooth', block: 'center' }); productInput.focus(); }
+  showToast("Kalem düzenlemeniz için forma yüklendi. Geliş/satış fiyatı, yüzde, miktar — ne değiştirdiyseniz '💾 Düzenlemeyi Kaydet' butonuna basın.");
 }
 
 // checkFisProductMatch'in aynısı — sadece 're-add-' alanlarına ve bu modalın
@@ -6370,12 +6432,12 @@ function renderReceiptEditItems() {
     box.innerHTML = '<p style="color:var(--steel); font-size:12px; text-align:center; padding:10px 0;">Listede hiç kalem yok. Aşağıdan ekleyebilirsiniz.</p>';
   } else {
     box.innerHTML = receiptEditItems.map((it, idx) => `
-      <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px solid var(--steel-line); flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid var(--steel-line); flex-wrap:wrap; ${idx === reEditingIndex ? 'background:#FFF7E0; border-radius:6px; outline:2px solid var(--warning, #E0A800);' : ''}">
         <div style="flex:2; min-width:160px;">
-          <strong>${it.name}</strong>${it.isNew ? ' <span style="color:var(--info); font-size:10px; font-weight:600;">(YENİ ÜRÜN' + (it.category ? ' — ' + it.category : '') + ')</span>' : ''}<br>
+          <strong>${it.name}</strong>${it.isNew ? ' <span style="color:var(--info); font-size:10px; font-weight:600;">(YENİ ÜRÜN' + (it.category ? ' — ' + it.category : '') + ')</span>' : ''}${idx === reEditingIndex ? ' <span style="color:#E0A800; font-size:10px; font-weight:600;">(DÜZENLENİYOR)</span>' : ''}<br>
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${it.isNew ? (it.code || 'Kod otomatik atanacak') : (it.code || '-')} ${it.unit ? '· ' + it.unit : ''}</small>
           ${it.isNew && it.price ? `<br><small style="color:var(--steel);">Satış: ₺${formatMoney(it.price)}${it.vat?' · KDV %'+it.vat:''}${it.targetProfit!=null && it.targetProfit!==''?' · Kâr %'+it.targetProfit:''}</small>` : ''}
-          ${!it.isNew && it.updatePrices ? `<br><small style="color:var(--success);">↻ Fiyat/kâr stokta güncellenecek</small>` : ''}
+          ${!it.isNew && it.updatePrices ? `<br><small style="color:var(--success);">↻ Geliş ₺${formatMoney(it.cost||0)}${it.newPrice!=null?' · Satış ₺'+formatMoney(it.newPrice):''}${it.vat!=null?' · KDV %'+it.vat:''}${it.targetProfit!=null?' · Kâr %'+it.targetProfit:''} stokta güncellenecek</small>` : ''}
         </div>
         <div style="width:90px;">
           <label style="font-size:9px; text-transform:uppercase; color:var(--steel);">Miktar</label>
@@ -6386,6 +6448,7 @@ function renderReceiptEditItems() {
           <input type="number" step="0.01" value="${it.cost || 0}" oninput="updateReceiptEditItem(${idx}, 'cost', this.value)">
         </div>
         <div id="re-line-total-${idx}" style="width:90px; text-align:right; font-family:'IBM Plex Mono'; font-weight:bold;">₺${formatMoney((Number(it.qty)||0) * (Number(it.cost)||0))}</div>
+        <button type="button" class="btn btn-info btn-sm" style="width:auto; flex-shrink:0;" title="Geliş/satış fiyatı, yüzde, birim gibi tüm özellikleri düzenle" onclick="editReceiptEditItem(${idx})">✏️ Düzenle</button>
         <button type="button" class="btn btn-danger btn-sm" style="width:auto; flex-shrink:0;" onclick="removeReceiptEditItem(${idx})">🗑</button>
       </div>
     `).join('');
@@ -6439,6 +6502,16 @@ function addReceiptEditItem() {
       if(newPriceRaw !== '') newEntry.newPrice = Math.max(0, parseFloat(newPriceRaw) || 0);
     }
 
+    // Düzenleme modundaysak (bir kalemin ✏️ Düzenle'sine basılmışsa), yeni bir satır
+    // açmak yerine düzenlenen kalemin yerine koyuyoruz — kod farklı bir ürüne
+    // değiştirilmiş olsa bile bu geçerli, çünkü "elle eşleştir" ile ürün de değişebilir.
+    if(reEditingIndex !== null && receiptEditItems[reEditingIndex]) {
+      receiptEditItems[reEditingIndex] = newEntry;
+      resetReceiptAddForm();
+      renderReceiptEditItems();
+      return;
+    }
+
     // Aynı mevcut üründen fişte zaten varsa ayrı satır açmak yerine miktarını artır.
     const existingIdx = receiptEditItems.findIndex(it => !it.isNew && it.code === p.code);
     if(existingIdx > -1) {
@@ -6459,7 +6532,8 @@ function addReceiptEditItem() {
     const category = document.getElementById('re-add-category').value;
 
     if(rawBarcode) {
-      if(productsData[rawBarcode] || receiptEditItems.some(it => it.code === rawBarcode)) {
+      const usedElsewhere = receiptEditItems.some((it, i) => it.code === rawBarcode && i !== reEditingIndex);
+      if(productsData[rawBarcode] || usedElsewhere) {
         alert(`'${rawBarcode}' barkodu zaten kullanılıyor. Lütfen kontrol edin.`);
         return;
       }
@@ -6471,7 +6545,11 @@ function addReceiptEditItem() {
     };
   }
 
-  receiptEditItems.push(newEntry);
+  if(reEditingIndex !== null && receiptEditItems[reEditingIndex]) {
+    receiptEditItems[reEditingIndex] = newEntry;
+  } else {
+    receiptEditItems.push(newEntry);
+  }
   resetReceiptAddForm();
   renderReceiptEditItems();
 }
