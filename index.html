@@ -1151,6 +1151,10 @@
           <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any"></div>
           <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit(); updateCostCalc('fis', 'fis-cost');"></div>
         </div>
+        <div class="form-row" style="grid-template-columns: 1fr 3fr; margin-top:-4px;">
+          <div><label>İskonto Tutarı (₺)</label><input type="number" id="fis-discount" step="0.01" placeholder="0.00" min="0"></div>
+          <div style="font-size:11px; color:var(--steel); padding-bottom:10px; align-self:flex-end;">Toptancının bu kalem için uyguladığı toplam iskonto tutarı (yüzde değil, ₺). Ara toplamdan otomatik düşülür.</div>
+        </div>
         <div id="fis-price-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
           <p id="fis-price-note" style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;"></p>
           <div class="form-row" style="grid-template-columns:1fr; margin-bottom:10px;">
@@ -1702,6 +1706,10 @@
       </div>
       <div><label>Miktar</label><input type="number" id="re-add-qty" placeholder="1" min="0.1" step="any"></div>
       <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="re-add-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit('re-add')"></div>
+    </div>
+    <div class="form-row" style="grid-template-columns: 1fr 3fr; margin-top:-4px;">
+      <div><label>İskonto Tutarı (₺)</label><input type="number" id="re-add-discount" step="0.01" placeholder="0.00" min="0"></div>
+      <div style="font-size:11px; color:var(--steel); padding-bottom:10px; align-self:flex-end;">Toptancının bu kalem için uyguladığı toplam iskonto tutarı (yüzde değil, ₺). Ara toplamdan otomatik düşülür.</div>
     </div>
 
     <div id="re-add-price-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
@@ -5856,7 +5864,8 @@ async function addToGoodsReceipt() {
       }
     }
   }
-  item.total = item.qty * item.cost;
+  item.discount = Math.max(0, parseFloat(document.getElementById('fis-discount').value) || 0);
+  item.total = Math.max(0, item.qty * item.cost - item.discount);
 
   const wasEditing = fisEditingIndex !== null;
   if (wasEditing) {
@@ -5875,6 +5884,7 @@ async function addToGoodsReceipt() {
   document.getElementById('fis-product').value = '';
   document.getElementById('fis-qty').value = '1';
   document.getElementById('fis-cost').value = '';
+  document.getElementById('fis-discount').value = '';
   document.getElementById('fis-price').value = '';
   document.getElementById('fis-unit').value = 'Adet';
   document.getElementById('fis-category').value = 'Diğer';
@@ -5999,7 +6009,7 @@ function renderGoodsReceiptCart() {
         </td>
         <td>₺${formatMoney(item.cost)}</td>
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
-        <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}</td>
+        <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}${item.discount ? `<br><small style="color:var(--success); font-weight:normal;">-₺${formatMoney(item.discount)} iskonto</small>` : ''}</td>
         <td style="display:flex; gap:4px; flex-wrap:wrap;">
           <button class="btn btn-info btn-sm" style="width:auto;" onclick="editFisItem(${index})">${editBtnLabel}</button>
           <button class="btn btn-dark btn-sm" style="width:auto;" onclick="removeFromGoodsReceipt(${index})">Çıkar</button>
@@ -6051,6 +6061,7 @@ function editFisItem(index) {
   document.getElementById('fis-product').value = item.isNew ? item.name : `${item.code} - ${item.name}`;
   document.getElementById('fis-qty').value = item.qty;
   document.getElementById('fis-cost').value = item.cost;
+  document.getElementById('fis-discount').value = item.discount || '';
 
   checkFisProductMatch();
 
@@ -6088,6 +6099,7 @@ function cancelFisEdit() {
   document.getElementById('fis-product').value = '';
   document.getElementById('fis-qty').value = '1';
   document.getElementById('fis-cost').value = '';
+  document.getElementById('fis-discount').value = '';
   document.getElementById('fis-price').value = '';
   document.getElementById('fis-unit').value = 'Adet';
   document.getElementById('fis-category').value = 'Diğer';
@@ -6758,7 +6770,7 @@ function populateReceiptEditProductList() {
 }
 
 function resetReceiptAddForm() {
-  ['re-add-product','re-add-qty','re-add-cost','re-add-vat','re-add-profit','re-add-price','re-add-suggested-price','re-add-barcode','re-add-barcode-pending'].forEach(id => {
+  ['re-add-product','re-add-qty','re-add-cost','re-add-discount','re-add-vat','re-add-profit','re-add-price','re-add-suggested-price','re-add-barcode','re-add-barcode-pending'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.value = '';
   });
@@ -6792,6 +6804,7 @@ function editReceiptEditItem(idx) {
   document.getElementById('re-add-product').value = item.isNew ? item.name : `${item.code} - ${item.name}`;
   document.getElementById('re-add-qty').value = item.qty;
   document.getElementById('re-add-cost').value = item.cost;
+  document.getElementById('re-add-discount').value = item.discount || '';
 
   checkReceiptEditProductMatch();
 
@@ -6914,7 +6927,11 @@ function renderReceiptEditItems() {
           <label style="font-size:9px; text-transform:uppercase; color:var(--steel);">Alış Fiyatı</label>
           <input type="number" step="0.01" value="${it.cost || 0}" oninput="updateReceiptEditItem(${idx}, 'cost', this.value)">
         </div>
-        <div id="re-line-total-${idx}" style="width:90px; text-align:right; font-family:'IBM Plex Mono'; font-weight:bold;">₺${formatMoney((Number(it.qty)||0) * (Number(it.cost)||0))}</div>
+        <div style="width:100px;">
+          <label style="font-size:9px; text-transform:uppercase; color:var(--steel);">İskonto (₺)</label>
+          <input type="number" step="0.01" value="${it.discount || 0}" oninput="updateReceiptEditItem(${idx}, 'discount', this.value)">
+        </div>
+        <div id="re-line-total-${idx}" style="width:90px; text-align:right; font-family:'IBM Plex Mono'; font-weight:bold;">₺${formatMoney(Math.max(0, (Number(it.qty)||0) * (Number(it.cost)||0) - (Number(it.discount)||0)))}</div>
         <button type="button" class="btn btn-info btn-sm" style="width:auto; flex-shrink:0;" title="Geliş/satış fiyatı, yüzde, birim gibi tüm özellikleri düzenle" onclick="editReceiptEditItem(${idx})">✏️ Düzenle</button>
         <button type="button" class="btn btn-danger btn-sm" style="width:auto; flex-shrink:0;" onclick="removeReceiptEditItem(${idx})">🗑</button>
       </div>
@@ -6926,7 +6943,7 @@ function renderReceiptEditItems() {
 function updateReceiptEditItem(idx, field, val) {
   if(!receiptEditItems[idx]) return;
   receiptEditItems[idx][field] = parseFloat(val) || 0;
-  const lineTotal = (Number(receiptEditItems[idx].qty)||0) * (Number(receiptEditItems[idx].cost)||0);
+  const lineTotal = Math.max(0, (Number(receiptEditItems[idx].qty)||0) * (Number(receiptEditItems[idx].cost)||0) - (Number(receiptEditItems[idx].discount)||0));
   receiptEditItems[idx].total = lineTotal;
 
   // Sadece ilgili satırın toplamını güncelle — tüm listeyi yeniden çizmiyoruz
@@ -6942,6 +6959,7 @@ function addReceiptEditItem() {
   const qty = parseFloat(document.getElementById('re-add-qty').value);
   const costRaw = document.getElementById('re-add-cost').value;
   const costEntered = costRaw === '' ? null : parseFloat(costRaw);
+  const discount = Math.max(0, parseFloat(document.getElementById('re-add-discount').value) || 0);
 
   if(!inputVal || isNaN(qty) || qty <= 0) {
     alert("Lütfen geçerli bir malzeme adı/kodu ve miktar girin.");
@@ -6961,7 +6979,7 @@ function addReceiptEditItem() {
     const profitRaw = document.getElementById('re-add-profit').value;
     const newPriceRaw = document.getElementById('re-add-price').value;
 
-    newEntry = { code: p.code, name: p.name, unit: p.unit || 'Adet', qty, cost, isNew: false };
+    newEntry = { code: p.code, name: p.name, unit: p.unit || 'Adet', qty, cost, discount, isNew: false };
     if(updatePrices) {
       newEntry.updatePrices = true;
       if(vatRaw !== '') newEntry.vat = parseFloat(vatRaw) || 0;
@@ -6983,7 +7001,8 @@ function addReceiptEditItem() {
     const existingIdx = receiptEditItems.findIndex(it => !it.isNew && it.code === p.code);
     if(existingIdx > -1) {
       receiptEditItems[existingIdx].qty = (Number(receiptEditItems[existingIdx].qty)||0) + qty;
-      if(updatePrices) Object.assign(receiptEditItems[existingIdx], newEntry, { qty: receiptEditItems[existingIdx].qty });
+      receiptEditItems[existingIdx].discount = (Number(receiptEditItems[existingIdx].discount)||0) + discount;
+      if(updatePrices) Object.assign(receiptEditItems[existingIdx], newEntry, { qty: receiptEditItems[existingIdx].qty, discount: receiptEditItems[existingIdx].discount });
       resetReceiptAddForm();
       renderReceiptEditItems();
       return;
@@ -7008,7 +7027,7 @@ function addReceiptEditItem() {
 
     newEntry = {
       code: rawBarcode || null, name: inputVal, unit, category,
-      qty, cost, vat, targetProfit: profit, price, isNew: true
+      qty, cost, discount, vat, targetProfit: profit, price, isNew: true
     };
   }
 
@@ -7028,7 +7047,7 @@ function removeReceiptEditItem(idx) {
 }
 
 function updateReceiptEditTotal() {
-  const total = receiptEditItems.reduce((sum, it) => sum + ((Number(it.qty)||0) * (Number(it.cost)||0)), 0);
+  const total = receiptEditItems.reduce((sum, it) => sum + Math.max(0, (Number(it.qty)||0) * (Number(it.cost)||0) - (Number(it.discount)||0)), 0);
   const el = document.getElementById('re-total');
   if(el) el.textContent = formatMoney(total);
 }
@@ -7064,7 +7083,8 @@ async function saveReceiptEdit() {
     const clean = Object.assign({}, it);
     clean.qty = Number(it.qty) || 0;
     clean.cost = Number(it.cost) || 0;
-    clean.total = clean.qty * clean.cost;
+    clean.discount = Math.max(0, Number(it.discount) || 0);
+    clean.total = Math.max(0, clean.qty * clean.cost - clean.discount);
     return clean;
   }).filter(it => it.qty > 0 && it.code);
 
@@ -9675,17 +9695,7 @@ ${inventoryContext}`;
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          // Gemini 3.6 Flash varsayılan olarak "medium" seviyede düşünüyor; bu basit
-          // stok/fiyat/yönlendirme sınıflandırması için gereğinden fazla ve yavaş.
-          // "low" ile gecikmeyi büyük ölçüde azaltıyoruz. Hâlâ yavaş geliyorsa "minimal" deneyin.
-          thinkingConfig: { thinkingLevel: "minimal" },
-          // Cevaplar zaten kısa JSON, gereksiz uzun çıktı üretilmesini engelleyip hızlandırıyoruz
-          maxOutputTokens: 400
-        }
-      })
+      body: JSON.stringify({ contents })
     });
 
     const data = await response.json();
@@ -9912,10 +9922,7 @@ async function sendPanelAIMessage(panelKey) {
     const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        generationConfig: { thinkingConfig: { thinkingLevel: 'minimal' }, maxOutputTokens: 400 }
-      })
+      body: JSON.stringify({ contents })
     });
 
     const data = await response.json();
