@@ -503,7 +503,7 @@ function maybeSeedDefaultBrands() {
   if (Object.keys(brandSettingsData).length > 0) return;
   const updates = {};
   DEFAULT_BRANDS.forEach(b => {
-    updates['brand_settings/' + b] = { discount: 0, vat: 0 };
+    updates['brand_settings/' + b] = { discount: 0, vat: 0, profit: 0 };
   });
   dbRoot.update(updates);
 }
@@ -522,7 +522,7 @@ function addBrandGroup() {
   const name = input.value.trim();
   if (!name) { alert("Marka adı girin."); return; }
   if (brandSettingsData[name]) { alert("Bu marka zaten listede: " + name); return; }
-  dbBrandSettings.child(name).set({ discount: 0, vat: 0 }, (err) => {
+  dbBrandSettings.child(name).set({ discount: 0, vat: 0, profit: 0 }, (err) => {
     if (err) { alert("Eklenemedi: " + err.message); return; }
     input.value = '';
     showToast("Marka eklendi: " + name);
@@ -554,15 +554,19 @@ function renderBrandSettings() {
     html += brands.map(brand => {
       const s = brandSettingsData[brand] || {};
       return `
-        <div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-top:1px solid var(--steel-line);">
-          <div style="flex:1.2;"><label style="margin-bottom:2px;">${brand}</label></div>
-          <div style="flex:1;">
+        <div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-top:1px solid var(--steel-line); flex-wrap:wrap;">
+          <div style="flex:1.2; min-width:100px;"><label style="margin-bottom:2px;">${brand}</label></div>
+          <div style="flex:1; min-width:70px;">
             <label style="margin-bottom:2px;">İskonto %</label>
             <input type="number" step="0.01" id="bs-discount-${brand}" value="${s.discount != null ? s.discount : ''}" placeholder="0">
           </div>
-          <div style="flex:1;">
+          <div style="flex:1; min-width:70px;">
             <label style="margin-bottom:2px;">KDV %</label>
             <input type="number" step="0.01" id="bs-vat-${brand}" value="${s.vat != null ? s.vat : ''}" placeholder="0">
+          </div>
+          <div style="flex:1; min-width:70px;">
+            <label style="margin-bottom:2px;">Kâr %</label>
+            <input type="number" step="0.01" id="bs-profit-${brand}" value="${s.profit != null ? s.profit : ''}" placeholder="0">
           </div>
           <button class="btn btn-dark btn-sm" style="width:auto;" onclick="saveBrandSetting('${brand}')">Kaydet</button>
           <button class="stand-del" style="position:static; font-size:16px;" onclick="deleteBrandGroup(event, '${brand}')" title="Markayı Sil">✕</button>
@@ -578,9 +582,11 @@ function saveBrandSetting(brand) {
   if (currentRole !== 'admin') return;
   const discount = parseFloat(document.getElementById(`bs-discount-${brand}`).value) || 0;
   const vat = parseFloat(document.getElementById(`bs-vat-${brand}`).value) || 0;
-  dbBrandSettings.child(brand).set({ discount, vat }, (err) => {
+  const profitEl = document.getElementById(`bs-profit-${brand}`);
+  const profit = profitEl ? (parseFloat(profitEl.value) || 0) : 0;
+  dbBrandSettings.child(brand).set({ discount, vat, profit }, (err) => {
     if (err) { alert("Kaydedilemedi: " + err.message); return; }
-    showToast(`${brand} için oranlar kaydedildi.`);
+    showToast(`${brand} için oranlar kaydedildi — bu markayla eklenen ürünlere/boru boyutlarına otomatik uygulanacak.`);
   });
 }
 
@@ -3355,7 +3361,7 @@ function openKatalogPricingModal(ctx) {
   document.getElementById('kp-cost').value = ctx.cost || '';
   const discEl = document.getElementById('kp-discount'); discEl.value = ''; discEl.dataset.auto = '';
   const vatEl = document.getElementById('kp-vat'); vatEl.value = ''; vatEl.dataset.auto = '';
-  document.getElementById('kp-profit').value = '';
+  const profitEl = document.getElementById('kp-profit'); profitEl.value = ''; profitEl.dataset.auto = '';
   document.getElementById('kp-unit').value = 'Adet';
   document.getElementById('kp-existing-search').value = ctx.existingCode ? `${ctx.existingCode} - ${ctx.name}` : '';
   populateProductDatalist('katalog-existing-product-list');
@@ -3384,14 +3390,16 @@ function updateKatalogPricing() {
   const brand = document.getElementById('kp-brand').value;
   const box = document.getElementById('kp-calc-box');
 
-  // Marka seçilince, kullanıcı henüz elle değiştirmediyse iskonto/KDV'yi marka
+  // Marka seçilince, kullanıcı henüz elle değiştirmediyse iskonto/KDV/kâr'ı marka
   // varsayılanından otomatik doldur (üzerine yazılabilir).
   if (brand && brandSettingsData[brand]) {
     const s = brandSettingsData[brand];
     const discEl = document.getElementById('kp-discount');
     const vatEl = document.getElementById('kp-vat');
+    const profitEl = document.getElementById('kp-profit');
     if (discEl.value === '' || discEl.dataset.auto === '1') { discEl.value = s.discount || 0; discEl.dataset.auto = '1'; }
     if (vatEl.value === '' || vatEl.dataset.auto === '1') { vatEl.value = s.vat || 0; vatEl.dataset.auto = '1'; }
+    if (profitEl.value === '' || profitEl.dataset.auto === '1') { profitEl.value = s.profit || 0; profitEl.dataset.auto = '1'; }
   }
 
   const cost = parseFloat(document.getElementById('kp-cost').value);
@@ -3489,6 +3497,7 @@ function addPipeType() {
   newRef.child('name').set(name, (err) => {
     if (err) { alert("Eklenemedi: " + err.message); return; }
     input.value = '';
+    pipeTypeExpanded.add(newRef.key);
     showToast("Boru tipi eklendi: " + name);
   });
 }
@@ -3502,6 +3511,14 @@ function deletePipeType(tipId) {
   dbPipeTypes.child(tipId).remove(() => showToast("Boru tipi silindi."));
 }
 
+let pipeTypeExpanded = new Set(); // açık (genişletilmiş) boru tiplerinin id'leri
+
+function togglePipeTypeExpand(tipId) {
+  if (pipeTypeExpanded.has(tipId)) pipeTypeExpanded.delete(tipId);
+  else pipeTypeExpanded.add(tipId);
+  renderPipeTypesList();
+}
+
 function renderPipeTypesList() {
   const box = document.getElementById('pipe-types-list');
   if (!box) return;
@@ -3512,27 +3529,34 @@ function renderPipeTypesList() {
   }
   box.innerHTML = tips.map(([tipId, t]) => {
     const sizes = Object.entries(t).filter(([k]) => k !== 'name');
+    const isOpen = pipeTypeExpanded.has(tipId);
     return `
-      <div style="border:1px solid var(--steel-line); border-radius:8px; padding:10px; margin-bottom:10px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <strong>${t.name}</strong>
-          <span style="display:flex; gap:6px;">
+      <div style="border:1px solid var(--steel-line); border-radius:8px; margin-bottom:10px; overflow:hidden;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; cursor:pointer; background:${isOpen ? '#F1F5F9' : 'transparent'};" onclick="togglePipeTypeExpand('${tipId}')">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <span style="display:inline-block; transition:transform 0.15s; transform:rotate(${isOpen ? '90' : '0'}deg);">▶</span>
+            <strong>${t.name}</strong>
+            <small style="color:var(--steel);">(${sizes.length} boyut)</small>
+          </span>
+          <span style="display:flex; gap:6px;" onclick="event.stopPropagation();">
             <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openPipeSizeModal('${tipId}')">+ Boyut Ekle</button>
             <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deletePipeType('${tipId}')">🗑 Tipi Sil</button>
           </span>
         </div>
-        ${sizes.length === 0
-          ? `<p style="font-size:11px; color:var(--steel); margin:6px 0 0;">Bu tipe henüz boyut eklenmedi.</p>`
-          : sizes.map(([boyutId, s]) => `
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
-                <span>${s.size} ${s.brand ? `<small style="color:var(--steel);">(${s.brand})</small>` : ''} — Satış: <b>₺${formatMoney(s.price||0)}</b> · Stok: ${s.stock||0}</span>
-                <span style="display:flex; gap:6px; flex-shrink:0;">
-                  <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openPipeSizeModal('${tipId}','${boyutId}')">✏️</button>
-                  <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deletePipeSize('${tipId}','${boyutId}')">🗑</button>
-                </span>
-              </div>
-            `).join('')
-        }
+        <div style="padding:${isOpen ? '0 10px 10px' : '0'}; max-height:${isOpen ? '2000px' : '0'}; overflow:hidden; transition:max-height 0.2s ease;">
+          ${sizes.length === 0
+            ? `<p style="font-size:11px; color:var(--steel); margin:6px 0 0;">Bu tipe henüz boyut eklenmedi.</p>`
+            : sizes.map(([boyutId, s]) => `
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+                  <span>${s.size} ${s.brand ? `<small style="color:var(--steel);">(${s.brand})</small>` : ''} — Satış: <b>₺${formatMoney(s.price||0)}</b> · Stok: ${s.stock||0}</span>
+                  <span style="display:flex; gap:6px; flex-shrink:0;">
+                    <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openPipeSizeModal('${tipId}','${boyutId}')">✏️</button>
+                    <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deletePipeSize('${tipId}','${boyutId}')">🗑</button>
+                  </span>
+                </div>
+              `).join('')
+          }
+        </div>
       </div>
     `;
   }).join('');
@@ -3553,9 +3577,9 @@ function openPipeSizeModal(tipId, boyutId) {
   document.getElementById('pipe-size-brand').value = existing ? (existing.brand || '') : '';
   document.getElementById('pipe-size-cost').value = existing ? (existing.cost || '') : '';
   document.getElementById('pipe-size-stock').value = existing ? (existing.stock || 0) : 0;
-  document.getElementById('pipe-size-discount').value = existing ? (existing.discount || 0) : 0;
-  document.getElementById('pipe-size-vat').value = existing ? (existing.vat || 0) : 0;
-  document.getElementById('pipe-size-profit').value = existing ? (existing.profit || 0) : 0;
+  const discEl = document.getElementById('pipe-size-discount'); discEl.value = existing ? (existing.discount || 0) : ''; discEl.dataset.auto = existing ? '' : '';
+  const vatEl = document.getElementById('pipe-size-vat'); vatEl.value = existing ? (existing.vat || 0) : ''; vatEl.dataset.auto = '';
+  const profitEl2 = document.getElementById('pipe-size-profit'); profitEl2.value = existing ? (existing.profit || 0) : ''; profitEl2.dataset.auto = '';
   const priceEl = document.getElementById('pipe-size-price');
   priceEl.value = existing ? (existing.price || '') : '';
   priceEl.dataset.manual = '';
@@ -3571,6 +3595,22 @@ function closePipeSizeModal() {
 
 function updatePipeSizeCalc() {
   const box = document.getElementById('pipe-size-calc-box');
+  const brand = document.getElementById('pipe-size-brand').value;
+
+  // Marka seçilince, kullanıcı henüz elle değiştirmediyse iskonto/KDV/kâr'ı o
+  // markanın "Marka İskonto/KDV Ayarları" panelinde bir kere kaydedilen
+  // değerlerinden otomatik doldur — böylece her boyut için tekrar tekrar
+  // girmeye gerek kalmaz.
+  if (brand && brandSettingsData[brand]) {
+    const s = brandSettingsData[brand];
+    const discEl = document.getElementById('pipe-size-discount');
+    const vatEl = document.getElementById('pipe-size-vat');
+    const profitEl = document.getElementById('pipe-size-profit');
+    if (discEl.value === '' || discEl.dataset.auto === '1') { discEl.value = s.discount || 0; discEl.dataset.auto = '1'; }
+    if (vatEl.value === '' || vatEl.dataset.auto === '1') { vatEl.value = s.vat || 0; vatEl.dataset.auto = '1'; }
+    if (profitEl.value === '' || profitEl.dataset.auto === '1') { profitEl.value = s.profit || 0; profitEl.dataset.auto = '1'; }
+  }
+
   const cost = parseFloat(document.getElementById('pipe-size-cost').value);
   const discount = parseFloat(document.getElementById('pipe-size-discount').value) || 0;
   const vat = parseFloat(document.getElementById('pipe-size-vat').value) || 0;
@@ -3583,7 +3623,7 @@ function updatePipeSizeCalc() {
   const suggested = netCost * (1 + profit / 100);
 
   box.classList.add('active');
-  box.innerHTML = `Net Maliyet: <b>₺${netCost.toFixed(2)}</b> → Önerilen Satış: <b style="color:var(--success);">₺${suggested.toFixed(2)}</b>`;
+  box.innerHTML = `Katalog Fiyatı: <b>₺${cost.toFixed(2)}</b> → İskonto (%${discount}) + KDV (%${vat}) sonrası Net Maliyet: <b>₺${netCost.toFixed(2)}</b> → + Kâr (%${profit}) = <b style="color:var(--success);">Tavsiye Edilen Satış: ₺${suggested.toFixed(2)}</b>`;
 
   const priceEl = document.getElementById('pipe-size-price');
   if (!priceEl.dataset.manual) priceEl.value = suggested.toFixed(2);
