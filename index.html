@@ -1376,7 +1376,7 @@
     <h3 style="margin-top:0; font-family:'Oswald';">📐 <span id="pipe-size-type-label"></span> — Boyut Ekle/Düzenle</h3>
     <div class="form-row">
       <div><label>Boyut/Ölçü</label><input type="text" id="pipe-size-value" placeholder="Örn: 32mm"></div>
-      <div><label>Marka</label><select id="pipe-size-brand"></select></div>
+      <div><label>Marka</label><select id="pipe-size-brand" onchange="updatePipeSizeCalc()"></select></div>
     </div>
     <div class="form-row">
       <div><label>Geliş Fiyatı (₺)</label><input type="number" id="pipe-size-cost" step="0.01" oninput="updatePipeSizeCalc()"></div>
