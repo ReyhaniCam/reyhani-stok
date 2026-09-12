@@ -2977,4 +2977,3 @@ function renderGrid() {
   document.getElementById('sum-units').textContent = units.toFixed(1);
   document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
 }
-
