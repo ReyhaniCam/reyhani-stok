@@ -194,6 +194,7 @@
         <button class="btn btn-info btn-sm disabled-action" id="auto-update-btn" onclick="enableAutoStockUpdate()" title="Her stok giriş/çıkışında bu klasördeki dosyayı otomatik günceller">🔄 Otomatik Güncellemeyi Aç</button>
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
         <button class="btn btn-warning btn-sm" id="merge-products-btn" onclick="openMergeProductsModal()" style="display:none;" title="Yanlışlıkla birden fazla barkodla kaydedilmiş aynı ürünleri tek kayıtta birleştirir">🔗 Mükerrer Ürünleri Birleştir</button>
+        <button class="btn btn-danger btn-sm" id="import-cleanup-btn" onclick="openImportCleanupModal()" style="display:none;" title="Excel ile toplu içe aktarılmış (ve o zamandan beri fiyatı elle değiştirilmemiş) ürünleri toplu olarak siler">🗑️ Toplu Aktarımı Geri Al</button>
       </div>
       <div id="grid" class="grid"></div>
       <div id="grid-load-more-wrap" style="text-align:center; margin-top:20px;"></div>
@@ -1233,6 +1234,27 @@
     <div id="merge-summary-box" style="margin-top:14px;"></div>
 
     <button type="button" class="btn btn-danger" style="width:100%; margin-top:14px;" id="merge-execute-btn" onclick="executeMergeProducts()" disabled>🔗 Seçilenleri Birleştir</button>
+  </div>
+</div>
+
+<!-- TOPLU İÇE AKTARIM GERİ ALMA MODALI -->
+<div class="modal-overlay" id="import-cleanup-modal" style="display:none;">
+  <div class="modal-content" style="max-width:680px;">
+    <button class="modal-close" onclick="closeImportCleanupModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">🗑️ Toplu Aktarımı Geri Al</h3>
+    <p style="font-size:12px; color:var(--steel); margin-top:-6px;">
+      Excel ile toplu içe aktarılan ve o zamandan beri fiyatı/bilgisi elle güncellenmemiş ürünleri listeler. <strong>Yeni ürün</strong> olarak eklenenler ve <strong>mevcut bir ürünün üzerine yazılanlar</strong> ayrı işaretlenir — üzerine yazılanları silmek, aktarımdan önce zaten var olan bir kaydı da silebilir, bu yüzden varsayılan olarak işaretli DEĞİLDİR. Sadece o zamandan beri hiç dokunulmamış (fiyatı elle değiştirilmemiş) kayıtlar burada görünür. <strong>Bu işlem geri alınamaz.</strong>
+    </p>
+
+    <div id="import-cleanup-summary" style="margin-bottom:10px;"></div>
+    <div style="display:flex; gap:8px; margin-bottom:8px;">
+      <input type="text" id="import-cleanup-search" placeholder="Ada/koda göre filtrele..." oninput="renderImportCleanupList()" style="flex:1;">
+      <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="toggleAllImportCleanup(true)">Tümünü Seç</button>
+      <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="toggleAllImportCleanup(false)">Hiçbirini Seçme</button>
+    </div>
+    <div id="import-cleanup-list" style="max-height:320px; overflow-y:auto; border:1px solid var(--steel-line); border-radius:6px; padding:6px;"></div>
+
+    <button type="button" class="btn btn-danger" style="width:100%; margin-top:14px;" id="import-cleanup-execute-btn" onclick="executeImportCleanup()" disabled>🗑️ Seçilenleri Kalıcı Olarak Sil</button>
   </div>
 </div>
 
