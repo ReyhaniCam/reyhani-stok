@@ -837,6 +837,8 @@ function updateAuthUI() {
   document.getElementById('nav-acikhesap-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   const mergeProductsBtn = document.getElementById('merge-products-btn');
   if(mergeProductsBtn) mergeProductsBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+  const importCleanupBtn = document.getElementById('import-cleanup-btn');
+  if(importCleanupBtn) importCleanupBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   if (typeof renderDashboard === 'function') renderDashboard();
   
   const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
