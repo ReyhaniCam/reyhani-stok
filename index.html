@@ -77,6 +77,7 @@
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
     <button class="tab-btn" id="nav-borc-btn" onclick="switchTab('borc')" style="display:none;">💰 Müşteri Borç</button>
     <button class="tab-btn" id="nav-acikhesap-btn" onclick="switchTab('acikhesap')" style="display:none;">📖 Açık Hesap</button>
+    <button class="tab-btn" id="nav-katalog-btn" onclick="switchTab('katalog')" style="display:none;">📚 Kataloglar</button>
   </div>
 
   <main>
@@ -1012,6 +1013,52 @@
       <div id="ah-pagination" style="display:flex; justify-content:center; align-items:center; gap:10px; margin-top:14px;"></div>
     </div>
 
+    <!-- KATALOGLAR TABI -->
+    <div id="tab-katalog" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">🔍 Katalogda Hızlı Ara</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Ürün adı, kod veya marka ile arayın — stoktaki ürünler, tekil fişler ve boru tipi/boyutları birlikte taranır.</p>
+        <input type="text" id="katalog-search" placeholder="Ürün adı, kod veya marka yazın..." oninput="renderKatalogSearchResults()">
+        <div id="katalog-search-results" style="margin-top:10px;"></div>
+      </div>
+
+      <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">🏷️ Marka Katalogları (PDF)</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Her marka için bir veya birden fazla katalog/fiyat listesi PDF'i yükleyin. 2 MB üzeri dosyalarda yükleme yavaş olabilir.</p>
+        <div id="katalog-brand-list"></div>
+      </div>
+
+      <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">🧾 Tekil Ürün Fişleri</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Marka kataloğu dışında, elinizdeki tek bir ürün fişini (fotoğraf veya PDF) kaydedin.</p>
+        <div class="form-row">
+          <div><label>Ürün Adı</label><input type="text" id="katalog-single-name" placeholder="Örn: Eviye Bataryası XL-200"></div>
+          <div><label>Marka</label><select id="katalog-single-brand"></select></div>
+        </div>
+        <div class="form-row">
+          <div><label>Barkod (Opsiyonel)</label><input type="text" id="katalog-single-barcode" placeholder="Varsa barkod/kod"></div>
+          <div><label>Katalog Fiyatı (₺)</label><input type="number" id="katalog-single-price" step="0.01" placeholder="0.00"></div>
+        </div>
+        <div class="form-row" style="grid-template-columns:1fr;">
+          <div><label>Not</label><input type="text" id="katalog-single-note" placeholder="Ek bilgiler..."></div>
+        </div>
+        <input type="file" id="katalog-single-file" accept="image/*,application/pdf" style="display:none;" onchange="uploadSingleReceipt(event)">
+        <button type="button" class="btn btn-primary" onclick="document.getElementById('katalog-single-file').click()">📤 Fiş Fotoğrafı/PDF Seç ve Kaydet</button>
+        <div id="katalog-single-status" style="margin-top:8px; font-size:12px; font-weight:bold; display:none;"></div>
+        <div id="katalog-single-list" style="margin-top:14px;"></div>
+      </div>
+
+      <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">🔧 Boru Tipleri (Boyut Bazlı)</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Her boru tipini (Dirsek, T, Manşon, Nipel...) bir kez tanımlayın; altına istediğiniz kadar boyut/ölçü ekleyin. Her boyut normal stokta da bir ürün olarak görünür.</p>
+        <div class="form-row">
+          <div><label>Yeni Tip Adı</label><input type="text" id="pipe-type-name" placeholder="Örn: Dirsek"></div>
+          <div style="display:flex; align-items:flex-end;"><button type="button" class="btn btn-primary" style="width:auto;" onclick="addPipeType()">+ Tip Ekle</button></div>
+        </div>
+        <div id="pipe-types-list" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -1268,6 +1315,83 @@
     </p>
     <div id="duplicate-receipt-detail"></div>
     <button type="button" class="btn btn-danger" style="width:100%; margin-top:14px;" id="duplicate-receipt-execute-btn" onclick="executeDuplicateReceiptMerge()">🔗 Seçileni Tut, Diğerlerini İptal Et</button>
+  </div>
+</div>
+
+<!-- KATALOG: PDF YÜKLEME MODALI -->
+<div class="modal-overlay" id="katalog-pdf-upload-modal" style="display:none;">
+  <div class="modal-content" style="max-width:480px;">
+    <button class="modal-close" onclick="closeKatalogPdfUploadModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">📤 <span id="katalog-pdf-upload-brand-label"></span> — Katalog Yükle</h3>
+    <div class="form-row" style="grid-template-columns:1fr;">
+      <div><label>Katalog Adı</label><input type="text" id="katalog-pdf-name" placeholder="Örn: 2024 Fiyat Listesi"></div>
+    </div>
+    <input type="file" id="katalog-pdf-file" accept="application/pdf" style="display:none;" onchange="uploadCatalogPdf(event)">
+    <button type="button" class="btn btn-primary" style="width:100%; margin-top:8px;" onclick="document.getElementById('katalog-pdf-file').click()">📄 PDF Dosyası Seç</button>
+    <div id="katalog-pdf-upload-status" style="margin-top:8px; font-size:12px; font-weight:bold; display:none;"></div>
+  </div>
+</div>
+
+<!-- KATALOG: PDF ÖNİZLEME MODALI -->
+<div class="modal-overlay" id="katalog-pdf-preview-modal" style="display:none;">
+  <div class="modal-content" style="max-width:900px; height:90vh; display:flex; flex-direction:column;">
+    <button class="modal-close" onclick="closeKatalogPdfPreview()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';" id="katalog-pdf-preview-title">Katalog</h3>
+    <iframe id="katalog-pdf-preview-frame" style="flex:1; width:100%; border:1px solid var(--steel-line); border-radius:6px;"></iframe>
+  </div>
+</div>
+
+<!-- KATALOG: FİYATLANDIRMA PANELİ -->
+<div class="modal-overlay" id="katalog-pricing-modal" style="display:none;">
+  <div class="modal-content" style="max-width:520px;">
+    <button class="modal-close" onclick="closeKatalogPricingModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">💰 Fiyatlandır: <span id="kp-product-name"></span></h3>
+    <div class="form-row">
+      <div><label>Marka</label><select id="kp-brand" onchange="updateKatalogPricing()"></select></div>
+      <div><label>Katalog (Geliş) Fiyatı (₺)</label><input type="number" id="kp-cost" step="0.01" oninput="updateKatalogPricing()"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Marka İskontosu (%)</label><input type="number" id="kp-discount" step="0.01" oninput="updateKatalogPricing()"></div>
+      <div><label>KDV (%)</label><input type="number" id="kp-vat" step="0.01" oninput="updateKatalogPricing()"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Hedef Kâr (%)</label><input type="number" id="kp-profit" step="0.01" oninput="updateKatalogPricing()"></div>
+      <div><label>Birim (varsayılan Adet)</label><input type="text" id="kp-unit" value="Adet"></div>
+    </div>
+    <div id="kp-calc-box" class="cost-calc-box" style="margin-top:6px;"></div>
+    <div class="form-row" style="margin-top:10px;">
+      <div><label>Mevcut ürüne işlemek için ara</label><input list="katalog-existing-product-list" id="kp-existing-search" placeholder="Ürün kodu/adı yazın..."><datalist id="katalog-existing-product-list"></datalist></div>
+    </div>
+    <div style="display:flex; gap:8px; margin-top:12px;">
+      <button type="button" class="btn btn-info" onclick="applyToExistingProduct()">📌 Stoktaki Ürüne İşle</button>
+      <button type="button" class="btn btn-success" onclick="addAsNewProductFromKatalog()">➕ Yeni Ürün Olarak Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- KATALOG: BORU BOYUTU EKLE/DÜZENLE MODALI -->
+<div class="modal-overlay" id="pipe-size-modal" style="display:none;">
+  <div class="modal-content" style="max-width:480px;">
+    <button class="modal-close" onclick="closePipeSizeModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">📐 <span id="pipe-size-type-label"></span> — Boyut Ekle/Düzenle</h3>
+    <div class="form-row">
+      <div><label>Boyut/Ölçü</label><input type="text" id="pipe-size-value" placeholder="Örn: 32mm"></div>
+      <div><label>Marka</label><select id="pipe-size-brand"></select></div>
+    </div>
+    <div class="form-row">
+      <div><label>Geliş Fiyatı (₺)</label><input type="number" id="pipe-size-cost" step="0.01" oninput="updatePipeSizeCalc()"></div>
+      <div><label>Stok (Adet)</label><input type="number" id="pipe-size-stock" step="0.01"></div>
+    </div>
+    <div class="form-row">
+      <div><label>İskonto (%)</label><input type="number" id="pipe-size-discount" step="0.01" oninput="updatePipeSizeCalc()"></div>
+      <div><label>KDV (%)</label><input type="number" id="pipe-size-vat" step="0.01" oninput="updatePipeSizeCalc()"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Hedef Kâr (%)</label><input type="number" id="pipe-size-profit" step="0.01" oninput="updatePipeSizeCalc()"></div>
+      <div><label>Satış Fiyatı (₺, otomatik/elle)</label><input type="number" id="pipe-size-price" step="0.01"></div>
+    </div>
+    <div id="pipe-size-calc-box" class="cost-calc-box" style="margin-top:6px;"></div>
+    <button type="button" class="btn btn-primary" style="width:100%; margin-top:12px;" onclick="saveCurrentPipeSize()">💾 Boyutu Kaydet</button>
   </div>
 </div>
 
@@ -1577,8 +1701,7 @@
     <button id="ai-chat-send" onclick="sendAIChatMessage()" style="background:var(--info); color:#fff; border:none; width:38px; height:38px; border-radius:50%; cursor:pointer; font-size:16px; flex-shrink:0;">➤</button>
     <input type="file" id="ai-chat-file-input" accept="image/*" style="display:none;" onchange="handleAIChatFileUpload(event)">
   </div>
-
-
+</div>
 
 <script src="app-core.js"></script>
 <script src="app-operations.js"></script>
