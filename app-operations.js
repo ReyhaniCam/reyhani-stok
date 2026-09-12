@@ -2362,6 +2362,119 @@ async function executeDuplicateReceiptMerge() {
   }
 }
 
+// ============================================================
+// TOPLU İÇE AKTARIMI GERİ ALMA — Excel ile toplu yüklenmiş, o zamandan
+// beri fiyatı/bilgisi elle değiştirilmemiş ürünleri tespit edip toplu
+// silmek için (finalizeBulkImport() sırasında kaydedilen lastUpdatedBy
+// etiketi "Toplu Aktarım" bilgisini taşımaya devam ediyorsa yakalanır).
+// ============================================================
+let importCleanupSelected = new Set();
+
+function detectBulkImportProducts() {
+  return Object.values(productsData).filter(p => (p.lastUpdatedBy || '').includes('Toplu Aktarım'));
+}
+
+function openImportCleanupModal() {
+  if(currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  const candidates = detectBulkImportProducts();
+  // Varsayılan olarak sadece "yeni ürün olarak eklenen" kayıtları işaretli getir;
+  // mevcut bir ürünün üzerine yazılanları admin bilerek seçsin.
+  importCleanupSelected = new Set(candidates.filter(p => (p.lastUpdatedBy || '').includes('Toplu Aktarım)') && !(p.lastUpdatedBy || '').includes('Güncellendi')).map(p => p.code));
+  document.getElementById('import-cleanup-search').value = '';
+  renderImportCleanupList();
+  document.getElementById('import-cleanup-modal').style.display = 'flex';
+}
+
+function closeImportCleanupModal() {
+  document.getElementById('import-cleanup-modal').style.display = 'none';
+  importCleanupSelected = new Set();
+}
+
+function toggleImportCleanupCode(code) {
+  if(importCleanupSelected.has(code)) importCleanupSelected.delete(code);
+  else importCleanupSelected.add(code);
+  renderImportCleanupSummary();
+  const btn = document.getElementById('import-cleanup-execute-btn');
+  if(btn) btn.disabled = importCleanupSelected.size === 0;
+}
+
+function toggleAllImportCleanup(select) {
+  const term = (document.getElementById('import-cleanup-search').value || '').toLocaleLowerCase('tr-TR').trim();
+  const visible = detectBulkImportProducts().filter(p => !term || p.name.toLocaleLowerCase('tr-TR').includes(term) || (p.code||'').toLocaleLowerCase('tr-TR').includes(term));
+  visible.forEach(p => { if(select) importCleanupSelected.add(p.code); else importCleanupSelected.delete(p.code); });
+  renderImportCleanupList();
+}
+
+function renderImportCleanupSummary() {
+  const box = document.getElementById('import-cleanup-summary');
+  const all = detectBulkImportProducts();
+  if(!box) return;
+  if(all.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel);">Toplu içe aktarımdan kalma, hâlâ dokunulmamış görünen bir ürün bulunamadı.</p>`;
+    return;
+  }
+  box.innerHTML = `<div style="font-size:12px;"><strong>${all.length}</strong> ürün toplu aktarımdan kalma görünüyor. <strong>${importCleanupSelected.size}</strong> tanesi seçili.</div>`;
+}
+
+function renderImportCleanupList() {
+  const listBox = document.getElementById('import-cleanup-list');
+  if(!listBox) return;
+  renderImportCleanupSummary();
+
+  const term = (document.getElementById('import-cleanup-search').value || '').toLocaleLowerCase('tr-TR').trim();
+  const all = detectBulkImportProducts()
+    .filter(p => !term || p.name.toLocaleLowerCase('tr-TR').includes(term) || (p.code||'').toLocaleLowerCase('tr-TR').includes(term))
+    .sort((a,b) => a.name.localeCompare(b.name, 'tr-TR'));
+
+  if(all.length === 0) {
+    listBox.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; margin:10px 0;">Ürün bulunamadı.</p>`;
+    document.getElementById('import-cleanup-execute-btn').disabled = importCleanupSelected.size === 0;
+    return;
+  }
+
+  listBox.innerHTML = all.map(p => {
+    const isOverwrite = (p.lastUpdatedBy || '').includes('Güncellendi');
+    return `
+      <label style="display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; ${importCleanupSelected.has(p.code) ? 'background:#FEE2E2;' : ''}">
+        <input type="checkbox" ${importCleanupSelected.has(p.code) ? 'checked' : ''} onchange="toggleImportCleanupCode('${p.code}')">
+        <span style="flex:1; font-size:13px;">${p.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}, ${p.qty||0} ${p.unit||'Adet'}, ₺${formatMoney(p.price||0)})</small>${isOverwrite ? ' <small style="color:#DC2626; font-weight:600;">— mevcut kaydın üzerine yazılmış!</small>' : ''}</span>
+      </label>
+    `;
+  }).join('');
+  document.getElementById('import-cleanup-execute-btn').disabled = importCleanupSelected.size === 0;
+}
+
+async function executeImportCleanup() {
+  const codes = Array.from(importCleanupSelected).filter(c => productsData[c]);
+  if(codes.length === 0) return;
+
+  const confirmWord = prompt(`${codes.length} ürün KALICI OLARAK silinecek. Bu işlem geri alınamaz.\n\nOnaylamak için kutuya büyük harflerle "SİL" yazın:`);
+  if(confirmWord !== 'SİL') { showToast("İptal edildi, hiçbir şey silinmedi."); return; }
+
+  const btn = document.getElementById('import-cleanup-execute-btn');
+  if(btn) { btn.disabled = true; btn.textContent = '⏳ Siliniyor...'; }
+
+  try {
+    const productUpdates = {};
+    const imageUpdates = {};
+    const barcodeUpdates = {};
+    codes.forEach(c => { productUpdates[c] = null; imageUpdates[c] = null; barcodeUpdates[c] = null; });
+
+    await db.update(productUpdates);
+    await dbProductImages.update(imageUpdates);
+    await dbBarcodeCache.update(barcodeUpdates);
+    codes.forEach(c => delete productsData[c]);
+
+    showToast(`✅ ${codes.length} toplu içe aktarım kaydı kalıcı olarak silindi.`);
+    closeImportCleanupModal();
+    if(typeof renderGrid === 'function') renderGrid();
+  } catch(err) {
+    alert("Silme sırasında bir hata oluştu: " + (err.message || err) + "\n\nBazı ürünler silinmiş olabilir, lütfen stok listesini kontrol edin.");
+  } finally {
+    if(btn) { btn.disabled = false; btn.textContent = '🗑️ Seçilenleri Kalıcı Olarak Sil'; }
+  }
+}
+
 function populateReceiptEditProductList() {
   const dl = document.getElementById('receipt-edit-product-list');
   if(!dl) return;
