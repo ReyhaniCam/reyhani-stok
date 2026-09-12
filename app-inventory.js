@@ -1970,7 +1970,138 @@ async function processReceiptWithAI(event) {
 }
 
 // ============================================================
-// ÜRÜN EKLE — AI İLE SİSTEMDE OLMAYAN ÜRÜNLERİ TOPLU YÜKLEME
+// BORÇ FİŞİ (VERESİYE) — malzeme fişindeki AI okuma motorunun BİREBİR
+// aynısı (aynı model, aynı istek yapısı, aynı ürün eşleştirme motoru),
+// tek farkla: burada geliş fiyatı değil müşteriden alınacak satış fiyatı
+// ve müşteri adı/telefonu okunuyor, sonuç borç sepetine (borcCart) işleniyor.
+// ============================================================
+async function processDebtReceiptWithAI(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Fiş okuyabilmek için Google API Anahtarınızı girmelisiniz:");
+    if (!apiKey) {
+      event.target.value = '';
+      return;
+    }
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  const statusMsg = document.getElementById('ai-debt-status-msg');
+  if (statusMsg) {
+    statusMsg.style.display = 'block';
+    statusMsg.style.color = '#F59E0B';
+    statusMsg.innerHTML = '⏳ Fotoğraf inceleniyor, bekleyin...';
+  }
+
+  try {
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = e => reject(e);
+    });
+    const pureBase64 = base64Data.split(',')[1];
+
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: "Sen bir veresiye/borç fişi okuma sistemisin. Bu kağıtta bir müşteriye borca (veresiye) verilen ürünler el yazısıyla veya matbu olarak yazılıdır. Fişteki MÜŞTERİ ADINI, varsa TELEFON NUMARASINI ve ürün listesini (ürün adı, miktar, müşteriye yazılan birim SATIŞ fiyatı) tespit et. SADECE geçerli bir JSON nesnesi ver, başka hiçbir açıklama ekleme. Format tam olarak şu şekilde olmalı: {\"customer\": \"Müşteri Adı\", \"phone\": \"05xxxxxxxxx veya boş string\", \"items\": [{\"name\": \"Ürün Adı\", \"qty\": 5, \"price\": 45.50}]}. Müşteri adı okunamıyorsa customer alanını boş string yap. price alanı ALIŞ fiyatı değil, müşteriden alınacak/borç yazılan TOPLAM BİRİM SATIŞ FİYATIDIR." },
+            { inlineData: { mimeType: file.type || "image/jpeg", data: pureBase64 } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zeka gorselden veri okuyamadi.");
+    }
+
+    let textResult = data.candidates[0].content.parts[0].text
+      .replace(/```(?:json)?/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    const parsed = JSON.parse(textResult);
+    const aiCustomer = (parsed.customer || '').trim();
+    const aiPhone = (parsed.phone || '').trim();
+    const parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
+
+    if (aiCustomer) document.getElementById('borc-sale-customer').value = aiCustomer;
+    if (aiPhone) document.getElementById('borc-sale-phone').value = aiPhone;
+
+    let addedCount = 0;
+    const unmatchedNames = [];
+    const insufficientStock = [];
+
+    parsedItems.forEach(item => {
+      const aiName = item.name || 'Bilinmeyen Ürün';
+      const qty = parseFloat(item.qty) || 1;
+      const aiPrice = parseFloat(item.price) || 0;
+      const { product: matchedProduct, score } = findBestProductMatch(aiName);
+      const isMatch = !!(matchedProduct && score >= FIS_MATCH_THRESHOLD);
+
+      if (!isMatch) {
+        unmatchedNames.push(aiName);
+        return;
+      }
+
+      const availableQty = Number(matchedProduct.qty || 0);
+      if (availableQty < qty) {
+        insufficientStock.push(`${matchedProduct.name} (istenen ${qty}, mevcut ${availableQty})`);
+      }
+
+      const price = aiPrice > 0 ? aiPrice : Number(matchedProduct.price || 0);
+      const existingIndex = borcCart.findIndex(ci => ci.code === matchedProduct.code);
+      if (existingIndex !== -1) {
+        borcCart[existingIndex].qty += qty;
+        borcCart[existingIndex].total = borcCart[existingIndex].qty * borcCart[existingIndex].price;
+      } else {
+        borcCart.push({
+          code: matchedProduct.code,
+          name: matchedProduct.name,
+          price,
+          qty,
+          unit: matchedProduct.unit || 'Adet',
+          total: price * qty
+        });
+      }
+      addedCount++;
+    });
+
+    renderBorcCart();
+
+    if (statusMsg) {
+      let msg = `✅ ${aiCustomer ? `Müşteri: <b>${aiCustomer}</b> — ` : ''}${addedCount} ürün sepete eklendi.`;
+      if (unmatchedNames.length > 0) {
+        msg += `<br>🔵 Stokta bulunamayıp eklenemeyenler (elle ekleyin): ${unmatchedNames.join(', ')}`;
+      }
+      if (insufficientStock.length > 0) {
+        msg += `<br>⚠️ Stok yetersiz olabilir: ${insufficientStock.join(', ')}`;
+      }
+      statusMsg.style.color = (unmatchedNames.length > 0 || insufficientStock.length > 0) ? '#F59E0B' : '#10B981';
+      statusMsg.innerHTML = msg;
+    }
+  } catch (err) {
+    if (statusMsg) {
+      statusMsg.style.color = '#EF4444';
+      statusMsg.innerHTML = '❌ Fiş okunamadı.';
+    }
+    alert("Hata: " + err.message);
+  } finally {
+    event.target.value = '';
+  }
+}
 // (processReceiptWithAI ile aynı okuma mantığı + aynı eşleştirme motoru,
 // ama burada amaç FİŞ değil; fiziksel stokta olup sisteme hiç girilmemiş
 // ürünleri tespit edip toplu olarak stoğa kaydetmek.)
