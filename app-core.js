@@ -24,6 +24,9 @@ const dbBarcodeCache = dbRoot.child('barcode_cache');
 const dbCustomerDebts = dbRoot.child('customer_debts');
 const dbCustomers = dbRoot.child('customers');
 const dbSenetler = dbRoot.child('senetler');
+const dbCatalogPdfs = dbRoot.child('catalog_pdfs');
+const dbCatalogMeta = dbRoot.child('catalog_meta');
+const dbPipeTypes = dbRoot.child('pipe_types');
 
 const DEFAULT_BRANDS = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon"];
 let brandSeedChecked = false;
@@ -44,6 +47,9 @@ let currentPlanId = 'magaza';
 let planSeedChecked = false;
 let brandSettingsData = {};
 let highlightTimer = null;
+let catalogPdfsData = {};   // { brandKey: { pdfId: {name, brand, data, sizeKB, uploadedAt, uploadedBy} } }
+let catalogMetaData = {};   // { itemId: {name, brand, barcode, catalogPrice, note, photo, createdAt, createdBy} }
+let pipeTypesData = {};     // { tipId: {name, [boyutId]: {size, price, cost, vat, profit, discount, stock, brand, updatedAt}} }
 
 let html5QrcodeScanner = null;
 let currentRole = 'guest';
@@ -380,6 +386,21 @@ dbBrandSettings.on('value', (snapshot) => {
     brandSeedChecked = true;
     maybeSeedDefaultBrands();
   }
+});
+
+dbCatalogPdfs.on('value', (snapshot) => {
+  catalogPdfsData = snapshot.val() || {};
+  if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderBrandCatalogList === 'function') renderBrandCatalogList();
+});
+
+dbCatalogMeta.on('value', (snapshot) => {
+  catalogMetaData = snapshot.val() || {};
+  if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderSingleReceipts === 'function') renderSingleReceipts();
+});
+
+dbPipeTypes.on('value', (snapshot) => {
+  pipeTypesData = snapshot.val() || {};
+  if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderPipeTypesList === 'function') renderPipeTypesList();
 });
 
 dbZReports.on('value', (snapshot) => {
@@ -839,6 +860,9 @@ function updateAuthUI() {
   if(mergeProductsBtn) mergeProductsBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   const importCleanupBtn = document.getElementById('import-cleanup-btn');
   if(importCleanupBtn) importCleanupBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+  const canAccessKatalog = (currentRole === 'admin' || currentRole === 'staff');
+  const katalogBtn = document.getElementById('nav-katalog-btn');
+  if(katalogBtn) katalogBtn.style.display = canAccessKatalog ? 'block' : 'none';
   if (typeof renderDashboard === 'function') renderDashboard();
   
   const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
@@ -1048,16 +1072,24 @@ function completeBorcSale() {
   let grandTotal = 0;
   borcCart.forEach(item => grandTotal += item.total);
   
-  let stockError = false;
+  let insufficientItems = [];
   borcCart.forEach(item => {
     if (!productsData[item.code]) return;
     const currentQty = productsData[item.code].qty || 0;
     if (currentQty < item.qty) {
-      alert(`Yetersiz stok: ${item.name} (Mevcut: ${currentQty}, İstenen: ${item.qty})`);
-      stockError = true;
+      insufficientItems.push(`${item.name} (Mevcut: ${currentQty}, İstenen: ${item.qty})`);
     }
   });
-  if (stockError) return;
+  if (insufficientItems.length > 0) {
+    // Sayım henüz yapılmamış olabilir: stok yetersiz görünse bile satışı ENGELLEMİYORUZ,
+    // sadece uyarıp devam etmek isteyip istemediğini soruyoruz (Kataloglar modülü — madde 6).
+    const proceed = confirm(
+      `⚠️ Şu ürünlerde kayıtlı stok yetersiz görünüyor (henüz sayım yapılmamış olabilir):\n\n` +
+      insufficientItems.join('\n') +
+      `\n\nYine de borç fişi kesilsin mi? (Gerçek stok miktarını sonradan "Kataloglar" ekranından girebilirsiniz.)`
+    );
+    if (!proceed) return;
+  }
   
   borcCart.forEach(item => {
     db.child(item.code).child('qty').transaction((currentQty) => {
