@@ -1024,8 +1024,38 @@
 
       <div class="form-card">
         <h3 style="margin-top:0; font-family:'Oswald';">🏷️ Marka Katalogları (PDF)</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Her marka için bir veya birden fazla katalog/fiyat listesi PDF'i yükleyin. 2 MB üzeri dosyalarda yükleme yavaş olabilir.</p>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Her marka için bir veya birden fazla katalog/fiyat listesi PDF'i yükleyin. 2 MB üzeri dosyalarda yükleme yavaş olabilir. Yükledikten sonra "🤖 AI ile Oku" butonuyla markayı, tüm ürünleri, ölçülerini ve fiyatlarını otomatik çıkarabilirsiniz.</p>
         <div id="katalog-brand-list"></div>
+      </div>
+
+      <div class="form-card" id="katalog-ai-result-card" style="display:none;">
+        <h3 style="margin-top:0; font-family:'Oswald';">🤖 AI Katalog Sonuçları</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:10px;">Yapay zeka kataloğu okuyup markayı, ürünleri, ölçülerini ve katalog fiyatlarını tek başlık altında listeledi. Fiyatlar; markanın "İskonto/KDV Ayarları" panelindekiyle <b>aynı formülle</b> (Katalog Fiyatı → İskonto → +KDV → +Kâr) otomatik hesaplanır — Fiyatlandırma panelindeki ve Boru Boyutu ekranındaki hesaplamayla birebir aynıdır. "⚠️ Zaten stokta" görünen ürünler varsayılan olarak işaretsizdir; işaretlerseniz yeni kayıt açılmaz, mevcut ürünün fiyatı güncellenir.</p>
+        <div id="katalog-ai-status" style="margin-bottom:10px; font-size:12px; display:none; font-weight:600;"></div>
+
+        <div class="form-row" style="grid-template-columns:1fr 1fr 1fr auto;">
+          <div><label>Tümüne Uygula: İskonto (%)</label><input type="number" id="katalog-ai-global-discount" step="0.01" value="0"></div>
+          <div><label>KDV (%)</label><input type="number" id="katalog-ai-global-vat" step="0.01" value="20"></div>
+          <div><label>Kâr (%)</label><input type="number" id="katalog-ai-global-profit" step="0.01" value="0"></div>
+          <div style="display:flex; align-items:flex-end;"><button type="button" class="btn btn-warning" style="width:auto;" onclick="applyGlobalKatalogAiSettings()">↻ Tümüne Uygula</button></div>
+        </div>
+
+        <div style="overflow-x:auto; margin-top:10px;">
+          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:12px; min-width:760px;">
+            <thead><tr style="border-bottom:1px solid var(--steel-line); color:var(--steel);">
+              <th style="padding-bottom:5px;">Ekle</th>
+              <th>Ürün Adı (Ölçü Dahil)</th>
+              <th>Katalog Fiyatı (₺)</th>
+              <th>İsk. (%)</th>
+              <th>KDV (%)</th>
+              <th>Kâr (%)</th>
+              <th>Satış Fiyatı</th>
+              <th>Durum</th>
+            </tr></thead>
+            <tbody id="katalog-ai-items"></tbody>
+          </table>
+        </div>
+        <button class="btn btn-success" style="margin-top:14px;" onclick="completeKatalogAiImport()">✅ İşaretli Ürünleri Sisteme İşle</button>
       </div>
 
       <div class="form-card">
