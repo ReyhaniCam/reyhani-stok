@@ -3157,9 +3157,12 @@ function renderBrandCatalogList() {
         ${pdfEntries.length === 0
           ? `<p style="font-size:11px; color:var(--steel); margin:6px 0 0;">Bu markaya henüz katalog yüklenmedi.</p>`
           : pdfEntries.map(([pdfId, p]) => `
-              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:12px; gap:6px; flex-wrap:wrap;">
                 <span style="cursor:pointer; color:var(--info); text-decoration:underline;" onclick="openKatalogPdfPreview('${brandKey}','${pdfId}')">📄 ${p.name} <small style="color:var(--steel);">(${p.sizeKB||0} KB · ${new Date(p.uploadedAt).toLocaleDateString('tr-TR')})</small></span>
-                <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deleteCatalogPdf('${brandKey}','${pdfId}')">🗑</button>
+                <span style="display:flex; gap:6px;">
+                  <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="readCatalogPdfWithAI('${brandKey}','${pdfId}')">🤖 AI ile Oku</button>
+                  <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deleteCatalogPdf('${brandKey}','${pdfId}')">🗑</button>
+                </span>
               </div>
             `).join('')
         }
@@ -3481,6 +3484,232 @@ async function addAsNewProductFromKatalog() {
   } catch (err) {
     alert("Eklenemedi: " + err.message);
   }
+}
+
+// ---------- 3b) AI İLE KATALOG OKUMA (Marka + Ürün + Ölçü + Fiyat) ----------
+// Malzeme fişi / toplu ürün yükleme ile BİREBİR AYNI yapay zeka motorunu
+// (aynı model, aynı istek yapısı, aynı ürün eşleştirme fonksiyonu) kullanır.
+// Fark: burada girdi bir PDF katalogdur ve çıktı olarak sadece ürün adı değil,
+// marka, ölçü/ebat ve katalog fiyatı da tek seferde okunur. Fiyatlandırma ise
+// Fiyatlandırma Paneli / Boru Boyutu ekranıyla AYNI formülü (İskonto → +KDV →
+// +Kâr) kullanarak, markanın "İskonto/KDV Ayarları"ndan otomatik beslenir —
+// tüm katalog modülü tek bir dişli sistemi gibi birbirine bağlıdır.
+
+let katalogAiCart = [];
+let katalogAiContext = null; // { brand, brandKey, pdfId }
+
+async function readCatalogPdfWithAI(brandKey, pdfId) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  const pdfMeta = (catalogPdfsData[brandKey] || {})[pdfId];
+  if (!pdfMeta) { alert("Katalog bulunamadı."); return; }
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Kataloğu okuyabilmek için Google API Anahtarınızı girmelisiniz:");
+    if (!apiKey) return;
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  const card = document.getElementById('katalog-ai-result-card');
+  const statusMsg = document.getElementById('katalog-ai-status');
+  if (card) card.style.display = 'block';
+  if (statusMsg) {
+    statusMsg.style.display = 'block';
+    statusMsg.style.color = '#F59E0B';
+    statusMsg.innerHTML = `⏳ "${pdfMeta.name}" (${pdfMeta.brand || brandKey}) inceleniyor, sayfa sayısına göre biraz sürebilir...`;
+  }
+  katalogAiCart = [];
+  renderKatalogAiCart();
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    const pureBase64 = (pdfMeta.data || '').split(',')[1];
+    if (!pureBase64) throw new Error("Katalog dosyası okunamadı.");
+
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: "Sen bir hırdavat/nalburiye/cam mağazası için marka fiyat kataloğu (PDF) okuyan bir yapay zekasın. Bu PDF'teki HER ürünü tek tek tespit et: ürün adı (name), varsa ölçüsü/ebadı/boyutu (size — yoksa boş string \"\" yaz, ürün adının içine YAZMA), ve katalog/liste fiyatı (price — KDV hariç görünüyorsa o haliyle, sadece sayı, para birimi simgesi ekleme). Ayrıca PDF'in ait olduğu marka adını da tespit et (brand). SADECE geçerli bir JSON nesnesi döndür, başka hiçbir açıklama veya markdown işareti ekleme. Format tam olarak şu şekilde olmalı: {\"brand\": \"Marka Adı\", \"items\": [{\"name\": \"Ürün Adı\", \"size\": \"60x40 cm\", \"price\": 245.50}]}. Fiyatı hiç görünmeyen veya net okunamayan satırları listeye ekleme." },
+            { inlineData: { mimeType: "application/pdf", data: pureBase64 } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zeka katalogdan veri okuyamadı.");
+    }
+
+    let textResult = data.candidates[0].content.parts[0].text
+      .replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(textResult);
+
+    const items = Array.isArray(parsed) ? parsed : (parsed.items || []);
+    if (!Array.isArray(items) || items.length === 0) throw new Error("Katalogda geçerli fiyatlı ürün bulunamadı.");
+
+    // Marka: önce PDF'in kayıtlı olduğu marka (kullanıcı zaten o markanın altına
+    // yüklemişti), yoksa AI'ın tespit ettiği marka adı kullanılır — tek başlık.
+    const brandName = pdfMeta.brand || parsed.brand || brandKey;
+    katalogAiContext = { brand: brandName, brandKey, pdfId };
+
+    // Markanın "İskonto/KDV Ayarları" panelinde kayıtlı değerlerini otomatik
+    // uygula — Fiyatlandırma Paneli ve Boru Boyutu ekranıyla AYNI kaynak.
+    const settings = brandSettingsData[brandName] || { discount: 0, vat: 0, profit: 0 };
+    const gDisc = document.getElementById('katalog-ai-global-discount');
+    const gVat = document.getElementById('katalog-ai-global-vat');
+    const gProfit = document.getElementById('katalog-ai-global-profit');
+    if (gDisc) gDisc.value = settings.discount || 0;
+    if (gVat) gVat.value = settings.vat || 0;
+    if (gProfit) gProfit.value = settings.profit || 0;
+
+    let newCount = 0, matchedCount = 0, skippedNoPrice = 0;
+    items.forEach(item => {
+      const aiName = (item.name || '').trim();
+      if (!aiName) return;
+      const cost = parseFloat(item.price);
+      if (isNaN(cost) || cost <= 0) { skippedNoPrice++; return; }
+      const size = (item.size || '').trim();
+      const fullName = size ? `${aiName} ${size}` : aiName;
+
+      // Fiş okuma ve toplu ürün yüklemede kullanılan AYNI eşleştirme motoru —
+      // sistemde zaten kayıtlı ürünlerle karışmasın diye.
+      const { product: matchedProduct, score } = findBestProductMatch(fullName);
+      const isMatch = !!(matchedProduct && score >= FIS_MATCH_THRESHOLD);
+      if (isMatch) matchedCount++; else newCount++;
+
+      const discount = settings.discount || 0;
+      const vat = settings.vat || 0;
+      const profit = settings.profit || 0;
+      const afterDiscount = cost * (1 - discount / 100);
+      const netCost = afterDiscount * (1 + vat / 100);
+      const salePrice = netCost * (1 + profit / 100);
+
+      katalogAiCart.push({
+        name: fullName, size, brand: brandName, cost,
+        discount, vat, profit,
+        price: Math.round(salePrice * 100) / 100,
+        matched: isMatch, matchedCode: isMatch ? matchedProduct.code : null,
+        include: !isMatch // zaten stokta olanlar varsayılan olarak işaretsiz
+      });
+    });
+
+    renderKatalogAiCart();
+
+    if (statusMsg) {
+      statusMsg.style.color = '#10B981';
+      statusMsg.innerHTML = `✅ "${pdfMeta.name}" okundu → <b>${brandName}</b> markası altında ${katalogAiCart.length} ürün listelendi (🆕 ${newCount} yeni, ⚠️ ${matchedCount} zaten stokta` + (skippedNoPrice > 0 ? `, ${skippedNoPrice} tanesi fiyat okunamadığı için atlandı` : '') + `). Fiyatlar "${brandName}" markasının kayıtlı iskonto/KDV/kâr oranına göre otomatik hesaplandı — sisteme işlemeden önce listeyi kontrol edin!`;
+    }
+  } catch (err) {
+    if (statusMsg) {
+      statusMsg.style.color = '#EF4444';
+      statusMsg.innerHTML = '❌ Katalog okunamadı.';
+    }
+    alert(typeof friendlyAIErrorMessage === 'function' ? friendlyAIErrorMessage(err) : ("Hata: " + err.message));
+  }
+}
+
+function renderKatalogAiCart() {
+  const tbody = document.getElementById('katalog-ai-items');
+  if (!tbody) return;
+
+  if (katalogAiCart.length === 0) { tbody.innerHTML = ''; return; }
+
+  tbody.innerHTML = katalogAiCart.map((item, i) => `
+    <tr style="border-bottom:1px dashed var(--steel-line); ${item.matched ? 'opacity:0.65;' : ''}">
+      <td style="padding:6px 4px; text-align:center;"><input type="checkbox" ${item.include ? 'checked' : ''} onchange="katalogAiCart[${i}].include=this.checked"></td>
+      <td style="padding:6px 4px;"><input type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="min-width:170px;" oninput="katalogAiCart[${i}].name=this.value"></td>
+      <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.cost}" style="width:80px;" oninput="katalogAiCart[${i}].cost=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
+      <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.discount}" style="width:60px;" oninput="katalogAiCart[${i}].discount=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
+      <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.vat}" style="width:60px;" oninput="katalogAiCart[${i}].vat=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
+      <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.profit}" style="width:60px;" oninput="katalogAiCart[${i}].profit=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
+      <td style="padding:6px 4px; font-weight:bold; color:var(--success);" id="katalog-ai-price-${i}">₺${item.price.toFixed(2)}</td>
+      <td style="padding:6px 4px; font-size:11px; white-space:nowrap;">${item.matched ? `⚠️ Zaten stokta<br><small style="color:var(--steel);">(${item.matchedCode})</small>` : '🆕 Yeni ürün'}</td>
+    </tr>
+  `).join('');
+}
+
+function recalcKatalogAiRow(i) {
+  const item = katalogAiCart[i];
+  if (!item) return;
+  const afterDiscount = item.cost * (1 - item.discount / 100);
+  const netCost = afterDiscount * (1 + item.vat / 100);
+  const salePrice = netCost * (1 + item.profit / 100);
+  item.price = Math.round(salePrice * 100) / 100;
+  const cell = document.getElementById(`katalog-ai-price-${i}`);
+  if (cell) cell.textContent = `₺${item.price.toFixed(2)}`;
+}
+
+// Üstteki genel İskonto/KDV/Kâr kutularını tüm satırlara uygular ve markanın
+// kalıcı ayarını da günceller — bir sonraki katalogda/Fiyatlandırma panelinde
+// de otomatik gelsin diye (aynı dişli sistemin bir parçası).
+function applyGlobalKatalogAiSettings() {
+  const discount = parseFloat(document.getElementById('katalog-ai-global-discount').value) || 0;
+  const vat = parseFloat(document.getElementById('katalog-ai-global-vat').value) || 0;
+  const profit = parseFloat(document.getElementById('katalog-ai-global-profit').value) || 0;
+
+  katalogAiCart.forEach((item) => { item.discount = discount; item.vat = vat; item.profit = profit; });
+  katalogAiCart.forEach((_, i) => recalcKatalogAiRow(i));
+  renderKatalogAiCart();
+
+  if (katalogAiContext && katalogAiContext.brand) {
+    dbBrandSettings.child(katalogAiContext.brand).set({ discount, vat, profit }, (err) => {
+      if (!err) showToast(`"${katalogAiContext.brand}" markasının varsayılan iskonto/KDV/kâr oranı da güncellendi.`);
+    });
+  }
+}
+
+async function completeKatalogAiImport() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  const selected = katalogAiCart.filter(i => i.include);
+  if (selected.length === 0) { alert("Sisteme işlemek için en az bir ürün işaretleyin."); return; }
+  if (!confirm(`${selected.length} ürün, "${katalogAiContext?.brand || ''}" markasıyla sisteme işlenecek (yeni olanlar eklenecek, zaten stokta işaretlenenlerin fiyatı güncellenecek). Onaylıyor musunuz?`)) return;
+
+  const usedCodes = new Set();
+  let successCount = 0;
+  const failed = [];
+
+  for (const item of katalogAiCart) {
+    if (!item.include) continue;
+    try {
+      if (item.matched && item.matchedCode && productsData[item.matchedCode]) {
+        // Fiyatlandırma panelindeki "Mevcut Ürüne İşle" ile AYNI merkezi mantık.
+        await db.child(item.matchedCode).update({
+          costPrice: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price,
+          brand: item.brand || productsData[item.matchedCode].brand || null,
+          lastPriceUpdate: new Date().toISOString(),
+          lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')'
+        });
+        productsData[item.matchedCode] = Object.assign({}, productsData[item.matchedCode], {
+          costPrice: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price,
+          brand: item.brand || productsData[item.matchedCode].brand || null
+        });
+      } else {
+        // Yeni ürün kaydını, fiş/toplu yükleme akışıyla AYNI merkezi fonksiyonla oluşturuyoruz.
+        const code = await createNewProductRecord({
+          name: item.name, unit: 'Adet', category: 'Diğer', brand: item.brand,
+          cost: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price
+        }, (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')', usedCodes);
+        usedCodes.add(code);
+      }
+      successCount++;
+    } catch (err) {
+      failed.push(`${item.name} (${err.message})`);
+    }
+  }
+
+  katalogAiCart = katalogAiCart.filter(i => !i.include);
+  renderKatalogAiCart();
+  if (typeof renderGrid === 'function') renderGrid();
+
+  showToast(`${successCount} ürün sisteme işlendi.` + (failed.length ? ` ⚠️ ${failed.length} tanesi eklenemedi.` : ''));
+  if (failed.length) alert("Eklenemeyenler:\n" + failed.join('\n'));
 }
 
 // ---------- 4) BORU TİPLERİ (BOYUT BAZLI) ----------
