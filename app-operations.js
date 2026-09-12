@@ -724,7 +724,7 @@ function switchTab(tabName) {
   if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'borc' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'acikhesap' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
-  if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'fis') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'fis' || tabName === 'katalog') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -739,6 +739,7 @@ function switchTab(tabName) {
   }
   if(tabName === 'okut') startScanner(); else stopScanner();
   if(tabName === 'acikhesap' && typeof renderCustomerAccounts === 'function') renderCustomerAccounts();
+  if(tabName === 'katalog' && typeof initKatalogTab === 'function') initKatalogTab();
 }
 
 function showToast(msg) {
@@ -3089,4 +3090,653 @@ function renderGrid() {
   document.getElementById('sum-count').textContent = count;
   document.getElementById('sum-units').textContent = units.toFixed(1);
   document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
+}
+
+
+// ============================================================
+// KATALOG MODÜLÜ — Marka katalogları (PDF), tekil ürün fişleri,
+// boru tipi/boyut sistemi, katalogdan hızlı arama ve fiyatlandırma paneli.
+// ============================================================
+
+// Firebase anahtarı olarak yasak olan karakterleri (. # $ [ ] /) temizler;
+// marka adının kendisini (Türkçe karakterler dahil) bozmadan sadece bunu yapar.
+function sanitizeFirebaseKey(str) {
+  return (str || '').toString().replace(/[.#$\[\]\/]/g, '-').trim() || 'diger';
+}
+
+// Katalog sekmesi her açıldığında listeleri ve dropdown'ları tazeler.
+function initKatalogTab() {
+  populateBrandSelect('katalog-single-brand');
+  populateBrandSelect('kp-brand');
+  populateBrandSelect('pipe-size-brand');
+  renderBrandCatalogList();
+  renderSingleReceipts();
+  renderPipeTypesList();
+  const searchEl = document.getElementById('katalog-search');
+  if (searchEl) searchEl.value = '';
+  renderKatalogSearchResults();
+}
+
+function populateProductDatalist(datalistId) {
+  const dl = document.getElementById(datalistId);
+  if (!dl) return;
+  dl.innerHTML = '';
+  Object.values(productsData).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = `${p.code} - ${p.name}`;
+    dl.appendChild(opt);
+  });
+}
+
+// ---------- 1) MARKA KATALOGLARI (PDF) ----------
+
+function renderBrandCatalogList() {
+  const box = document.getElementById('katalog-brand-list');
+  if (!box) return;
+  const brands = currentBrandList();
+  if (brands.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:14px 0;">Henüz marka tanımlanmadı — "Marka İskonto/KDV Ayarları" panelinden marka ekleyin.</p>`;
+    return;
+  }
+  box.innerHTML = brands.map(brand => {
+    const brandKey = sanitizeFirebaseKey(brand);
+    const pdfs = catalogPdfsData[brandKey] || {};
+    const pdfEntries = Object.entries(pdfs);
+    return `
+      <div style="border:1px solid var(--steel-line); border-radius:8px; padding:10px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong>${brand}</strong>
+          <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openKatalogPdfUploadModal('${brand.replace(/'/g, "\\'")}')">+ PDF Yükle</button>
+        </div>
+        ${pdfEntries.length === 0
+          ? `<p style="font-size:11px; color:var(--steel); margin:6px 0 0;">Bu markaya henüz katalog yüklenmedi.</p>`
+          : pdfEntries.map(([pdfId, p]) => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+                <span style="cursor:pointer; color:var(--info); text-decoration:underline;" onclick="openKatalogPdfPreview('${brandKey}','${pdfId}')">📄 ${p.name} <small style="color:var(--steel);">(${p.sizeKB||0} KB · ${new Date(p.uploadedAt).toLocaleDateString('tr-TR')})</small></span>
+                <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deleteCatalogPdf('${brandKey}','${pdfId}')">🗑</button>
+              </div>
+            `).join('')
+        }
+      </div>
+    `;
+  }).join('');
+}
+
+let katalogPdfUploadBrand = null;
+
+function openKatalogPdfUploadModal(brand) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  katalogPdfUploadBrand = brand;
+  document.getElementById('katalog-pdf-upload-brand-label').textContent = brand;
+  document.getElementById('katalog-pdf-name').value = '';
+  document.getElementById('katalog-pdf-file').value = '';
+  const statusEl = document.getElementById('katalog-pdf-upload-status');
+  statusEl.style.display = 'none';
+  document.getElementById('katalog-pdf-upload-modal').style.display = 'flex';
+}
+
+function closeKatalogPdfUploadModal() {
+  document.getElementById('katalog-pdf-upload-modal').style.display = 'none';
+  katalogPdfUploadBrand = null;
+}
+
+async function uploadCatalogPdf(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const nameInput = document.getElementById('katalog-pdf-name');
+  const name = nameInput.value.trim() || file.name.replace(/\.pdf$/i, '');
+  const statusEl = document.getElementById('katalog-pdf-upload-status');
+  const sizeKB = Math.round(file.size / 1024);
+
+  if (sizeKB > 2048) {
+    if (!confirm(`Bu PDF ${sizeKB} KB (2 MB üzeri). Firebase'e base64 olarak kaydetmek yavaş olabilir ve veritabanı boyutunu hızla büyütür. Mümkünse dosyayı sıkıştırıp küçültmenizi öneririz. Yine de devam etmek istiyor musunuz?`)) {
+      event.target.value = '';
+      return;
+    }
+  }
+
+  statusEl.style.display = 'block';
+  statusEl.style.color = '#F59E0B';
+  statusEl.textContent = "Yükleniyor, lütfen bekleyin...";
+
+  try {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = e => reject(e);
+      reader.readAsDataURL(file);
+    });
+
+    const brandKey = sanitizeFirebaseKey(katalogPdfUploadBrand);
+    const newRef = dbCatalogPdfs.child(brandKey).push();
+    await newRef.set({
+      name, brand: katalogPdfUploadBrand, data: dataUrl, sizeKB,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+    });
+
+    statusEl.style.color = '#10B981';
+    statusEl.textContent = "✅ Katalog kaydedildi.";
+    showToast(`"${name}" kataloğu ${katalogPdfUploadBrand} markasına eklendi.`);
+    setTimeout(() => closeKatalogPdfUploadModal(), 800);
+  } catch (err) {
+    statusEl.style.color = '#EF4444';
+    statusEl.textContent = "❌ Yüklenemedi: " + err.message;
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function deleteCatalogPdf(brandKey, pdfId) {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  if (!confirm("Bu katalog PDF'ini kalıcı olarak silmek istiyor musunuz?")) return;
+  dbCatalogPdfs.child(brandKey).child(pdfId).remove(() => showToast("Katalog silindi."));
+}
+
+function openKatalogPdfPreview(brandKey, pdfId) {
+  const p = (catalogPdfsData[brandKey] || {})[pdfId];
+  if (!p) return;
+  document.getElementById('katalog-pdf-preview-title').textContent = `${p.brand} — ${p.name}`;
+  document.getElementById('katalog-pdf-preview-frame').src = p.data;
+  document.getElementById('katalog-pdf-preview-modal').style.display = 'flex';
+}
+
+function closeKatalogPdfPreview() {
+  document.getElementById('katalog-pdf-preview-modal').style.display = 'none';
+  document.getElementById('katalog-pdf-preview-frame').src = '';
+}
+
+// ---------- 2) TEKİL ÜRÜN FİŞLERİ ----------
+
+async function uploadSingleReceipt(event) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); event.target.value = ''; return; }
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const name = document.getElementById('katalog-single-name').value.trim();
+  if (!name) { alert("Lütfen önce ürün adını girin."); event.target.value = ''; return; }
+
+  const brand = document.getElementById('katalog-single-brand').value;
+  const barcode = document.getElementById('katalog-single-barcode').value.trim();
+  const catalogPrice = parseFloat(document.getElementById('katalog-single-price').value) || 0;
+  const note = document.getElementById('katalog-single-note').value.trim();
+  const statusEl = document.getElementById('katalog-single-status');
+  statusEl.style.display = 'block';
+  statusEl.style.color = '#F59E0B';
+  statusEl.textContent = "Kaydediliyor...";
+
+  try {
+    let fileData;
+    if (file.type === 'application/pdf') {
+      const sizeKB = Math.round(file.size / 1024);
+      if (sizeKB > 2048 && !confirm(`Bu PDF ${sizeKB} KB (2 MB üzeri). Devam edilsin mi?`)) {
+        event.target.value = ''; statusEl.style.display = 'none'; return;
+      }
+      fileData = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = e => reject(e);
+        reader.readAsDataURL(file);
+      });
+    } else {
+      fileData = await compressImageFile(file, 900, 0.7);
+    }
+
+    const newRef = dbCatalogMeta.push();
+    await newRef.set({
+      name, brand: brand || null, barcode: barcode || null, catalogPrice,
+      note: note || null, photo: fileData, fileType: file.type,
+      createdAt: new Date().toISOString(),
+      createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+    });
+
+    statusEl.style.color = '#10B981';
+    statusEl.textContent = "✅ Fiş kaydedildi.";
+    ['katalog-single-name', 'katalog-single-barcode', 'katalog-single-price', 'katalog-single-note'].forEach(id => document.getElementById(id).value = '');
+    showToast(`"${name}" fişi kaydedildi.`);
+  } catch (err) {
+    statusEl.style.color = '#EF4444';
+    statusEl.textContent = "❌ Kaydedilemedi: " + err.message;
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function renderSingleReceipts() {
+  const box = document.getElementById('katalog-single-list');
+  if (!box) return;
+  const entries = Object.entries(catalogMetaData).sort((a, b) => new Date(b[1].createdAt) - new Date(a[1].createdAt));
+  if (entries.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz tekil ürün fişi kaydedilmedi.</p>`;
+    return;
+  }
+  box.innerHTML = entries.map(([id, m]) => `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+      <span>
+        <strong>${m.name}</strong> ${m.brand ? `<small style="color:var(--steel);">(${m.brand})</small>` : ''}
+        ${m.catalogPrice ? `<br><small style="color:var(--steel);">Katalog Fiyatı: ₺${formatMoney(m.catalogPrice)}</small>` : ''}
+      </span>
+      <span style="display:flex; gap:6px; flex-shrink:0;">
+        <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="viewSingleReceiptFile('${id}')">👁</button>
+        <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="openKatalogPricingModalFromMeta('${id}')">💰</button>
+        <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deleteSingleReceipt('${id}')">🗑</button>
+      </span>
+    </div>
+  `).join('');
+}
+
+function viewSingleReceiptFile(id) {
+  const m = catalogMetaData[id];
+  if (!m) return;
+  if (m.fileType === 'application/pdf') {
+    document.getElementById('katalog-pdf-preview-title').textContent = m.name;
+    document.getElementById('katalog-pdf-preview-frame').src = m.photo;
+    document.getElementById('katalog-pdf-preview-modal').style.display = 'flex';
+  } else {
+    openImageModal(m.photo);
+  }
+}
+
+function deleteSingleReceipt(id) {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  if (!confirm("Bu fişi kalıcı olarak silmek istiyor musunuz?")) return;
+  dbCatalogMeta.child(id).remove(() => showToast("Fiş silindi."));
+}
+
+// ---------- 3) FİYATLANDIRMA PANELİ ----------
+
+let katalogPricingContext = null; // { sourceType: 'meta'|'existing'|'search', name, brand, cost, existingCode? }
+
+function openKatalogPricingModal(ctx) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  katalogPricingContext = ctx;
+  document.getElementById('kp-product-name').textContent = ctx.name || '';
+  populateBrandSelect('kp-brand', ctx.brand || '');
+  document.getElementById('kp-cost').value = ctx.cost || '';
+  const discEl = document.getElementById('kp-discount'); discEl.value = ''; discEl.dataset.auto = '';
+  const vatEl = document.getElementById('kp-vat'); vatEl.value = ''; vatEl.dataset.auto = '';
+  document.getElementById('kp-profit').value = '';
+  document.getElementById('kp-unit').value = 'Adet';
+  document.getElementById('kp-existing-search').value = ctx.existingCode ? `${ctx.existingCode} - ${ctx.name}` : '';
+  populateProductDatalist('katalog-existing-product-list');
+  updateKatalogPricing();
+  document.getElementById('katalog-pricing-modal').style.display = 'flex';
+}
+
+function openKatalogPricingModalFromMeta(id) {
+  const m = catalogMetaData[id];
+  if (!m) return;
+  openKatalogPricingModal({ sourceType: 'meta', sourceId: id, name: m.name, brand: m.brand, cost: m.catalogPrice });
+}
+
+function openKatalogPricingModalFromProduct(code) {
+  const p = productsData[code];
+  if (!p) return;
+  openKatalogPricingModal({ sourceType: 'existing', name: p.name, brand: p.brand, cost: p.costPrice, existingCode: code });
+}
+
+function closeKatalogPricingModal() {
+  document.getElementById('katalog-pricing-modal').style.display = 'none';
+  katalogPricingContext = null;
+}
+
+function updateKatalogPricing() {
+  const brand = document.getElementById('kp-brand').value;
+  const box = document.getElementById('kp-calc-box');
+
+  // Marka seçilince, kullanıcı henüz elle değiştirmediyse iskonto/KDV'yi marka
+  // varsayılanından otomatik doldur (üzerine yazılabilir).
+  if (brand && brandSettingsData[brand]) {
+    const s = brandSettingsData[brand];
+    const discEl = document.getElementById('kp-discount');
+    const vatEl = document.getElementById('kp-vat');
+    if (discEl.value === '' || discEl.dataset.auto === '1') { discEl.value = s.discount || 0; discEl.dataset.auto = '1'; }
+    if (vatEl.value === '' || vatEl.dataset.auto === '1') { vatEl.value = s.vat || 0; vatEl.dataset.auto = '1'; }
+  }
+
+  const cost = parseFloat(document.getElementById('kp-cost').value);
+  const discount = parseFloat(document.getElementById('kp-discount').value) || 0;
+  const vat = parseFloat(document.getElementById('kp-vat').value) || 0;
+  const profit = parseFloat(document.getElementById('kp-profit').value) || 0;
+
+  if (isNaN(cost) || cost <= 0) { box.classList.remove('active'); box.innerHTML = ''; delete box.dataset.salePrice; return; }
+
+  const afterDiscount = cost * (1 - discount / 100);
+  const netCost = afterDiscount * (1 + vat / 100);
+  const salePrice = netCost * (1 + profit / 100);
+
+  box.classList.add('active');
+  box.innerHTML = `
+    Katalog Fiyatı: <b>₺${cost.toFixed(2)}</b> → İskonto (%${discount}) sonrası: <b>₺${afterDiscount.toFixed(2)}</b> →
+    + KDV (%${vat}) = Net Maliyet: <b>₺${netCost.toFixed(2)}</b> → + Kâr (%${profit}) =
+    <b style="color:var(--success); font-size:13px;">Önerilen Satış: ₺${salePrice.toFixed(2)}</b>
+  `;
+  box.dataset.salePrice = salePrice.toFixed(2);
+}
+
+async function applyToExistingProduct() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  const box = document.getElementById('kp-calc-box');
+  if (!box.dataset.salePrice) { alert("Önce geçerli bir katalog (geliş) fiyatı girin."); return; }
+
+  const inputVal = document.getElementById('kp-existing-search').value.trim();
+  const code = inputVal.split(' - ')[0].trim();
+  const p = productsData[code];
+  if (!p) { alert("Lütfen listeden geçerli bir ürün seçin."); return; }
+
+  const brand = document.getElementById('kp-brand').value;
+  const vat = parseFloat(document.getElementById('kp-vat').value) || 0;
+  const profit = parseFloat(document.getElementById('kp-profit').value) || 0;
+  const cost = parseFloat(document.getElementById('kp-cost').value) || 0;
+  const price = parseFloat(box.dataset.salePrice);
+
+  if (!confirm(`"${p.name}" (${code}) ürününün fiyat bilgileri güncellenecek:\n\nGeliş: ₺${cost.toFixed(2)}\nKDV: %${vat}\nKâr: %${profit}\nSatış: ₺${price.toFixed(2)}\n\nOnaylıyor musunuz?`)) return;
+
+  try {
+    await db.child(code).update({
+      costPrice: cost, vat, targetProfit: profit, price, brand: brand || p.brand || null,
+      lastPriceUpdate: new Date().toISOString(),
+      lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog Fiyatlandırma)'
+    });
+    productsData[code] = Object.assign({}, p, { costPrice: cost, vat, targetProfit: profit, price, brand: brand || p.brand || null });
+
+    showToast(`"${p.name}" fiyatı katalogdan güncellendi.`);
+    closeKatalogPricingModal();
+    if (typeof renderGrid === 'function') renderGrid();
+  } catch (err) {
+    alert("Güncellenemedi: " + err.message);
+  }
+}
+
+async function addAsNewProductFromKatalog() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  const box = document.getElementById('kp-calc-box');
+  if (!box.dataset.salePrice) { alert("Önce geçerli bir katalog (geliş) fiyatı girin."); return; }
+  if (!katalogPricingContext || !katalogPricingContext.name) { alert("Ürün bilgisi bulunamadı."); return; }
+
+  const brand = document.getElementById('kp-brand').value;
+  const vat = parseFloat(document.getElementById('kp-vat').value) || 0;
+  const profit = parseFloat(document.getElementById('kp-profit').value) || 0;
+  const cost = parseFloat(document.getElementById('kp-cost').value) || 0;
+  const price = parseFloat(box.dataset.salePrice);
+  const unit = document.getElementById('kp-unit').value.trim() || 'Adet';
+
+  try {
+    const code = await createNewProductRecord({
+      name: katalogPricingContext.name, unit, category: 'Diğer', brand: brand || null,
+      cost, vat, targetProfit: profit, price
+    }, (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalogdan Eklendi)');
+
+    showToast(`"${katalogPricingContext.name}" yeni ürün olarak eklendi (${code}). Stok miktarı 0 — malzeme fişiyle veya "🔢 Stok Gir" ile stok girin.`);
+    closeKatalogPricingModal();
+    if (typeof renderGrid === 'function') renderGrid();
+  } catch (err) {
+    alert("Eklenemedi: " + err.message);
+  }
+}
+
+// ---------- 4) BORU TİPLERİ (BOYUT BAZLI) ----------
+
+function addPipeType() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  const input = document.getElementById('pipe-type-name');
+  const name = input.value.trim();
+  if (!name) { alert("Tip adı girin."); return; }
+  const exists = Object.values(pipeTypesData).some(t => (t.name || '').toLocaleLowerCase('tr-TR') === name.toLocaleLowerCase('tr-TR'));
+  if (exists) { alert("Bu isimde bir boru tipi zaten var: " + name); return; }
+
+  const newRef = dbPipeTypes.push();
+  newRef.child('name').set(name, (err) => {
+    if (err) { alert("Eklenemedi: " + err.message); return; }
+    input.value = '';
+    showToast("Boru tipi eklendi: " + name);
+  });
+}
+
+function deletePipeType(tipId) {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  const t = pipeTypesData[tipId];
+  if (!t) return;
+  const sizeCount = Object.keys(t).filter(k => k !== 'name').length;
+  if (!confirm(`"${t.name}" tipini ve altındaki ${sizeCount} boyutu bu listeden silmek istiyor musunuz? Stoktaki karşılık gelen ürün kayıtları (PIPE-... kodlu) otomatik silinmez, Stok Listesi'nden ayrıca silebilirsiniz.`)) return;
+  dbPipeTypes.child(tipId).remove(() => showToast("Boru tipi silindi."));
+}
+
+function renderPipeTypesList() {
+  const box = document.getElementById('pipe-types-list');
+  if (!box) return;
+  const tips = Object.entries(pipeTypesData);
+  if (tips.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz boru tipi tanımlanmadı.</p>`;
+    return;
+  }
+  box.innerHTML = tips.map(([tipId, t]) => {
+    const sizes = Object.entries(t).filter(([k]) => k !== 'name');
+    return `
+      <div style="border:1px solid var(--steel-line); border-radius:8px; padding:10px; margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong>${t.name}</strong>
+          <span style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openPipeSizeModal('${tipId}')">+ Boyut Ekle</button>
+            <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deletePipeType('${tipId}')">🗑 Tipi Sil</button>
+          </span>
+        </div>
+        ${sizes.length === 0
+          ? `<p style="font-size:11px; color:var(--steel); margin:6px 0 0;">Bu tipe henüz boyut eklenmedi.</p>`
+          : sizes.map(([boyutId, s]) => `
+              <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+                <span>${s.size} ${s.brand ? `<small style="color:var(--steel);">(${s.brand})</small>` : ''} — Satış: <b>₺${formatMoney(s.price||0)}</b> · Stok: ${s.stock||0}</span>
+                <span style="display:flex; gap:6px; flex-shrink:0;">
+                  <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openPipeSizeModal('${tipId}','${boyutId}')">✏️</button>
+                  <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deletePipeSize('${tipId}','${boyutId}')">🗑</button>
+                </span>
+              </div>
+            `).join('')
+        }
+      </div>
+    `;
+  }).join('');
+}
+
+let pipeSizeContext = null; // { tipId, boyutId (null = yeni boyut) }
+
+function openPipeSizeModal(tipId, boyutId) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  const t = pipeTypesData[tipId];
+  if (!t) return;
+  pipeSizeContext = { tipId, boyutId: boyutId || null };
+  document.getElementById('pipe-size-type-label').textContent = t.name;
+  populateBrandSelect('pipe-size-brand');
+
+  const existing = boyutId ? t[boyutId] : null;
+  document.getElementById('pipe-size-value').value = existing ? existing.size : '';
+  document.getElementById('pipe-size-brand').value = existing ? (existing.brand || '') : '';
+  document.getElementById('pipe-size-cost').value = existing ? (existing.cost || '') : '';
+  document.getElementById('pipe-size-stock').value = existing ? (existing.stock || 0) : 0;
+  document.getElementById('pipe-size-discount').value = existing ? (existing.discount || 0) : 0;
+  document.getElementById('pipe-size-vat').value = existing ? (existing.vat || 0) : 0;
+  document.getElementById('pipe-size-profit').value = existing ? (existing.profit || 0) : 0;
+  const priceEl = document.getElementById('pipe-size-price');
+  priceEl.value = existing ? (existing.price || '') : '';
+  priceEl.dataset.manual = '';
+
+  updatePipeSizeCalc();
+  document.getElementById('pipe-size-modal').style.display = 'flex';
+}
+
+function closePipeSizeModal() {
+  document.getElementById('pipe-size-modal').style.display = 'none';
+  pipeSizeContext = null;
+}
+
+function updatePipeSizeCalc() {
+  const box = document.getElementById('pipe-size-calc-box');
+  const cost = parseFloat(document.getElementById('pipe-size-cost').value);
+  const discount = parseFloat(document.getElementById('pipe-size-discount').value) || 0;
+  const vat = parseFloat(document.getElementById('pipe-size-vat').value) || 0;
+  const profit = parseFloat(document.getElementById('pipe-size-profit').value) || 0;
+
+  if (isNaN(cost) || cost <= 0) { box.classList.remove('active'); box.innerHTML = ''; return; }
+
+  const afterDiscount = cost * (1 - discount / 100);
+  const netCost = afterDiscount * (1 + vat / 100);
+  const suggested = netCost * (1 + profit / 100);
+
+  box.classList.add('active');
+  box.innerHTML = `Net Maliyet: <b>₺${netCost.toFixed(2)}</b> → Önerilen Satış: <b style="color:var(--success);">₺${suggested.toFixed(2)}</b>`;
+
+  const priceEl = document.getElementById('pipe-size-price');
+  if (!priceEl.dataset.manual) priceEl.value = suggested.toFixed(2);
+}
+
+async function saveCurrentPipeSize() {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  if (!pipeSizeContext) return;
+  const { tipId } = pipeSizeContext;
+  const t = pipeTypesData[tipId];
+  if (!t) return;
+
+  const size = document.getElementById('pipe-size-value').value.trim();
+  if (!size) { alert("Boyut/ölçü girin."); return; }
+
+  const brand = document.getElementById('pipe-size-brand').value;
+  const cost = parseFloat(document.getElementById('pipe-size-cost').value) || 0;
+  const stock = parseFloat(document.getElementById('pipe-size-stock').value) || 0;
+  const discount = parseFloat(document.getElementById('pipe-size-discount').value) || 0;
+  const vat = parseFloat(document.getElementById('pipe-size-vat').value) || 0;
+  const profit = parseFloat(document.getElementById('pipe-size-profit').value) || 0;
+  const price = parseFloat(document.getElementById('pipe-size-price').value) || 0;
+
+  // boyutId: düzenlemede mevcut id kullanılır; yeni eklemede aynı isimde boyut zaten
+  // varsa onun üzerine yazılır, yoksa yeni bir push id üretilir.
+  let boyutId = pipeSizeContext.boyutId;
+  if (!boyutId) {
+    const existingEntry = Object.entries(t).find(([k, v]) => k !== 'name' && v.size === size);
+    boyutId = existingEntry ? existingEntry[0] : dbPipeTypes.child(tipId).push().key;
+  }
+
+  const sizeData = { size, price, cost, vat, profit, discount, stock, brand: brand || null, updatedAt: new Date().toISOString() };
+
+  try {
+    await dbPipeTypes.child(tipId).child(boyutId).set(sizeData);
+
+    // Bu boyutu normal stokta da bir ürün olarak senkronize et — böylece arama,
+    // sipariş/borç satışı gibi mevcut akışlarda normal bir ürün gibi davranır.
+    const productCode = `PIPE-${tipId}-${boyutId}`;
+    const productName = `${t.name} ${size}`;
+    await db.child(productCode).set({
+      code: productCode, name: productName, unit: 'Adet', qty: stock, price, costPrice: cost,
+      vat, targetProfit: profit, category: 'Boru/Fitings', brand: brand || null,
+      lastPriceUpdate: new Date().toISOString(),
+      lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Boru Tipi: ' + t.name + ')'
+    });
+    productsData[productCode] = { code: productCode, name: productName, unit: 'Adet', qty: stock, price, costPrice: cost, vat, targetProfit: profit, category: 'Boru/Fitings', brand: brand || null };
+
+    showToast(`"${productName}" boyutu kaydedildi ve stokta güncellendi.`);
+    closePipeSizeModal();
+    if (typeof renderGrid === 'function') renderGrid();
+  } catch (err) {
+    alert("Kaydedilemedi: " + err.message);
+  }
+}
+
+function deletePipeSize(tipId, boyutId) {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  if (!confirm("Bu boyutu bu listeden silmek istiyor musunuz? (Stoktaki karşılık gelen ürün kaydı otomatik silinmez, Stok Listesi'nden ayrıca silebilirsiniz.)")) return;
+  dbPipeTypes.child(tipId).child(boyutId).remove(() => showToast("Boyut silindi."));
+}
+
+// ---------- 5) SAYIM OLMADAN SATIŞ İÇİN MANUEL STOK GİRİŞİ ----------
+
+function openManualStockOverride(code) {
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  const p = productsData[code];
+  if (!p) return;
+  const val = prompt(`"${p.name}" için GERÇEK stok miktarını girin (henüz sayım yapılmadıysa buradan düzeltebilirsiniz):`, p.qty || 0);
+  if (val === null) return;
+  const qty = parseFloat(val);
+  if (isNaN(qty) || qty < 0) { alert("Geçerli bir miktar girin."); return; }
+
+  db.child(code).child('qty').set(qty, (err) => {
+    if (err) { alert("Güncellenemedi: " + err.message); return; }
+    const oldQty = productsData[code].qty || 0;
+    productsData[code].qty = qty;
+    logMovement(code, p.name, qty - oldQty, 'SAYIM/ELLE STOK GİRİŞİ (Katalog)');
+    showToast(`"${p.name}" stoğu ${qty} olarak güncellendi.`);
+    if (typeof renderGrid === 'function') renderGrid();
+    renderKatalogSearchResults();
+  });
+}
+
+// ---------- 6) KATALOGDAN HIZLI ARAMA ----------
+
+function renderKatalogSearchResults() {
+  const box = document.getElementById('katalog-search-results');
+  if (!box) return;
+  const term = (document.getElementById('katalog-search').value || '').trim();
+  if (term.length < 2) { box.innerHTML = ''; return; }
+
+  const results = [];
+
+  // Stoktaki ürünler: doğrudan kod eşleşmesi + akıllı isim eşleştirme.
+  const directCodeMatch = productsData[term.toUpperCase()];
+  if (directCodeMatch) results.push({ type: 'stok', product: directCodeMatch });
+  findSimilarProducts(term, 8).forEach(m => {
+    if (!results.some(r => r.type === 'stok' && r.product.code === m.product.code)) {
+      results.push({ type: 'stok', product: m.product });
+    }
+  });
+
+  // Tekil ürün fişleri
+  const termNorm = normalizeTr(term);
+  Object.entries(catalogMetaData).forEach(([id, m]) => {
+    if (normalizeTr(m.name).includes(termNorm) || (m.brand && normalizeTr(m.brand).includes(termNorm))) {
+      results.push({ type: 'fis', id, meta: m });
+    }
+  });
+
+  // Boru tipi/boyutları
+  Object.entries(pipeTypesData).forEach(([tipId, t]) => {
+    if (!normalizeTr(t.name).includes(termNorm)) return;
+    Object.entries(t).forEach(([k, s]) => {
+      if (k === 'name') return;
+      results.push({ type: 'boru', tipId, boyutId: k, tipName: t.name, size: s });
+    });
+  });
+
+  if (results.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Sonuç bulunamadı.</p>`;
+    return;
+  }
+
+  box.innerHTML = results.slice(0, 30).map(r => {
+    if (r.type === 'stok') {
+      const p = r.product;
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+          <span>📦 <strong>${p.name}</strong> <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}${p.brand ? ', ' + p.brand : ''})</small><br><small style="color:var(--steel);">Stok: ${p.qty||0} · Satış: ₺${formatMoney(p.price||0)}</small></span>
+          <span style="display:flex; gap:6px; flex-shrink:0;">
+            <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openManualStockOverride('${p.code}')">🔢 Stok</button>
+            <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="openKatalogPricingModalFromProduct('${p.code}')">💰</button>
+          </span>
+        </div>
+      `;
+    }
+    if (r.type === 'fis') {
+      const m = r.meta;
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+          <span>🧾 <strong>${m.name}</strong> ${m.brand ? `<small style="color:var(--steel);">(${m.brand})</small>` : ''}${m.catalogPrice ? `<br><small style="color:var(--steel);">Katalog Fiyatı: ₺${formatMoney(m.catalogPrice)}</small>` : ''}</span>
+          <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="openKatalogPricingModalFromMeta('${r.id}')">💰 Fiyatlandır</button>
+        </div>
+      `;
+    }
+    const s = r.size;
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+        <span>🔧 <strong>${r.tipName} ${s.size}</strong> ${s.brand ? `<small style="color:var(--steel);">(${s.brand})</small>` : ''}<br><small style="color:var(--steel);">Stok: ${s.stock||0} · Satış: ₺${formatMoney(s.price||0)}</small></span>
+        <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openPipeSizeModal('${r.tipId}','${r.boyutId}')">✏️ Düzenle</button>
+      </div>
+    `;
+  }).join('');
 }
