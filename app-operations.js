@@ -2970,6 +2970,167 @@ function saveWholesalerEdit() {
   });
 }
 
+// ============================================================
+// ÜRÜN GRUPLAMA MOTORU — "Dirsek 50", "Dirsek 70", "Dirsek 100" gibi aynı
+// ana isme sahip, sadece ölçüsü/ebadı farklı ürünleri tek bir "Dirsek"
+// başlığı altında toplayıp açılıp kapanabilir hâle getirir. Hem Ana Stok
+// ızgarasında hem de Kataloglar > Hızlı Ara sonuçlarında AYNI motor
+// kullanılır (tek dişli sistemi).
+// ============================================================
+let gridGroupExpanded = new Set();
+
+// Bir ürün adının son kelimesi rakam içeriyorsa (50, 70, 1/2, 280ml, XL-200 vb.)
+// bunu "ölçü/ebat" olarak, geri kalanını da "ana isim" olarak ayırır.
+function extractProductSizeSuffix(name) {
+  const tokens = (name || '').toString().trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return null;
+  const last = tokens[tokens.length - 1];
+  if (!/\d/.test(last)) return null;
+  const baseLabel = tokens.slice(0, -1).join(' ');
+  const baseKey = normalizeProductName(baseLabel);
+  if (!baseKey) return null;
+  return { baseLabel, baseKey, sizeLabel: last };
+}
+
+// "50", "1/2", "70mm" gibi ölçüleri sayısal olarak (küçükten büyüğe) sıralar.
+function naturalSizeCompare(a, b) {
+  const numOf = (s) => {
+    const m = (s || '').replace(',', '.').match(/[\d.]+/);
+    return m ? parseFloat(m[0]) : NaN;
+  };
+  const na = numOf(a), nb = numOf(b);
+  if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+  return (a || '').localeCompare(b || '', 'tr');
+}
+
+// Verilen ürün listesini { type:'single', product } veya
+// { type:'group', baseKey, baseLabel, items:[...] } girdilerine dönüştürür.
+// Bir ana isim altında EN AZ 2 farklı ölçü varsa grup oluşturulur; tek başına
+// kalan ürünler normal kart olarak görünmeye devam eder.
+function groupProductsForDisplay(products) {
+  const buckets = {};
+  const suffixByCode = new Map();
+
+  products.forEach(p => {
+    const info = extractProductSizeSuffix(p.name);
+    suffixByCode.set(p.code, info);
+    if (info) {
+      if (!buckets[info.baseKey]) buckets[info.baseKey] = { baseLabel: info.baseLabel, items: [] };
+      buckets[info.baseKey].items.push(p);
+    }
+  });
+
+  const usedCodes = new Set();
+  const entries = [];
+
+  products.forEach(p => {
+    if (usedCodes.has(p.code)) return;
+    const info = suffixByCode.get(p.code);
+    const bucket = info ? buckets[info.baseKey] : null;
+
+    if (bucket && bucket.items.length >= 2) {
+      bucket.items.forEach(it => usedCodes.add(it.code));
+      const sortedItems = bucket.items.slice().sort((a, b) => {
+        const sa = suffixByCode.get(a.code)?.sizeLabel || '';
+        const sb = suffixByCode.get(b.code)?.sizeLabel || '';
+        return naturalSizeCompare(sa, sb);
+      });
+      entries.push({ type: 'group', baseKey: info.baseKey, baseLabel: bucket.baseLabel, items: sortedItems });
+    } else {
+      usedCodes.add(p.code);
+      entries.push({ type: 'single', product: p });
+    }
+  });
+
+  return entries;
+}
+
+// Tek bir ürün kartının HTML'ini üretir (hem tekil ürünler hem de bir grubun
+// içindeki her ölçü için AYNI fonksiyon kullanılır — kod tekrarını önler).
+function renderProductCard(p, canEdit, isAdmin) {
+  const isLow = p.qty <= 5;
+  const hasCostPrice = p.costPrice != null && parseFloat(p.costPrice) > 0;
+  const effectiveCost = hasCostPrice ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
+  const itemInventoryValue = parseFloat(p.qty || 0) * effectiveCost;
+
+  let editActions = '';
+  if (canEdit) {
+    editActions = `
+      <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--steel-line); padding-top:8px;">
+        <button class="sm-btn" onclick="openEditModal('${p.code}')">✏️ Düzenle</button>
+        ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--rust);">🗑️ Sil</button>` : ''}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="tag ${isLow ? 'low' : ''}" id="card-${p.code}">
+      <div class="tag-header">
+        <div>
+          <div class="tag-title">${p.name}</div>
+          <div class="tag-code">${p.code}</div>
+          <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
+          <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
+          <button class="sm-btn" onclick="printBarcodeLabel('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🏷️ Barkod Yazıcı</button>
+        </div>
+      </div>
+
+      <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
+      <button class="qr-toggle-link" onclick="toggleQR('${p.code}')">🔳 Karekodu Görüntüle</button>
+      <div class="qr-box-mini hidden" id="grid-qr-${p.code}"></div>
+
+      <div class="price-info-box">
+         <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
+         <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
+      </div>
+      ${isAdmin ? `
+      <div style="font-size:10px; color:var(--steel); margin:-6px 0 8px; display:flex; justify-content:space-between; align-items:center;">
+        <span>Envanter Değeri: <b style="color:var(--charcoal);">₺${formatMoney(itemInventoryValue)}</b></span>
+        ${!hasCostPrice && p.qty > 0 ? `<span style="color:var(--rust); font-weight:600;" title="Bu üründe geliş/maliyet fiyatı girilmemiş, hesaplamada satış fiyatı kullanılıyor.">⚠️ Maliyet girilmemiş</span>` : ''}
+      </div>` : ''}
+
+      <div class="qty-control">
+        <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
+        <div class="qty-val">${p.qty} <span style="font-size:10px;font-family:'Inter';color:var(--steel);">${p.unit || 'Adet'}</span></div>
+        <button class="qty-btn" onclick="updateQty('${p.code}', 1)" ${!canEdit ? 'disabled' : ''}>+</button>
+      </div>
+      ${editActions}
+    </div>
+  `;
+}
+
+// Bir grup başlığının (örn. "Dirsek") kapalı/açık HTML'ini üretir.
+function renderProductGroupCard(entry, canEdit, isAdmin) {
+  const { baseKey, baseLabel, items } = entry;
+  const isOpen = gridGroupExpanded.has(baseKey);
+  const totalQty = items.reduce((s, p) => s + (parseFloat(p.qty) || 0), 0);
+  const prices = items.map(p => parseFloat(p.price) || 0);
+  const minPrice = Math.min(...prices), maxPrice = Math.max(...prices);
+  const priceRange = minPrice === maxPrice ? `₺${formatMoney(minPrice)}` : `₺${formatMoney(minPrice)} – ₺${formatMoney(maxPrice)}`;
+  const anyLow = items.some(p => p.qty <= 5);
+
+  return `
+    <div class="group-card ${anyLow ? 'low' : ''}" id="group-${baseKey}">
+      <div class="group-header" onclick="toggleGridGroup('${baseKey}')">
+        <div>
+          <div class="group-title">📦 ${baseLabel} <span style="font-weight:600; color:var(--steel); font-size:12px;">(${items.length} ölçü)</span></div>
+          <div class="group-meta">Toplam Stok: <b>${totalQty}</b> ${items[0]?.unit || 'Adet'} • Fiyat Aralığı: <b>${priceRange}</b>${items[0]?.brand ? ` • ${items[0].brand}` : ''}</div>
+        </div>
+        <div class="group-caret ${isOpen ? 'open' : ''}">▶</div>
+      </div>
+      ${isOpen ? `<div class="group-items">${items.map(p => renderProductCard(p, canEdit, isAdmin)).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+function toggleGridGroup(baseKey) {
+  if (gridGroupExpanded.has(baseKey)) gridGroupExpanded.delete(baseKey);
+  else gridGroupExpanded.add(baseKey);
+  renderGrid();
+}
+
 function renderGrid() {
   const grid = document.getElementById('grid');
   const search = document.getElementById('search').value.toLowerCase();
@@ -3018,74 +3179,35 @@ function renderGrid() {
     default: break;
   }
 
-  const visibleCount = Math.min(matchedProducts.length, gridCurrentPage * GRID_PAGE_SIZE);
-  const pageProducts = matchedProducts.slice(0, visibleCount);
+  // Aynı ana isme sahip, sadece ölçüsü farklı ürünleri (Dirsek 50/70/100 gibi)
+  // tek bir açılır/kapanır başlık altında topluyoruz. Gruplama, sayfalama
+  // uygulanmadan ÖNCE tüm filtrelenmiş listede yapılır — böylece bir grubun
+  // ölçüleri sayfa sınırında ikiye bölünmez.
+  const displayEntries = groupProductsForDisplay(matchedProducts);
+
+  const visibleCount = Math.min(displayEntries.length, gridCurrentPage * GRID_PAGE_SIZE);
+  const pageEntries = displayEntries.slice(0, visibleCount);
   const matchedCodes = [];
 
   const htmlParts = [];
 
-  pageProducts.forEach(p => {
-    matchedCodes.push(p.code);
-    const isLow = p.qty <= 5;
-    const hasCostPrice = p.costPrice != null && parseFloat(p.costPrice) > 0;
-    const effectiveCost = hasCostPrice ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
-    const itemInventoryValue = parseFloat(p.qty || 0) * effectiveCost;
-
-    let editActions = '';
-    if (canEdit) {
-      editActions = `
-        <div style="display:flex; justify-content:space-between; margin-top:10px; border-top:1px solid var(--steel-line); padding-top:8px;">
-          <button class="sm-btn" onclick="openEditModal('${p.code}')">✏️ Düzenle</button>
-          ${isAdmin ? `<button class="sm-btn" onclick="deleteProduct('${p.code}')" style="color:var(--rust);">🗑️ Sil</button>` : ''}
-        </div>
-      `;
+  pageEntries.forEach(entry => {
+    if (entry.type === 'group') {
+      entry.items.forEach(p => matchedCodes.push(p.code));
+      htmlParts.push(renderProductGroupCard(entry, canEdit, isAdmin));
+    } else {
+      matchedCodes.push(entry.product.code);
+      htmlParts.push(renderProductCard(entry.product, canEdit, isAdmin));
     }
-
-    htmlParts.push(`
-      <div class="tag ${isLow ? 'low' : ''}" id="card-${p.code}">
-        <div class="tag-header">
-          <div>
-            <div class="tag-title">${p.name}</div>
-            <div class="tag-code">${p.code}</div>
-            <div class="tag-code" style="margin-top:2px;">${p.category || 'Belirtilmedi'}${p.brand ? ` • <span style="color:var(--charcoal-soft, var(--charcoal)); font-weight:600;">${p.brand}</span>` : ''}${p.location ? ` <span class="location-badge" onclick="goToLocation('${p.location}')">📍 ${p.location}</span>` : ''}</div>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-end; flex-shrink:0;">
-            <button class="sm-btn" onclick="printQR('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🖨️ Yazdır</button>
-            <button class="sm-btn" onclick="printBarcodeLabel('${p.code}')" ${!canEdit ? 'style="display:none;"' : ''}>🏷️ Barkod Yazıcı</button>
-          </div>
-        </div>
-
-        <div class="product-photo" id="photo-${p.code}"><span class="photo-placeholder">📷</span></div>
-        <button class="qr-toggle-link" onclick="toggleQR('${p.code}')">🔳 Karekodu Görüntüle</button>
-        <div class="qr-box-mini hidden" id="grid-qr-${p.code}"></div>
-
-        <div class="price-info-box">
-           <span>Birim Fiyatı: <strong style="color:var(--charcoal);font-size:13px;">₺${formatMoney(p.price || 0)}</strong></span>
-           <button class="sm-btn" onclick="updatePrice('${p.code}')" ${!isAdmin ? 'style="display:none;"' : ''}>Güncelle</button>
-        </div>
-        ${isAdmin ? `
-        <div style="font-size:10px; color:var(--steel); margin:-6px 0 8px; display:flex; justify-content:space-between; align-items:center;">
-          <span>Envanter Değeri: <b style="color:var(--charcoal);">₺${formatMoney(itemInventoryValue)}</b></span>
-          ${!hasCostPrice && p.qty > 0 ? `<span style="color:var(--rust); font-weight:600;" title="Bu üründe geliş/maliyet fiyatı girilmemiş, hesaplamada satış fiyatı kullanılıyor.">⚠️ Maliyet girilmemiş</span>` : ''}
-        </div>` : ''}
-
-        <div class="qty-control">
-          <button class="qty-btn" onclick="updateQty('${p.code}', -1)" ${!canEdit ? 'disabled' : ''}>-</button>
-          <div class="qty-val">${p.qty} <span style="font-size:10px;font-family:'Inter';color:var(--steel);">${p.unit || 'Adet'}</span></div>
-          <button class="qty-btn" onclick="updateQty('${p.code}', 1)" ${!canEdit ? 'disabled' : ''}>+</button>
-        </div>
-        ${editActions}
-      </div>
-    `);
   });
 
   grid.innerHTML = htmlParts.join('');
 
   const moreWrap = document.getElementById('grid-load-more-wrap');
   if (moreWrap) {
-    const remaining = matchedProducts.length - visibleCount;
+    const remaining = displayEntries.length - visibleCount;
     if (remaining > 0) {
-      moreWrap.innerHTML = `<button class="btn btn-dark" style="width:auto; padding:10px 24px;" onclick="gridCurrentPage++; renderGrid();">⬇️ Daha Fazla Göster (${remaining} ürün daha)</button>`;
+      moreWrap.innerHTML = `<button class="btn btn-dark" style="width:auto; padding:10px 24px;" onclick="gridCurrentPage++; renderGrid();">⬇️ Daha Fazla Göster (${remaining} kalem daha)</button>`;
     } else {
       moreWrap.innerHTML = '';
     }
@@ -3582,6 +3704,7 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
       // sistemde zaten kayıtlı ürünlerle karışmasın diye.
       const { product: matchedProduct, score } = findBestProductMatch(fullName);
       const isMatch = !!(matchedProduct && score >= FIS_MATCH_THRESHOLD);
+      const matchedQty = isMatch ? (parseFloat(matchedProduct.qty) || 0) : 0;
       if (isMatch) matchedCount++; else newCount++;
 
       const discount = settings.discount || 0;
@@ -3596,7 +3719,8 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
         discount, vat, profit,
         price: Math.round(salePrice * 100) / 100,
         matched: isMatch, matchedCode: isMatch ? matchedProduct.code : null,
-        include: !isMatch // zaten stokta olanlar varsayılan olarak işaretsiz
+        matchedQty,
+        include: !isMatch // zaten kaydı olanlar varsayılan olarak işaretsiz
       });
     });
 
@@ -3604,7 +3728,7 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
 
     if (statusMsg) {
       statusMsg.style.color = '#10B981';
-      statusMsg.innerHTML = `✅ "${pdfMeta.name}" okundu → <b>${brandName}</b> markası altında ${katalogAiCart.length} ürün listelendi (🆕 ${newCount} yeni, ⚠️ ${matchedCount} zaten stokta` + (skippedNoPrice > 0 ? `, ${skippedNoPrice} tanesi fiyat okunamadığı için atlandı` : '') + `). Fiyatlar "${brandName}" markasının kayıtlı iskonto/KDV/kâr oranına göre otomatik hesaplandı — sisteme işlemeden önce listeyi kontrol edin!`;
+      statusMsg.innerHTML = `✅ "${pdfMeta.name}" okundu → <b>${brandName}</b> markası altında ${katalogAiCart.length} ürün listelendi (🆕 ${newCount} yeni, ⚠️ ${matchedCount} sistemde zaten kayıtlı — bunların stok adedi 0 da olabilir, listede satır satır görebilirsiniz` + (skippedNoPrice > 0 ? `, ${skippedNoPrice} tanesi fiyat okunamadığı için atlandı` : '') + `). Fiyatlar "${brandName}" markasının kayıtlı iskonto/KDV/kâr oranına göre otomatik hesaplandı — sisteme işlemeden önce listeyi kontrol edin!`;
     }
   } catch (err) {
     if (statusMsg) {
@@ -3630,7 +3754,7 @@ function renderKatalogAiCart() {
       <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.vat}" style="width:60px;" oninput="katalogAiCart[${i}].vat=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
       <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.profit}" style="width:60px;" oninput="katalogAiCart[${i}].profit=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
       <td style="padding:6px 4px; font-weight:bold; color:var(--success);" id="katalog-ai-price-${i}">₺${item.price.toFixed(2)}</td>
-      <td style="padding:6px 4px; font-size:11px; white-space:nowrap;">${item.matched ? `⚠️ Zaten stokta<br><small style="color:var(--steel);">(${item.matchedCode})</small>` : '🆕 Yeni ürün'}</td>
+      <td style="padding:6px 4px; font-size:11px; white-space:nowrap;">${item.matched ? (item.matchedQty > 0 ? `⚠️ Stokta var (${item.matchedQty} adet)<br><small style="color:var(--steel);">${item.matchedCode}</small>` : `ℹ️ Kaydı var, stok 0<br><small style="color:var(--steel);">${item.matchedCode}</small>`) : '🆕 Yeni ürün'}</td>
     </tr>
   `).join('');
 }
@@ -3669,7 +3793,7 @@ async function completeKatalogAiImport() {
   if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
   const selected = katalogAiCart.filter(i => i.include);
   if (selected.length === 0) { alert("Sisteme işlemek için en az bir ürün işaretleyin."); return; }
-  if (!confirm(`${selected.length} ürün, "${katalogAiContext?.brand || ''}" markasıyla sisteme işlenecek (yeni olanlar eklenecek, zaten stokta işaretlenenlerin fiyatı güncellenecek). Onaylıyor musunuz?`)) return;
+  if (!confirm(`${selected.length} ürün, "${katalogAiContext?.brand || ''}" markasıyla sisteme işlenecek (yeni olanlar eklenecek, sistemde zaten kayıtlı olup işaretlediğiniz ürünlerin sadece fiyat/maliyet bilgisi güncellenecek, stok adedine dokunulmayacak). Onaylıyor musunuz?`)) return;
 
   const usedCodes = new Set();
   let successCount = 0;
@@ -3939,73 +4063,131 @@ function openManualStockOverride(code) {
 
 // ---------- 6) KATALOGDAN HIZLI ARAMA ----------
 
+// toggleGridGroup hem Ana Stok Izgarası'ndan hem Kataloglar > Hızlı Ara'dan
+// çağrılır; "ks-" ön ekiyle gelen anahtarlar arama kutusuna, diğerleri ana
+// ızgaraya aittir — hangi ekran açıksa sadece o yeniden çizilir.
+function toggleGridGroup(baseKey) {
+  if (gridGroupExpanded.has(baseKey)) gridGroupExpanded.delete(baseKey);
+  else gridGroupExpanded.add(baseKey);
+  if (baseKey.startsWith('ks-')) {
+    if (typeof renderKatalogSearchResults === 'function') renderKatalogSearchResults();
+  } else {
+    renderGrid();
+  }
+}
+
 function renderKatalogSearchResults() {
   const box = document.getElementById('katalog-search-results');
   if (!box) return;
   const term = (document.getElementById('katalog-search').value || '').trim();
   if (term.length < 2) { box.innerHTML = ''; return; }
 
-  const results = [];
+  const termNorm = normalizeTr(term);
 
-  // Stoktaki ürünler: doğrudan kod eşleşmesi + akıllı isim eşleştirme.
+  // 1) Stoktaki ürünler: doğrudan kod eşleşmesi + akıllı isim eşleştirme.
+  const stokProducts = [];
   const directCodeMatch = productsData[term.toUpperCase()];
-  if (directCodeMatch) results.push({ type: 'stok', product: directCodeMatch });
+  if (directCodeMatch) stokProducts.push(directCodeMatch);
   findSimilarProducts(term, 8).forEach(m => {
-    if (!results.some(r => r.type === 'stok' && r.product.code === m.product.code)) {
-      results.push({ type: 'stok', product: m.product });
-    }
+    if (!stokProducts.some(p => p.code === m.product.code)) stokProducts.push(m.product);
   });
 
-  // Tekil ürün fişleri
-  const termNorm = normalizeTr(term);
+  // 2) Tekil ürün fişleri
+  const fisResults = [];
   Object.entries(catalogMetaData).forEach(([id, m]) => {
     if (normalizeTr(m.name).includes(termNorm) || (m.brand && normalizeTr(m.brand).includes(termNorm))) {
-      results.push({ type: 'fis', id, meta: m });
+      fisResults.push({ id, meta: m });
     }
   });
 
-  // Boru tipi/boyutları
+  // 3) Boru tipi/boyutları — pseudo bir "ürün" nesnesine çevirip Ana Stok
+  // Izgarası'ndaki İLE AYNI gruplama motorunu (groupProductsForDisplay)
+  // kullanıyoruz, böylece "Dirsek" tek başlık altında, 50/70/100 açılıp
+  // kapanan bir liste olarak görünür.
+  const pipeProducts = [];
   Object.entries(pipeTypesData).forEach(([tipId, t]) => {
     if (!normalizeTr(t.name).includes(termNorm)) return;
     Object.entries(t).forEach(([k, s]) => {
       if (k === 'name') return;
-      results.push({ type: 'boru', tipId, boyutId: k, tipName: t.name, size: s });
+      pipeProducts.push({
+        code: `PIPE-${tipId}-${k}`, name: `${t.name} ${s.size}`, qty: s.stock || 0,
+        price: s.price || 0, unit: 'Adet', brand: s.brand || null,
+        __pipe: { tipId, boyutId: k }
+      });
     });
   });
 
-  if (results.length === 0) {
+  if (stokProducts.length === 0 && fisResults.length === 0 && pipeProducts.length === 0) {
     box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Sonuç bulunamadı.</p>`;
     return;
   }
 
-  box.innerHTML = results.slice(0, 30).map(r => {
-    if (r.type === 'stok') {
-      const p = r.product;
-      return `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
-          <span>📦 <strong>${p.name}</strong> <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}${p.brand ? ', ' + p.brand : ''})</small><br><small style="color:var(--steel);">Stok: ${p.qty||0} · Satış: ₺${formatMoney(p.price||0)}</small></span>
-          <span style="display:flex; gap:6px; flex-shrink:0;">
-            <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openManualStockOverride('${p.code}')">🔢 Stok</button>
-            <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="openKatalogPricingModalFromProduct('${p.code}')">💰</button>
-          </span>
-        </div>
-      `;
-    }
-    if (r.type === 'fis') {
-      const m = r.meta;
-      return `
-        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
-          <span>🧾 <strong>${m.name}</strong> ${m.brand ? `<small style="color:var(--steel);">(${m.brand})</small>` : ''}${m.catalogPrice ? `<br><small style="color:var(--steel);">Katalog Fiyatı: ₺${formatMoney(m.catalogPrice)}</small>` : ''}</span>
-          <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="openKatalogPricingModalFromMeta('${r.id}')">💰 Fiyatlandır</button>
-        </div>
-      `;
-    }
-    const s = r.size;
+  const parts = [];
+
+  groupProductsForDisplay(stokProducts.slice(0, 30)).forEach(entry => {
+    if (entry.type === 'group') parts.push(renderKatalogSearchGroup(entry.baseKey, entry.baseLabel, entry.items, 'stok'));
+    else parts.push(renderKatalogSearchRow(entry.product, 'stok'));
+  });
+
+  fisResults.forEach(r => {
+    const m = r.meta;
+    parts.push(`
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+        <span>🧾 <strong>${m.name}</strong> ${m.brand ? `<small style="color:var(--steel);">(${m.brand})</small>` : ''}${m.catalogPrice ? `<br><small style="color:var(--steel);">Katalog Fiyatı: ₺${formatMoney(m.catalogPrice)}</small>` : ''}</span>
+        <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="openKatalogPricingModalFromMeta('${r.id}')">💰 Fiyatlandır</button>
+      </div>
+    `);
+  });
+
+  groupProductsForDisplay(pipeProducts).forEach(entry => {
+    if (entry.type === 'group') parts.push(renderKatalogSearchGroup(entry.baseKey, entry.baseLabel, entry.items, 'boru'));
+    else parts.push(renderKatalogSearchRow(entry.product, 'boru'));
+  });
+
+  box.innerHTML = parts.join('');
+}
+
+// Tek bir arama sonucu satırı (grup içinde ya da tek başına gösterilebilir).
+function renderKatalogSearchRow(p, kind) {
+  if (kind === 'boru') {
+    const { tipId, boyutId } = p.__pipe;
     return `
       <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
-        <span>🔧 <strong>${r.tipName} ${s.size}</strong> ${s.brand ? `<small style="color:var(--steel);">(${s.brand})</small>` : ''}<br><small style="color:var(--steel);">Stok: ${s.stock||0} · Satış: ₺${formatMoney(s.price||0)}</small></span>
-        <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openPipeSizeModal('${r.tipId}','${r.boyutId}')">✏️ Düzenle</button>
+        <span>🔧 <strong>${p.name}</strong> ${p.brand ? `<small style="color:var(--steel);">(${p.brand})</small>` : ''}<br><small style="color:var(--steel);">Stok: ${p.qty || 0} · Satış: ₺${formatMoney(p.price || 0)}</small></span>
+        <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openPipeSizeModal('${tipId}','${boyutId}')">✏️ Düzenle</button>
       </div>
     `;
-  }).join('');
+  }
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-top:1px dashed var(--steel-line); font-size:12px;">
+      <span>📦 <strong>${p.name}</strong> <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}${p.brand ? ', ' + p.brand : ''})</small><br><small style="color:var(--steel);">Stok: ${p.qty || 0} · Satış: ₺${formatMoney(p.price || 0)}</small></span>
+      <span style="display:flex; gap:6px; flex-shrink:0;">
+        <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="openManualStockOverride('${p.code}')">🔢 Stok</button>
+        <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="openKatalogPricingModalFromProduct('${p.code}')">💰</button>
+      </span>
+    </div>
+  `;
+}
+
+// Ana Stok Izgarası'ndaki grup başlığıyla AYNI görünüm (açılıp kapanan
+// "📦 Dirsek (3 ölçü)" başlığı), sadece arama kutusuna uygun daha kompakt.
+function renderKatalogSearchGroup(baseKey, baseLabel, items, kind) {
+  const groupKey = 'ks-' + kind + '-' + baseKey;
+  const isOpen = gridGroupExpanded.has(groupKey);
+  const totalQty = items.reduce((s, p) => s + (parseFloat(p.qty) || 0), 0);
+  const prices = items.map(p => parseFloat(p.price) || 0);
+  const minPrice = Math.min(...prices), maxPrice = Math.max(...prices);
+  const priceRange = minPrice === maxPrice ? `₺${formatMoney(minPrice)}` : `₺${formatMoney(minPrice)} – ₺${formatMoney(maxPrice)}`;
+  return `
+    <div class="group-card" style="padding:10px 12px; margin-top:8px;">
+      <div class="group-header" onclick="toggleGridGroup('${groupKey}')">
+        <div>
+          <div class="group-title" style="font-size:13px;">${kind === 'boru' ? '🔧' : '📦'} ${baseLabel} <span style="font-weight:600; color:var(--steel); font-size:11px;">(${items.length} ölçü)</span></div>
+          <div class="group-meta">Toplam Stok: <b>${totalQty}</b> • Fiyat Aralığı: <b>${priceRange}</b></div>
+        </div>
+        <div class="group-caret ${isOpen ? 'open' : ''}">▶</div>
+      </div>
+      ${isOpen ? `<div style="margin-top:4px;">${items.map(p => renderKatalogSearchRow(p, kind)).join('')}</div>` : ''}
+    </div>
+  `;
 }
