@@ -383,6 +383,8 @@ dbBrandSettings.on('value', (snapshot) => {
   if (fBrandSel) populateBrandSelect('f-brand', fBrandSel.value);
   const fisBrandSel = document.getElementById('fis-brand');
   if (fisBrandSel) populateBrandSelect('fis-brand', fisBrandSel.value);
+  if (typeof populateGridBrandFilter === 'function') populateGridBrandFilter();
+  if (typeof renderGrid === 'function' && document.getElementById('brand-filter')) renderGrid();
   if (!brandSeedChecked) {
     brandSeedChecked = true;
     maybeSeedDefaultBrands();
