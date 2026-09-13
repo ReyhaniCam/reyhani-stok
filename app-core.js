@@ -27,6 +27,7 @@ const dbSenetler = dbRoot.child('senetler');
 const dbCatalogPdfs = dbRoot.child('catalog_pdfs');
 const dbCatalogMeta = dbRoot.child('catalog_meta');
 const dbPipeTypes = dbRoot.child('pipe_types');
+const dbCatalogAiHashes = dbRoot.child('catalog_ai_hashes'); // AI ile okutulmuş dosyaların içerik özeti — mükerrer yükleme uyarısı için
 
 const DEFAULT_BRANDS = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon"];
 let brandSeedChecked = false;
