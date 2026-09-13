@@ -1381,6 +1381,25 @@
   </div>
 </div>
 
+<!-- KATALOG: AI OKUMA SONUCU İNCELEME/ONAY MODALI -->
+<div class="modal-overlay" id="katalog-ai-review-modal" style="display:none;">
+  <div class="modal-content" style="max-width:760px; max-height:90vh; overflow-y:auto;">
+    <button class="modal-close" onclick="closeAiReviewModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">🔍 AI Okuma Sonucunu Kontrol Et</h3>
+    <p style="font-size:12px; color:var(--steel); margin-top:-6px;">
+      Kaydetmeden önce gözden geçirin: ürün adı yanlış okunduysa (kod yazılmış olabilir) düzeltin, her ürünün hangi boru tipine gideceğini seçin, istemediğiniz ürün/ölçüleri işaretini kaldırarak çıkarın.
+    </p>
+    <div class="form-row" style="grid-template-columns:1fr;">
+      <div><label>Marka</label><input type="text" id="ai-review-brand" placeholder="Marka adı"></div>
+    </div>
+    <div id="ai-review-products" style="margin-top:10px;"></div>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button type="button" class="btn btn-dark" onclick="closeAiReviewModal()">İptal</button>
+      <button type="button" class="btn btn-success" onclick="confirmAiReviewAndSave()">✅ Onayla ve Kaydet</button>
+    </div>
+  </div>
+</div>
+
 <!-- KATALOG: FİYATLANDIRMA PANELİ -->
 <div class="modal-overlay" id="katalog-pricing-modal" style="display:none;">
   <div class="modal-content" style="max-width:520px;">
@@ -1743,8 +1762,8 @@
   </div>
 </div>
 
-<script src="app-core.js?v=4"></script>
-<script src="app-operations.js?v=6"></script>
+<script src="app-core.js?v=5"></script>
+<script src="app-operations.js?v=7"></script>
 <script src="app-inventory.js?v=4"></script>
 </body>
 </html>
