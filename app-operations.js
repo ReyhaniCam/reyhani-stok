@@ -3125,12 +3125,6 @@ function renderProductGroupCard(entry, canEdit, isAdmin) {
   `;
 }
 
-function toggleGridGroup(baseKey) {
-  if (gridGroupExpanded.has(baseKey)) gridGroupExpanded.delete(baseKey);
-  else gridGroupExpanded.add(baseKey);
-  renderGrid();
-}
-
 function renderGrid() {
   const grid = document.getElementById('grid');
   const search = document.getElementById('search').value.toLowerCase();
@@ -4011,21 +4005,10 @@ async function saveCurrentPipeSize() {
   const sizeData = { size, price, cost, vat, profit, discount, stock, brand: brand || null, updatedAt: new Date().toISOString() };
 
   try {
-    await dbPipeTypes.child(tipId).child(boyutId).set(sizeData);
+    await persistPipeSize(tipId, t.name, boyutId, sizeData);
+    pipeTypesData[tipId][boyutId] = sizeData;
 
-    // Bu boyutu normal stokta da bir ürün olarak senkronize et — böylece arama,
-    // sipariş/borç satışı gibi mevcut akışlarda normal bir ürün gibi davranır.
-    const productCode = `PIPE-${tipId}-${boyutId}`;
-    const productName = `${t.name} ${size}`;
-    await db.child(productCode).set({
-      code: productCode, name: productName, unit: 'Adet', qty: stock, price, costPrice: cost,
-      vat, targetProfit: profit, category: 'Boru/Fitings', brand: brand || null,
-      lastPriceUpdate: new Date().toISOString(),
-      lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Boru Tipi: ' + t.name + ')'
-    });
-    productsData[productCode] = { code: productCode, name: productName, unit: 'Adet', qty: stock, price, costPrice: cost, vat, targetProfit: profit, category: 'Boru/Fitings', brand: brand || null };
-
-    showToast(`"${productName}" boyutu kaydedildi ve stokta güncellendi.`);
+    showToast(`"${t.name} ${size}" boyutu kaydedildi ve stokta güncellendi.`);
     closePipeSizeModal();
     if (typeof renderGrid === 'function') renderGrid();
   } catch (err) {
@@ -4037,6 +4020,183 @@ function deletePipeSize(tipId, boyutId) {
   if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if (!confirm("Bu boyutu bu listeden silmek istiyor musunuz? (Stoktaki karşılık gelen ürün kaydı otomatik silinmez, Stok Listesi'nden ayrıca silebilirsiniz.)")) return;
   dbPipeTypes.child(tipId).child(boyutId).remove(() => showToast("Boyut silindi."));
+}
+
+// Bir boru boyutunu hem pipe_types altına hem de normal stok (products) düğümüne
+// yazan ortak fonksiyon — hem manuel "Boyut Kaydet" hem de AI ile toplu katalog
+// aktarımı bunu kullanır ki iki yol da her zaman birbirinden farksız, tutarlı bir
+// stok kaydı üretsin.
+async function persistPipeSize(tipId, tipName, boyutId, sizeData) {
+  await dbPipeTypes.child(tipId).child(boyutId).set(sizeData);
+
+  const productCode = `PIPE-${tipId}-${boyutId}`;
+  const productName = `${tipName} ${sizeData.size}`;
+  const productRecord = {
+    code: productCode, name: productName, unit: 'Adet', qty: sizeData.stock || 0,
+    price: sizeData.price || 0, costPrice: sizeData.cost || 0,
+    vat: sizeData.vat || 0, targetProfit: sizeData.profit || 0,
+    category: 'Boru/Fitings', brand: sizeData.brand || null,
+    lastPriceUpdate: new Date().toISOString(),
+    lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Boru Tipi: ' + tipName + ')'
+  };
+  await db.child(productCode).set(productRecord);
+  productsData[productCode] = productRecord;
+  return productCode;
+}
+
+// ---------- 4.5) AI İLE KATALOGDAN TOPLU ÜRÜN AKTARIMI ----------
+// Malzeme fişindeki AI okuma motorunun BİREBİR aynısı (aynı model, aynı istek
+// yapısı) — farkla: burada bir katalog sayfası okunuyor, marka + ürün + ölçü/fiyat
+// tespit edilip "Boru Tipleri" yapısına ve dolayısıyla normal stoğa işleniyor.
+// Satış fiyatı, markanın "Marka İskonto/KDV Ayarları" panelinde kayıtlı
+// iskonto/KDV/kâr oranlarına göre otomatik hesaplanır.
+async function processCatalogWithAI(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); event.target.value = ''; return; }
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Katalog okuyabilmek için Google API Anahtarınızı girmelisiniz:");
+    if (!apiKey) { event.target.value = ''; return; }
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  const statusEl = document.getElementById('katalog-ai-status');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = '#F59E0B';
+    statusEl.innerHTML = '⏳ Katalog inceleniyor, bekleyin...';
+  }
+
+  try {
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = e => reject(e);
+    });
+    const pureBase64 = base64Data.split(',')[1];
+
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: "Sen bir ürün kataloğu/fiyat listesi okuma sistemisin. Bu görselde bir toptancı/üretici markasının ürün kataloğu ya da fiyat listesi var (örn. boru/fitings, hırdavat, yapı malzemesi). Katalogdaki MARKA ADINI ve ürünleri tespit et. Aynı ürünün farklı ölçü/boyut seçenekleri varsa HEPSİNİ TEK bir ürün başlığı altında topla (örn. 'Açık Dirsek' adlı üründe 20mm, 25mm, 32mm ölçüleri varsa bunların hepsi 'Açık Dirsek' başlığı altındaki tek bir listede yer almalı; 'Açık Dirsek' ve 'Kapalı Dirsek' birbirinden FARKLI ürün başlıklarıdır, karıştırma). Her ölçü için o ölçüye karşılık gelen KATALOG (LİSTE) FİYATINI oku. SADECE geçerli bir JSON nesnesi ver, başka hiçbir açıklama ekleme. Format tam olarak şu şekilde olmalı: {\"brand\": \"Marka Adı\", \"products\": [{\"name\": \"Açık Dirsek\", \"sizes\": [{\"size\": \"20mm\", \"price\": 5.50}, {\"size\": \"25mm\", \"price\": 7.20}]}]}. price alanı KDV/iskonto UYGULANMAMIŞ HAM KATALOG fiyatıdır, stok miktarı DEĞİLDİR — katalogda stok/adet bilgisi yoktur, sadece fiyat okunur. Marka adı okunamıyorsa \"brand\" alanını boş string yap." },
+            { inlineData: { mimeType: file.type || "image/jpeg", data: pureBase64 } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zeka görselden veri okuyamadı.");
+    }
+
+    let textResult = data.candidates[0].content.parts[0].text
+      .replace(/```(?:json)?/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    const parsed = JSON.parse(textResult);
+    const brand = (parsed.brand || '').trim();
+    const products = Array.isArray(parsed.products) ? parsed.products : [];
+    if (products.length === 0) throw new Error("Katalogda ürün/ölçü bulunamadı, lütfen daha net bir fotoğraf deneyin.");
+
+    // Marka sistemde yoksa otomatik ekle (oranlar 0 gelir; gerçek oranları
+    // "Marka İskonto/KDV Ayarları" panelinden girmeniz gerekir).
+    let brandIsNew = false;
+    if (brand && !brandSettingsData[brand]) {
+      await dbBrandSettings.child(brand).set({ discount: 0, vat: 0, profit: 0 });
+      brandSettingsData[brand] = { discount: 0, vat: 0, profit: 0 };
+      brandIsNew = true;
+    }
+
+    const brandRates = brand ? (brandSettingsData[brand] || {}) : {};
+    const discount = brandRates.discount || 0;
+    const vat = brandRates.vat || 0;
+    const profit = brandRates.profit || 0;
+
+    let addedProducts = 0, addedSizes = 0, updatedSizes = 0;
+
+    for (const prod of products) {
+      const prodName = (prod.name || '').trim();
+      if (!prodName) continue;
+      const sizes = Array.isArray(prod.sizes) ? prod.sizes : [];
+      if (sizes.length === 0) continue;
+
+      // Bu isimde bir ürün tipi zaten var mı? (Türkçe karakter/boşluk toleranslı karşılaştırma.)
+      let tipId = Object.keys(pipeTypesData).find(id => normalizeTr(pipeTypesData[id].name) === normalizeTr(prodName));
+      let tipName = prodName;
+      if (!tipId) {
+        const newTipRef = dbPipeTypes.push();
+        await newTipRef.child('name').set(prodName);
+        tipId = newTipRef.key;
+        pipeTypesData[tipId] = { name: prodName };
+        addedProducts++;
+      } else {
+        tipName = pipeTypesData[tipId].name;
+      }
+
+      for (const sz of sizes) {
+        const sizeLabel = (sz.size || '').toString().trim();
+        const catalogPrice = parseFloat(sz.price) || 0;
+        if (!sizeLabel) continue;
+
+        const afterDiscount = catalogPrice * (1 - discount / 100);
+        const netCost = afterDiscount * (1 + vat / 100);
+        const salePrice = netCost * (1 + profit / 100);
+
+        const existingEntry = Object.entries(pipeTypesData[tipId] || {}).find(([k, v]) => k !== 'name' && v.size === sizeLabel);
+        const boyutId = existingEntry ? existingEntry[0] : dbPipeTypes.child(tipId).push().key;
+        // Katalogda stok bilgisi olmadığı için, daha önce elle girilmiş bir stok
+        // varsa onu KORUYORUZ; yeni bir boyutsa stok 0 olarak başlar (sayım
+        // yapılana kadar "Kataloglar" ekranındaki "🔢 Stok" ile elle girilmeli).
+        const existingStock = existingEntry ? (existingEntry[1].stock || 0) : 0;
+
+        const sizeData = {
+          size: sizeLabel, price: Number(salePrice.toFixed(2)), cost: catalogPrice,
+          vat, profit, discount, stock: existingStock, brand: brand || null,
+          updatedAt: new Date().toISOString()
+        };
+
+        await persistPipeSize(tipId, tipName, boyutId, sizeData);
+        pipeTypesData[tipId][boyutId] = sizeData;
+
+        if (existingEntry) updatedSizes++; else addedSizes++;
+      }
+
+      pipeTypeExpanded.add(tipId);
+    }
+
+    renderPipeTypesList();
+    if (typeof renderGrid === 'function') renderGrid();
+
+    if (statusEl) {
+      statusEl.style.color = '#10B981';
+      statusEl.innerHTML =
+        `✅ ${brand ? `<b>${brand}</b> markası okundu — ` : ''}${addedProducts} yeni ürün tipi, ${addedSizes} yeni ölçü eklendi, ${updatedSizes} ölçü fiyatı güncellendi.` +
+        `<br>Satış fiyatları %${discount} iskonto / %${vat} KDV / %${profit} kâr oranına göre hesaplandı.` +
+        (brandIsNew ? `<br>⚠️ "${brand}" markası sistemde yeni — oranlar şu an 0. Gerçek oranları "Marka İskonto/KDV Ayarları" panelinden girip bu PDF'i tekrar okutursanız fiyatlar otomatik güncellenir.` : '') +
+        `<br>⚠️ Katalogda stok/adet bilgisi olmadığı için yeni eklenen ölçülerin stoğu 0'dır — Kataloglar aramasından "🔢 Stok" ile gerçek miktarı girmeniz gerekir.`;
+    }
+    showToast(`Katalog okundu: ${addedProducts} yeni ürün tipi, ${addedSizes + updatedSizes} ölçü işlendi.`);
+  } catch (err) {
+    if (statusEl) {
+      statusEl.style.color = '#EF4444';
+      statusEl.innerHTML = '❌ Katalog okunamadı: ' + err.message;
+    }
+    alert("Hata: " + err.message);
+  } finally {
+    event.target.value = '';
+  }
 }
 
 // ---------- 5) SAYIM OLMADAN SATIŞ İÇİN MANUEL STOK GİRİŞİ ----------
