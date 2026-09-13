@@ -516,15 +516,33 @@ function populateBrandSelect(selectId, selectedValue) {
   sel.value = selectedValue || '';
 }
 
+// Stok Listesi'ndeki "🏷️ Tüm Markalar" filtre kutusunu doldurur — marka
+// isminin yanında (varsa) malzeme sınıfını da gösterir ki admin hangi markanın
+// hangi tür malzeme getirdiğini listeden bakarak hemen görebilsin.
+function populateGridBrandFilter() {
+  const sel = document.getElementById('brand-filter');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">🏷️ Tüm Markalar</option>' +
+    currentBrandList().map(b => {
+      const cat = brandSettingsData[b] && brandSettingsData[b].category ? ` — ${brandSettingsData[b].category}` : '';
+      return `<option value="${b}">${b}${cat}</option>`;
+    }).join('');
+  sel.value = current || '';
+}
+
 function addBrandGroup() {
   if (currentRole !== 'admin') return;
   const input = document.getElementById('new-brand-name');
   const name = input.value.trim();
   if (!name) { alert("Marka adı girin."); return; }
   if (brandSettingsData[name]) { alert("Bu marka zaten listede: " + name); return; }
-  dbBrandSettings.child(name).set({ discount: 0, vat: 0, profit: 0 }, (err) => {
+  const categoryEl = document.getElementById('new-brand-category');
+  const category = categoryEl ? categoryEl.value.trim() : '';
+  dbBrandSettings.child(name).set({ discount: 0, vat: 0, profit: 0, category: category || null }, (err) => {
     if (err) { alert("Eklenemedi: " + err.message); return; }
     input.value = '';
+    if (categoryEl) categoryEl.value = '';
     showToast("Marka eklendi: " + name);
   });
 }
@@ -542,10 +560,12 @@ function renderBrandSettings() {
   const brands = currentBrandList();
 
   let html = `
-    <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:10px; margin-bottom:4px; border-bottom:2px solid var(--charcoal);">
-      <div style="flex:1;"><label style="margin-bottom:2px;">Yeni Marka Adı</label><input type="text" id="new-brand-name" placeholder="Örn: Makita"></div>
+    <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:10px; margin-bottom:4px; border-bottom:2px solid var(--charcoal); flex-wrap:wrap;">
+      <div style="flex:1; min-width:120px;"><label style="margin-bottom:2px;">Yeni Marka Adı</label><input type="text" id="new-brand-name" placeholder="Örn: Ege Yıldız"></div>
+      <div style="flex:1; min-width:140px;"><label style="margin-bottom:2px;">Malzeme Sınıfı</label><input type="text" id="new-brand-category" list="brand-category-suggestions" placeholder="Örn: Boru/Fitings"></div>
       <button class="btn btn-primary btn-sm" style="width:auto;" onclick="addBrandGroup()">+ Marka Ekle</button>
     </div>
+    <datalist id="brand-category-suggestions">${brandCategorySuggestions().map(c => `<option value="${c}"></option>`).join('')}</datalist>
   `;
 
   if (brands.length === 0) {
@@ -555,7 +575,14 @@ function renderBrandSettings() {
       const s = brandSettingsData[brand] || {};
       return `
         <div style="display:flex; gap:8px; align-items:flex-end; padding:8px 0; border-top:1px solid var(--steel-line); flex-wrap:wrap;">
-          <div style="flex:1.2; min-width:100px;"><label style="margin-bottom:2px;">${brand}</label></div>
+          <div style="flex:1.2; min-width:100px;">
+            <label style="margin-bottom:2px;">${brand}</label>
+            ${s.category ? `<div style="font-size:10px; color:var(--info); font-weight:600;">🏗️ ${s.category}</div>` : ''}
+          </div>
+          <div style="flex:1.4; min-width:130px;">
+            <label style="margin-bottom:2px;">Malzeme Sınıfı</label>
+            <input type="text" id="bs-category-${brand}" list="brand-category-suggestions" value="${s.category || ''}" placeholder="Örn: Boru/Fitings">
+          </div>
           <div style="flex:1; min-width:70px;">
             <label style="margin-bottom:2px;">İskonto %</label>
             <input type="number" step="0.01" id="bs-discount-${brand}" value="${s.discount != null ? s.discount : ''}" placeholder="0">
@@ -578,15 +605,27 @@ function renderBrandSettings() {
   box.innerHTML = html;
 }
 
+// Marka için "Malzeme Sınıfı" alanında öneri olarak, hem daha önce başka
+// markalara girilmiş sınıfları hem de stoktaki ürün kategorilerini toplar —
+// böylece admin her seferinde aynı adlandırmayı kullanır, aramada kolay bulunur.
+function brandCategorySuggestions() {
+  const set = new Set();
+  Object.values(brandSettingsData).forEach(s => { if (s && s.category) set.add(s.category); });
+  Object.values(productsData).forEach(p => { if (p && p.category) set.add(p.category); });
+  return Array.from(set).sort((a, b) => a.localeCompare(b, 'tr-TR'));
+}
+
 function saveBrandSetting(brand) {
   if (currentRole !== 'admin') return;
   const discount = parseFloat(document.getElementById(`bs-discount-${brand}`).value) || 0;
   const vat = parseFloat(document.getElementById(`bs-vat-${brand}`).value) || 0;
   const profitEl = document.getElementById(`bs-profit-${brand}`);
   const profit = profitEl ? (parseFloat(profitEl.value) || 0) : 0;
-  dbBrandSettings.child(brand).set({ discount, vat, profit }, (err) => {
+  const categoryEl = document.getElementById(`bs-category-${brand}`);
+  const category = categoryEl ? categoryEl.value.trim() : '';
+  dbBrandSettings.child(brand).set({ discount, vat, profit, category: category || null }, (err) => {
     if (err) { alert("Kaydedilemedi: " + err.message); return; }
-    showToast(`${brand} için oranlar kaydedildi — bu markayla eklenen ürünlere/boru boyutlarına otomatik uygulanacak.`);
+    showToast(`${brand} için oranlar ve malzeme sınıfı kaydedildi — bu markayla eklenen ürünlere/boru boyutlarına otomatik uygulanacak.`);
   });
 }
 
@@ -2375,18 +2414,28 @@ async function executeDuplicateReceiptMerge() {
 // silmek için (finalizeBulkImport() sırasında kaydedilen lastUpdatedBy
 // etiketi "Toplu Aktarım" bilgisini taşımaya devam ediyorsa yakalanır).
 // ============================================================
+// ============================================================
+// TOPLU/OTOMATİK EKLENENLERİ GERİ ALMA — Excel ile toplu içe aktarılan VEYA
+// Kataloglar modülünden (boru tipi/boyut senkronizasyonu, "Katalogdan Eklendi")
+// otomatik oluşturulmuş, o zamandan beri fiyatı/bilgisi elle değiştirilmemiş
+// ürünleri tespit edip toplu silmek için (lastUpdatedBy etiketi bu kaynaklardan
+// birini taşıyorsa yakalanır).
+// ============================================================
 let importCleanupSelected = new Set();
 
+const AUTO_CREATED_SOURCE_TAGS = ['Toplu Aktarım', 'Boru Tipi:', 'Katalogdan Eklendi'];
+
 function detectBulkImportProducts() {
-  return Object.values(productsData).filter(p => (p.lastUpdatedBy || '').includes('Toplu Aktarım'));
+  return Object.values(productsData).filter(p => AUTO_CREATED_SOURCE_TAGS.some(tag => (p.lastUpdatedBy || '').includes(tag)));
 }
 
 function openImportCleanupModal() {
   if(currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   const candidates = detectBulkImportProducts();
-  // Varsayılan olarak sadece "yeni ürün olarak eklenen" kayıtları işaretli getir;
-  // mevcut bir ürünün üzerine yazılanları admin bilerek seçsin.
-  importCleanupSelected = new Set(candidates.filter(p => (p.lastUpdatedBy || '').includes('Toplu Aktarım)') && !(p.lastUpdatedBy || '').includes('Güncellendi')).map(p => p.code));
+  // Varsayılan olarak "yeni ürün olarak eklenen" tüm kayıtları işaretli getir
+  // (Excel'den yeni gelenler, boru tipi boyutları, katalogdan eklenenler);
+  // sadece Excel'de MEVCUT bir ürünün üzerine yazılmış olanları admin bilerek seçsin.
+  importCleanupSelected = new Set(candidates.filter(p => !(p.lastUpdatedBy || '').includes('Güncellendi')).map(p => p.code));
   document.getElementById('import-cleanup-search').value = '';
   renderImportCleanupList();
   document.getElementById('import-cleanup-modal').style.display = 'flex';
@@ -2417,10 +2466,10 @@ function renderImportCleanupSummary() {
   const all = detectBulkImportProducts();
   if(!box) return;
   if(all.length === 0) {
-    box.innerHTML = `<p style="font-size:12px; color:var(--steel);">Toplu içe aktarımdan kalma, hâlâ dokunulmamış görünen bir ürün bulunamadı.</p>`;
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel);">Excel'den veya Kataloglar modülünden otomatik eklenmiş, hâlâ dokunulmamış görünen bir ürün bulunamadı.</p>`;
     return;
   }
-  box.innerHTML = `<div style="font-size:12px;"><strong>${all.length}</strong> ürün toplu aktarımdan kalma görünüyor. <strong>${importCleanupSelected.size}</strong> tanesi seçili.</div>`;
+  box.innerHTML = `<div style="font-size:12px;"><strong>${all.length}</strong> ürün otomatik eklenmiş görünüyor (Excel toplu aktarım / Kataloglar - Boru Tipi / Kataloglar - Yeni Ürün). <strong>${importCleanupSelected.size}</strong> tanesi seçili.</div>`;
 }
 
 function renderImportCleanupList() {
@@ -2441,10 +2490,11 @@ function renderImportCleanupList() {
 
   listBox.innerHTML = all.map(p => {
     const isOverwrite = (p.lastUpdatedBy || '').includes('Güncellendi');
+    const sourceTag = AUTO_CREATED_SOURCE_TAGS.find(tag => (p.lastUpdatedBy || '').includes(tag)) || '';
     return `
       <label style="display:flex; align-items:center; gap:8px; padding:5px 4px; cursor:pointer; ${importCleanupSelected.has(p.code) ? 'background:#FEE2E2;' : ''}">
         <input type="checkbox" ${importCleanupSelected.has(p.code) ? 'checked' : ''} onchange="toggleImportCleanupCode('${p.code}')">
-        <span style="flex:1; font-size:13px;">${p.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}, ${p.qty||0} ${p.unit||'Adet'}, ₺${formatMoney(p.price||0)})</small>${isOverwrite ? ' <small style="color:#DC2626; font-weight:600;">— mevcut kaydın üzerine yazılmış!</small>' : ''}</span>
+        <span style="flex:1; font-size:13px;">${p.name} <small style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code}, ${p.qty||0} ${p.unit||'Adet'}, ₺${formatMoney(p.price||0)})</small> <small style="color:var(--info);">[${sourceTag}]</small>${isOverwrite ? ' <small style="color:#DC2626; font-weight:600;">— mevcut kaydın üzerine yazılmış!</small>' : ''}</span>
       </label>
     `;
   }).join('');
@@ -2472,7 +2522,31 @@ async function executeImportCleanup() {
     await dbBarcodeCache.update(barcodeUpdates);
     codes.forEach(c => delete productsData[c]);
 
-    showToast(`✅ ${codes.length} toplu içe aktarım kaydı kalıcı olarak silindi.`);
+    // PIPE-... kodlu (Kataloglar > Boru Tipi) ürünler siliniyorsa, ilişkili
+    // pipe_types boyut kaydını da temizle ki "Boru Tipleri" listesinde
+    // artık var olmayan bir stok kaydına işaret eden yetim bir satır kalmasın.
+    const pipeUpdates = {};
+    codes.forEach(code => {
+      if (!code.startsWith('PIPE-')) return;
+      for (const [tipId, t] of Object.entries(pipeTypesData)) {
+        for (const boyutId of Object.keys(t)) {
+          if (boyutId === 'name') continue;
+          if (`PIPE-${tipId}-${boyutId}` === code) {
+            pipeUpdates[`${tipId}/${boyutId}`] = null;
+          }
+        }
+      }
+    });
+    if (Object.keys(pipeUpdates).length > 0) {
+      await dbPipeTypes.update(pipeUpdates);
+      Object.keys(pipeUpdates).forEach(path => {
+        const [tipId, boyutId] = path.split('/');
+        if (pipeTypesData[tipId]) delete pipeTypesData[tipId][boyutId];
+      });
+      if (typeof renderPipeTypesList === 'function') renderPipeTypesList();
+    }
+
+    showToast(`✅ ${codes.length} otomatik eklenmiş kayıt kalıcı olarak silindi.`);
     closeImportCleanupModal();
     if(typeof renderGrid === 'function') renderGrid();
   } catch(err) {
@@ -3129,6 +3203,8 @@ function renderGrid() {
   const grid = document.getElementById('grid');
   const search = document.getElementById('search').value.toLowerCase();
   const sortBy = document.getElementById('sort-select').value;
+  const brandFilterEl = document.getElementById('brand-filter');
+  const brandFilter = brandFilterEl ? brandFilterEl.value : '';
 
   if (search !== lastGridSearch) {
     gridCurrentPage = 1;
@@ -3147,6 +3223,7 @@ function renderGrid() {
     const pLoc = p.location ? p.location.toLowerCase() : '';
     const pBrand = p.brand ? p.brand.toLowerCase() : '';
 
+    if (brandFilter && p.brand !== brandFilter) return;
     if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
       count++;
       units += parseFloat(p.qty || 0);
