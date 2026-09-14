@@ -1032,7 +1032,10 @@
       </div>
 
       <div class="form-card" id="katalog-ai-result-card" style="display:none;">
-        <h3 style="margin-top:0; font-family:'Oswald';">🤖 AI Katalog Sonuçları</h3>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+          <h3 style="margin-top:0; font-family:'Oswald';">🤖 AI Katalog Sonuçları</h3>
+          <button type="button" class="btn btn-dark btn-sm" style="width:auto; flex-shrink:0;" onclick="closeKatalogAiResultCard()">❌ Kapat</button>
+        </div>
         <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:10px;">Yapay zeka kataloğu okuyup markayı, ürünleri, ölçülerini ve katalog fiyatlarını tek başlık altında listeledi. Fiyatlar; markanın "İskonto/KDV Ayarları" panelindekiyle <b>aynı formülle</b> (Katalog Fiyatı → İskonto → +KDV → +Kâr) otomatik hesaplanır — Fiyatlandırma panelindeki ve Boru Boyutu ekranındaki hesaplamayla birebir aynıdır. "⚠️ Zaten stokta" görünen ürünler varsayılan olarak işaretsizdir; işaretlerseniz yeni kayıt açılmaz, mevcut ürünün fiyatı güncellenir.</p>
         <div id="katalog-ai-status" style="margin-bottom:10px; font-size:12px; display:none; font-weight:600;"></div>
 
@@ -1062,6 +1065,17 @@
       </div>
 
       <div class="form-card">
+        <h3 style="margin-top:0; font-family:'Oswald';">📜 Geçmiş Yüklenen PDF'ler (AI)</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:10px;">"🤖 AI ile Oku" ile okutup sisteme işlediğiniz katalogların geçmişi. Test amaçlı veya hatalı bir yükleme yaptıysanız, o işlemin oluşturduğu ürünleri buradan toplu geri alabilirsiniz (zaten var olup sadece fiyatı güncellenen ürünlere dokunulmaz).</p>
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="toggleAllAiHistory(true)">Tümünü Seç</button>
+          <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="toggleAllAiHistory(false)">Hiçbirini Seçme</button>
+        </div>
+        <div id="ai-history-list" style="max-height:260px; overflow-y:auto; border:1px solid var(--steel-line); border-radius:6px; padding:6px;"></div>
+        <button type="button" class="btn btn-danger" style="width:100%; margin-top:10px;" id="ai-history-undo-btn" onclick="undoSelectedAiHistory()" disabled>🗑️ Seçilenleri Geri Al</button>
+      </div>
+
+      <div class="form-card">
         <h3 style="margin-top:0; font-family:'Oswald';">🧾 Tekil Ürün Fişleri</h3>
         <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">Marka kataloğu dışında, elinizdeki tek bir ürün fişini (fotoğraf veya PDF) kaydedin.</p>
         <div class="form-row">
@@ -1079,16 +1093,6 @@
         <button type="button" class="btn btn-primary" onclick="document.getElementById('katalog-single-file').click()">📤 Fiş Fotoğrafı/PDF Seç ve Kaydet</button>
         <div id="katalog-single-status" style="margin-top:8px; font-size:12px; font-weight:bold; display:none;"></div>
         <div id="katalog-single-list" style="margin-top:14px;"></div>
-      </div>
-
-      <div class="form-card">
-        <h3 style="margin-top:0; font-family:'Oswald';">🤖 AI ile Katalogdan Ürün Aktar</h3>
-        <p style="font-size:12px; color:var(--steel); margin-top:-5px; margin-bottom:12px;">
-          Elinizdeki katalog sayfasının fotoğrafını (veya PDF'ini) yükleyin — yapay zeka markayı, ürünleri tek başlık altında toplayıp altındaki ölçü/fiyatları okur ve aşağıdaki "Boru Tipleri" listesine otomatik işler. Satış fiyatı, markanın kayıtlı İskonto/KDV/Kâr oranlarına göre otomatik hesaplanır — marka sistemde yoksa oranlar 0 olarak eklenir, sonradan "Marka İskonto/KDV Ayarları" panelinden girmeniz gerekir.
-        </p>
-        <input type="file" id="katalog-ai-file" accept="image/*,application/pdf" style="display:none;" onchange="processCatalogWithAI(event)">
-        <button type="button" class="btn btn-primary" style="width:100%;" onclick="document.getElementById('katalog-ai-file').click()">📸 Katalog Fotoğrafı/PDF Yükle ve AI ile Oku</button>
-        <div id="katalog-ai-status" style="margin-top:8px; font-size:12px; font-weight:bold; display:none;"></div>
       </div>
 
       <div class="form-card">
@@ -1381,25 +1385,6 @@
     <button class="modal-close" onclick="closeKatalogPdfPreview()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';" id="katalog-pdf-preview-title">Katalog</h3>
     <iframe id="katalog-pdf-preview-frame" style="flex:1; width:100%; border:1px solid var(--steel-line); border-radius:6px;"></iframe>
-  </div>
-</div>
-
-<!-- KATALOG: AI OKUMA SONUCU İNCELEME/ONAY MODALI -->
-<div class="modal-overlay" id="katalog-ai-review-modal" style="display:none;">
-  <div class="modal-content" style="max-width:760px; max-height:90vh; overflow-y:auto;">
-    <button class="modal-close" onclick="closeAiReviewModal()">X</button>
-    <h3 style="margin-top:0; font-family:'Oswald';">🔍 AI Okuma Sonucunu Kontrol Et</h3>
-    <p style="font-size:12px; color:var(--steel); margin-top:-6px;">
-      Kaydetmeden önce gözden geçirin: ürün adı yanlış okunduysa (kod yazılmış olabilir) düzeltin, her ürünün hangi boru tipine gideceğini seçin, istemediğiniz ürün/ölçüleri işaretini kaldırarak çıkarın.
-    </p>
-    <div class="form-row" style="grid-template-columns:1fr;">
-      <div><label>Marka</label><input type="text" id="ai-review-brand" placeholder="Marka adı"></div>
-    </div>
-    <div id="ai-review-products" style="margin-top:10px;"></div>
-    <div style="display:flex; gap:8px; margin-top:14px;">
-      <button type="button" class="btn btn-dark" onclick="closeAiReviewModal()">İptal</button>
-      <button type="button" class="btn btn-success" onclick="confirmAiReviewAndSave()">✅ Onayla ve Kaydet</button>
-    </div>
   </div>
 </div>
 
@@ -1765,8 +1750,8 @@
   </div>
 </div>
 
-<script src="app-core.js?v=6"></script>
-<script src="app-operations.js?v=8"></script>
+<script src="app-core.js?v=7"></script>
+<script src="app-operations.js?v=9"></script>
 <script src="app-inventory.js?v=4"></script>
 </body>
 </html>
