@@ -27,7 +27,7 @@ const dbSenetler = dbRoot.child('senetler');
 const dbCatalogPdfs = dbRoot.child('catalog_pdfs');
 const dbCatalogMeta = dbRoot.child('catalog_meta');
 const dbPipeTypes = dbRoot.child('pipe_types');
-const dbCatalogAiHashes = dbRoot.child('catalog_ai_hashes'); // AI ile okutulmuş dosyaların içerik özeti — mükerrer yükleme uyarısı için
+const dbCatalogAiHistory = dbRoot.child('catalog_ai_history'); // AI ile yapılan her katalog okuma/kaydetme işleminin geçmişi — toplu geri alma için
 
 const DEFAULT_BRANDS = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon"];
 let brandSeedChecked = false;
@@ -51,6 +51,7 @@ let highlightTimer = null;
 let catalogPdfsData = {};   // { brandKey: { pdfId: {name, brand, data, sizeKB, uploadedAt, uploadedBy} } }
 let catalogMetaData = {};   // { itemId: {name, brand, barcode, catalogPrice, note, photo, createdAt, createdBy} }
 let pipeTypesData = {};     // { tipId: {name, [boyutId]: {size, price, cost, vat, profit, discount, stock, brand, updatedAt}} }
+let catalogAiHistoryData = {}; // { historyId: {brand, fileName, processedAt, touchedSizes:[{tipId,tipName,boyutId,productCode}]} }
 
 let html5QrcodeScanner = null;
 let currentRole = 'guest';
@@ -404,6 +405,11 @@ dbCatalogMeta.on('value', (snapshot) => {
 dbPipeTypes.on('value', (snapshot) => {
   pipeTypesData = snapshot.val() || {};
   if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderPipeTypesList === 'function') renderPipeTypesList();
+});
+
+dbCatalogAiHistory.on('value', (snapshot) => {
+  catalogAiHistoryData = snapshot.val() || {};
+  if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderAiHistoryList === 'function') renderAiHistoryList();
 });
 
 dbZReports.on('value', (snapshot) => {
