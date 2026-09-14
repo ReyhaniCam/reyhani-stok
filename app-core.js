@@ -2310,3 +2310,28 @@ function printSenet(key) {
     });
   });
 }
+document.addEventListener("DOMContentLoaded", () => {
+    const geceModuButonu = document.getElementById("geceModuButonu");
+    const body = document.body;
+
+    // Sayfa yüklendiğinde eski tercihi kontrol et
+    if (localStorage.getItem("geceModu") === "aktif") {
+        body.classList.add("dark-mode");
+        if(geceModuButonu) geceModuButonu.textContent = "Gündüz Modu ☀️";
+    }
+
+    // Butona tıklandığında modu değiştir
+    if(geceModuButonu) {
+        geceModuButonu.addEventListener("click", () => {
+            body.classList.toggle("dark-mode");
+
+            if (body.classList.contains("dark-mode")) {
+                localStorage.setItem("geceModu", "aktif");
+                geceModuButonu.textContent = "Gündüz Modu ☀️";
+            } else {
+                localStorage.setItem("geceModu", "pasif");
+                geceModuButonu.textContent = "Gece Modu 🌙";
+            }
+        });
+    }
+});
