@@ -1441,7 +1441,7 @@ async function createNewProductRecord(item, sourceLabel, extraUsedCodes) {
 
   await db.child(code).set({
     name: item.name, qty: 0, price: item.price || 0, unit: item.unit,
-    category: item.category || 'Diğer', brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0,
+    category: item.category || 'Diğer', productType: item.productType || null, brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0,
     targetProfit: item.targetProfit || null, code, lastPriceUpdate: new Date().toISOString(),
     lastUpdatedBy: sourceLabel
   });
@@ -1451,7 +1451,7 @@ async function createNewProductRecord(item, sourceLabel, extraUsedCodes) {
   }
   productsData[code] = {
     code, name: item.name, qty: 0, unit: item.unit, price: item.price || 0,
-    category: item.category || 'Diğer', brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0, targetProfit: item.targetProfit || null
+    category: item.category || 'Diğer', productType: item.productType || null, brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0, targetProfit: item.targetProfit || null
   };
   return code;
 }
@@ -3205,6 +3205,17 @@ function renderGrid() {
   const sortBy = document.getElementById('sort-select').value;
   const brandFilterEl = document.getElementById('brand-filter');
   const brandFilter = brandFilterEl ? brandFilterEl.value : '';
+  const groupFilterEl = document.getElementById('group-filter');
+  const groupFilter = groupFilterEl ? groupFilterEl.value : '';
+
+  // "🗂️ Tüm Ana Gruplar" filtresini stoktaki ürünlerde gerçekten kullanılan
+  // kategorilerden (Ana Grup) canlı olarak doldur — seçili değeri korur.
+  if (groupFilterEl) {
+    const distinctGroups = Array.from(new Set(Object.values(productsData).map(p => p.category).filter(c => c && c !== 'Diğer'))).sort((a, b) => a.localeCompare(b, 'tr-TR'));
+    const currentGroupVal = groupFilterEl.value;
+    groupFilterEl.innerHTML = '<option value="">🗂️ Tüm Ana Gruplar</option>' + distinctGroups.map(g => `<option value="${g}">${g}</option>`).join('');
+    groupFilterEl.value = currentGroupVal;
+  }
 
   if (search !== lastGridSearch) {
     gridCurrentPage = 1;
@@ -3224,6 +3235,7 @@ function renderGrid() {
     const pBrand = p.brand ? p.brand.toLowerCase() : '';
 
     if (brandFilter && p.brand !== brandFilter) return;
+    if (groupFilter && p.category !== groupFilter) return;
     if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
       count++;
       units += parseFloat(p.qty || 0);
@@ -3759,9 +3771,13 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
     const gDisc = document.getElementById('katalog-ai-global-discount');
     const gVat = document.getElementById('katalog-ai-global-vat');
     const gProfit = document.getElementById('katalog-ai-global-profit');
+    const gGroup = document.getElementById('katalog-ai-global-group');
     if (gDisc) gDisc.value = settings.discount || 0;
     if (gVat) gVat.value = settings.vat || 0;
     if (gProfit) gProfit.value = settings.profit || 0;
+    // Ana Grup için markanın "Malzeme Sınıfı" alanı varsayılan önerilir (örn.
+    // "Tesisat Malzemeleri") — admin isterse üzerine yazabilir.
+    if (gGroup) gGroup.value = settings.category || '';
 
     let newCount = 0, matchedCount = 0, skippedNoPrice = 0;
     items.forEach(item => {
@@ -3789,6 +3805,10 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
       katalogAiCart.push({
         name: fullName, size, brand: brandName, cost,
         discount, vat, profit,
+        // Alt Grup = ölçüsüz ürün adı (örn. "Dirsek") — aynı katalogdaki 10-12
+        // farklı ölçü otomatik olarak bu ortak başlık altında toplanır. Ana Grup
+        // (örn. "Tesisat Malzemeleri") ise yukarıdaki tek kutudan tüm satırlara uygulanır.
+        mainGroup: settings.category || '', subGroup: aiName,
         price: Math.round(salePrice * 100) / 100,
         matched: isMatch, matchedCode: isMatch ? matchedProduct.code : null,
         matchedQty,
@@ -3835,6 +3855,8 @@ function renderKatalogAiCart() {
     <tr style="border-bottom:1px dashed var(--steel-line); ${item.matched ? 'opacity:0.65;' : ''}">
       <td style="padding:6px 4px; text-align:center;"><input type="checkbox" ${item.include ? 'checked' : ''} onchange="katalogAiCart[${i}].include=this.checked"></td>
       <td style="padding:6px 4px;"><input type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="min-width:170px;" oninput="katalogAiCart[${i}].name=this.value"></td>
+      <td style="padding:6px 4px;"><input type="text" list="brand-category-suggestions" value="${(item.mainGroup || '').replace(/"/g, '&quot;')}" style="min-width:120px;" oninput="katalogAiCart[${i}].mainGroup=this.value" placeholder="Ana Grup"></td>
+      <td style="padding:6px 4px;"><input type="text" value="${(item.subGroup || '').replace(/"/g, '&quot;')}" style="min-width:100px;" oninput="katalogAiCart[${i}].subGroup=this.value" placeholder="Alt Grup"></td>
       <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.cost}" style="width:80px;" oninput="katalogAiCart[${i}].cost=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
       <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.discount}" style="width:60px;" oninput="katalogAiCart[${i}].discount=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
       <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.vat}" style="width:60px;" oninput="katalogAiCart[${i}].vat=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
@@ -3863,14 +3885,15 @@ function applyGlobalKatalogAiSettings() {
   const discount = parseFloat(document.getElementById('katalog-ai-global-discount').value) || 0;
   const vat = parseFloat(document.getElementById('katalog-ai-global-vat').value) || 0;
   const profit = parseFloat(document.getElementById('katalog-ai-global-profit').value) || 0;
+  const mainGroup = document.getElementById('katalog-ai-global-group').value.trim();
 
-  katalogAiCart.forEach((item) => { item.discount = discount; item.vat = vat; item.profit = profit; });
+  katalogAiCart.forEach((item) => { item.discount = discount; item.vat = vat; item.profit = profit; if (mainGroup) item.mainGroup = mainGroup; });
   katalogAiCart.forEach((_, i) => recalcKatalogAiRow(i));
   renderKatalogAiCart();
 
   if (katalogAiContext && katalogAiContext.brand) {
-    dbBrandSettings.child(katalogAiContext.brand).set({ discount, vat, profit }, (err) => {
-      if (!err) showToast(`"${katalogAiContext.brand}" markasının varsayılan iskonto/KDV/kâr oranı da güncellendi.`);
+    dbBrandSettings.child(katalogAiContext.brand).update({ discount, vat, profit, category: mainGroup || null }, (err) => {
+      if (!err) showToast(`"${katalogAiContext.brand}" markasının varsayılan iskonto/KDV/kâr oranı ve malzeme sınıfı da güncellendi.`);
     });
   }
 }
@@ -3895,18 +3918,22 @@ async function completeKatalogAiImport() {
         await db.child(item.matchedCode).update({
           costPrice: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price,
           brand: item.brand || productsData[item.matchedCode].brand || null,
+          category: item.mainGroup || productsData[item.matchedCode].category || 'Diğer',
+          productType: item.subGroup || productsData[item.matchedCode].productType || null,
           lastPriceUpdate: new Date().toISOString(),
           lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')'
         });
         productsData[item.matchedCode] = Object.assign({}, productsData[item.matchedCode], {
           costPrice: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price,
-          brand: item.brand || productsData[item.matchedCode].brand || null
+          brand: item.brand || productsData[item.matchedCode].brand || null,
+          category: item.mainGroup || productsData[item.matchedCode].category || 'Diğer',
+          productType: item.subGroup || productsData[item.matchedCode].productType || null
         });
         updatedCodes.push(item.matchedCode);
       } else {
         // Yeni ürün kaydını, fiş/toplu yükleme akışıyla AYNI merkezi fonksiyonla oluşturuyoruz.
         const code = await createNewProductRecord({
-          name: item.name, unit: 'Adet', category: 'Diğer', brand: item.brand,
+          name: item.name, unit: 'Adet', category: item.mainGroup || 'Diğer', productType: item.subGroup || null, brand: item.brand,
           cost: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price
         }, (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')', usedCodes);
         usedCodes.add(code);
