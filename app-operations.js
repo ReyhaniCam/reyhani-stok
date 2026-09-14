@@ -3311,6 +3311,7 @@ function initKatalogTab() {
   renderBrandCatalogList();
   renderSingleReceipts();
   renderPipeTypesList();
+  renderAiHistoryList();
   const searchEl = document.getElementById('katalog-search');
   if (searchEl) searchEl.value = '';
   renderKatalogSearchResults();
@@ -3810,10 +3811,24 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
   }
 }
 
+// AI okuma sonucu kartını (ve içindeki geçici sepeti) kapatır — "pdf açık
+// kalıyor, geri gidemiyorum" sorununu çözmek için: okuma bitince/kullanıcı
+// vazgeçtiğinde bu kartı açıkça kapatabilsin.
+function closeKatalogAiResultCard() {
+  if (katalogAiCart.length > 0 && !confirm("Sisteme henüz işlenmemiş " + katalogAiCart.length + " ürün var. Kapatırsanız bu liste kaybolacak (veritabanına hiçbir şey yazılmadı). Kapatmak istiyor musunuz?")) {
+    return;
+  }
+  katalogAiCart = [];
+  katalogAiContext = null;
+  const card = document.getElementById('katalog-ai-result-card');
+  if (card) card.style.display = 'none';
+  const statusMsg = document.getElementById('katalog-ai-status');
+  if (statusMsg) statusMsg.style.display = 'none';
+}
+
 function renderKatalogAiCart() {
   const tbody = document.getElementById('katalog-ai-items');
   if (!tbody) return;
-
   if (katalogAiCart.length === 0) { tbody.innerHTML = ''; return; }
 
   tbody.innerHTML = katalogAiCart.map((item, i) => `
@@ -3869,6 +3884,8 @@ async function completeKatalogAiImport() {
   const usedCodes = new Set();
   let successCount = 0;
   const failed = [];
+  const createdCodes = [];
+  const updatedCodes = [];
 
   for (const item of katalogAiCart) {
     if (!item.include) continue;
@@ -3885,6 +3902,7 @@ async function completeKatalogAiImport() {
           costPrice: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price,
           brand: item.brand || productsData[item.matchedCode].brand || null
         });
+        updatedCodes.push(item.matchedCode);
       } else {
         // Yeni ürün kaydını, fiş/toplu yükleme akışıyla AYNI merkezi fonksiyonla oluşturuyoruz.
         const code = await createNewProductRecord({
@@ -3892,11 +3910,24 @@ async function completeKatalogAiImport() {
           cost: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price
         }, (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')', usedCodes);
         usedCodes.add(code);
+        createdCodes.push(code);
       }
       successCount++;
     } catch (err) {
       failed.push(`${item.name} (${err.message})`);
     }
+  }
+
+  // "Geçmiş Yüklenen PDF'ler" listesi için bu işlemi kaydet — özellikle YENİ
+  // OLUŞTURULAN ürünler, hatalı/test amaçlı bir yüklemeyse toplu geri alınabilsin diye.
+  if (createdCodes.length > 0 || updatedCodes.length > 0) {
+    await dbCatalogAiHistory.push({
+      brand: katalogAiContext?.brand || null,
+      pdfName: katalogAiContext ? ((catalogPdfsData[katalogAiContext.brandKey] || {})[katalogAiContext.pdfId] || {}).name : null,
+      processedAt: new Date().toISOString(),
+      processedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan'),
+      createdCodes, updatedCodes
+    });
   }
 
   katalogAiCart = katalogAiCart.filter(i => !i.include);
@@ -4121,315 +4152,107 @@ async function persistPipeSize(tipId, tipName, boyutId, sizeData) {
   return productCode;
 }
 
-// ---------- 4.5) AI İLE KATALOGDAN TOPLU ÜRÜN AKTARIMI ----------
-// Malzeme fişindeki AI okuma motorunun BİREBİR aynısı (aynı model, aynı istek
-// yapısı) — farkla: burada bir katalog sayfası okunuyor, marka + ürün + ölçü/fiyat
-// tespit edilip "Boru Tipleri" yapısına ve dolayısıyla normal stoğa işleniyor.
-// Satış fiyatı, markanın "Marka İskonto/KDV Ayarları" panelinde kayıtlı
-// iskonto/KDV/kâr oranlarına göre otomatik hesaplanır.
-async function processCatalogWithAI(event) {
-  const file = event.target.files[0];
-  if (!file) return;
+// ---------- 4.7) GEÇMİŞ YÜKLENEN PDF'LER (AI) — TOPLU GERİ ALMA ----------
+// "🤖 AI ile Oku" ile bir katalog PDF'i okutup "✅ İşaretli Ürünleri Sisteme
+// İşle" ile onaylandığında, o işlemde YENİ OLUŞTURULAN ürün kodları burada
+// kayıt altına alınır. Sadece test amaçlı yükleme yaptıysanız ya da yanlış
+// bir katalog okuttuysanız, o işlemin oluşturduğu ürünleri toplu geri
+// alabilirsiniz. Zaten var olan bir ürünün sadece fiyatı güncellenmişse
+// (createdCodes'ta değil, updatedCodes'ta görünür) güvenli bir "geri alma"
+// mümkün olmadığı için o ürünler silinmez, sadece bilgi olarak gösterilir.
+let aiHistorySelected = new Set();
 
-  if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); event.target.value = ''; return; }
+function renderAiHistoryList() {
+  const box = document.getElementById('ai-history-list');
+  if (!box) return;
+  const entries = Object.entries(catalogAiHistoryData).sort((a, b) => new Date(b[1].processedAt) - new Date(a[1].processedAt));
 
-  const statusEl = document.getElementById('katalog-ai-status');
-
-  // 1) Mükerrer yükleme kontrolü — bu dosyanın (byte içeriğine göre) daha önce
-  // AI ile okutulup okutulmadığını kontrol et. Aynı dosya farklı isimle
-  // kaydedilmiş olsa bile içerik aynıysa yakalanır.
-  let fileHash;
-  try {
-    fileHash = await computeFileHash(file);
-  } catch (e) {
-    fileHash = null; // hash hesaplanamazsa (eski tarayıcı vb.) mükerrer kontrolünü atla, süreci durdurma
+  if (entries.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz AI ile okutulup sisteme işlenmiş bir katalog yok.</p>`;
+    const btn = document.getElementById('ai-history-undo-btn');
+    if (btn) btn.disabled = true;
+    return;
   }
 
-  if (fileHash) {
-    try {
-      const snap = await dbCatalogAiHashes.child(fileHash).once('value');
-      const prev = snap.val();
-      if (prev) {
-        const proceed = confirm(
-          `⚠️ Bu dosyayı daha önce okutmuşsunuz:\n\n` +
-          `Marka: ${prev.brand || '(okunamadı)'}\n` +
-          `Tarih: ${new Date(prev.processedAt).toLocaleString('tr-TR')}\n\n` +
-          `Yine de tekrar okutmak istiyor musunuz? (Zaten var olan ölçülerin fiyatı güncellenecek, yenileri eklenecek.)`
-        );
-        if (!proceed) { event.target.value = ''; return; }
-      }
-    } catch (e) { /* mükerrer kontrolü başarısız olursa süreci durdurmadan devam et */ }
-  }
-
-  let apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    apiKey = prompt("Katalog okuyabilmek için Google API Anahtarınızı girmelisiniz:");
-    if (!apiKey) { event.target.value = ''; return; }
-    localStorage.setItem('gemini_api_key', apiKey.trim());
-  }
-
-  if (statusEl) {
-    statusEl.style.display = 'block';
-    statusEl.style.color = '#F59E0B';
-    statusEl.innerHTML = '⏳ Katalog inceleniyor, bekleyin...';
-  }
-
-  try {
-    const base64Data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = e => reject(e);
-    });
-    const pureBase64 = base64Data.split(',')[1];
-
-    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
-
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { text: "Sen bir ürün kataloğu/fiyat listesi okuma sistemisin. Bu görselde bir toptancı/üretici markasının ürün kataloğu ya da fiyat listesi var (örn. boru/fitings, hırdavat, yapı malzemesi). Katalogdaki MARKA ADINI ve ürünleri tespit et.\n\nÇOK ÖNEMLİ — AD ile KOD'u KARIŞTIRMA: Katalog tablolarında genellikle 'Ürün Kodu' / 'Stok Kodu' / 'Model No' gibi bir sütun (örn. '45D-120', 'A-2201') ve ayrıca 'Ürün Adı' / 'Tanım' / 'Açıklama' gibi tanımlayıcı bir isim sütunu (örn. 'Açık Dirsek', 'Manşon', 'T Parçası') bulunur. 'name' alanına KESİNLİKLE ürün kodunu/model numarasını YAZMA — sadece harflerden oluşan, insanın okuyup anlayacağı tanımlayıcı ürün adını yaz. Eğer bir satırda okunabilir bir isim yoksa, sadece kod varsa, o satırı atla, JSON'a hiç ekleme.\n\nAynı ürünün farklı ölçü/boyut seçenekleri varsa HEPSİNİ TEK bir ürün başlığı altında topla (örn. 'Açık Dirsek' adlı üründe 20mm, 25mm, 32mm ölçüleri varsa bunların hepsi 'Açık Dirsek' başlığı altındaki tek bir listede yer almalı; 'Açık Dirsek' ve 'Kapalı Dirsek' birbirinden FARKLI ürün başlıklarıdır, ASLA birbirine karıştırma ya da aynı başlıkta birleştirme). Her ölçü için o ölçüye karşılık gelen KATALOG (LİSTE) FİYATINI oku; katalogdaki ürün kodunu 'code' alanına (varsa) ayrıca yaz.\n\nSADECE geçerli bir JSON nesnesi ver, başka hiçbir açıklama ekleme. Format tam olarak şu şekilde olmalı: {\"brand\": \"Marka Adı\", \"products\": [{\"name\": \"Açık Dirsek\", \"sizes\": [{\"size\": \"20mm\", \"price\": 5.50, \"code\": \"45D-120\"}]}]}. price alanı KDV/iskonto UYGULANMAMIŞ HAM KATALOG fiyatıdır, stok miktarı DEĞİLDİR — katalogda stok/adet bilgisi yoktur, sadece fiyat okunur. Marka adı okunamıyorsa \"brand\" alanını boş string yap." },
-            { inlineData: { mimeType: file.type || "image/jpeg", data: pureBase64 } }
-          ]
-        }]
-      })
-    });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error.message);
-    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
-      throw new Error("Yapay zeka görselden veri okuyamadı.");
-    }
-
-    let textResult = data.candidates[0].content.parts[0].text
-      .replace(/```(?:json)?/gi, '')
-      .replace(/```/g, '')
-      .trim();
-
-    const parsed = JSON.parse(textResult);
-    const brand = (parsed.brand || '').trim();
-    const products = Array.isArray(parsed.products) ? parsed.products.filter(p => (p.name || '').trim() && Array.isArray(p.sizes) && p.sizes.length > 0) : [];
-    if (products.length === 0) throw new Error("Katalogda okunabilir ürün adı/ölçü bulunamadı, lütfen daha net bir fotoğraf deneyin.");
-
-    // Artık DOĞRUDAN kaydetmiyoruz — önce admin'e inceleme/onay ekranı gösteriyoruz.
-    pendingAiCatalogData = { brand, products, fileHash, fileName: file.name };
-    if (statusEl) { statusEl.style.display = 'none'; }
-    openAiReviewModal();
-  } catch (err) {
-    if (statusEl) {
-      statusEl.style.color = '#EF4444';
-      statusEl.innerHTML = '❌ Katalog okunamadı: ' + err.message;
-    }
-    alert("Hata: " + err.message);
-  } finally {
-    event.target.value = '';
-  }
-}
-
-// Dosyanın ham baytlarından SHA-256 özeti çıkarır — aynı dosyanın farklı isimle
-// tekrar yüklenmesini de yakalamak için (isme değil, içeriğe bakar).
-async function computeFileHash(file) {
-  const buffer = await file.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
-  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-// ---------- 4.6) AI OKUMA SONUCUNU İNCELEME / ONAY EKRANI ----------
-// AI'ın okuduğu marka + ürün + ölçü/fiyat listesini veritabanına yazmadan ÖNCE
-// admin'e gösterir: ürün adı düzeltilebilir, hangi mevcut boru tipine
-// eşleşeceği (ya da yeni tip olarak mı ekleneceği) seçilebilir, istenmeyen
-// ürün/ölçüler listeden çıkarılabilir. Sadece "Onayla ve Kaydet" ile veritabanına yazılır.
-let pendingAiCatalogData = null; // { brand, products:[{name, sizes:[{size,price,code}]}], fileHash, fileName }
-let aiReviewExcludedProducts = new Set(); // dışarıda tutulan ürün indexleri
-let aiReviewExcludedSizes = new Set();    // dışarıda tutulan "prodIdx-sizeIdx" anahtarları
-let aiReviewTipOverrides = {};            // { prodIdx: tipId veya '__new__' }
-
-function openAiReviewModal() {
-  if (!pendingAiCatalogData) return;
-  aiReviewExcludedProducts = new Set();
-  aiReviewExcludedSizes = new Set();
-  aiReviewTipOverrides = {};
-
-  // Her ürün için varsayılan eşleşmeyi otomatik öner (isim birebir aynıysa o tipi seç, değilse "Yeni Tip").
-  pendingAiCatalogData.products.forEach((prod, idx) => {
-    const match = Object.keys(pipeTypesData).find(id => normalizeTr(pipeTypesData[id].name) === normalizeTr(prod.name));
-    aiReviewTipOverrides[idx] = match || '__new__';
-  });
-
-  document.getElementById('ai-review-brand').value = pendingAiCatalogData.brand || '';
-  renderAiReviewModal();
-  document.getElementById('katalog-ai-review-modal').style.display = 'flex';
-}
-
-function closeAiReviewModal() {
-  document.getElementById('katalog-ai-review-modal').style.display = 'none';
-  pendingAiCatalogData = null;
-}
-
-function updateAiReviewProductName(idx, val) {
-  pendingAiCatalogData.products[idx].name = val;
-}
-
-function updateAiReviewSizeField(prodIdx, sizeIdx, field, val) {
-  const sz = pendingAiCatalogData.products[prodIdx].sizes[sizeIdx];
-  if (field === 'price') sz.price = parseFloat(val) || 0;
-  else sz.size = val;
-}
-
-function setAiReviewTipOverride(prodIdx, val) {
-  aiReviewTipOverrides[prodIdx] = val;
-}
-
-function toggleAiReviewProduct(idx) {
-  if (aiReviewExcludedProducts.has(idx)) aiReviewExcludedProducts.delete(idx);
-  else aiReviewExcludedProducts.add(idx);
-  renderAiReviewModal();
-}
-
-function toggleAiReviewSize(prodIdx, sizeIdx) {
-  const key = prodIdx + '-' + sizeIdx;
-  if (aiReviewExcludedSizes.has(key)) aiReviewExcludedSizes.delete(key);
-  else aiReviewExcludedSizes.add(key);
-  renderAiReviewModal();
-}
-
-function renderAiReviewModal() {
-  const box = document.getElementById('ai-review-products');
-  if (!box || !pendingAiCatalogData) return;
-
-  const existingTipOptions = Object.entries(pipeTypesData)
-    .map(([id, t]) => `<option value="${id}">${t.name}</option>`).join('');
-
-  box.innerHTML = pendingAiCatalogData.products.map((prod, pIdx) => {
-    const isExcluded = aiReviewExcludedProducts.has(pIdx);
-    const selectedTip = aiReviewTipOverrides[pIdx] || '__new__';
+  box.innerHTML = entries.map(([id, h]) => {
+    const createdCount = (h.createdCodes || []).length;
+    const updatedCount = (h.updatedCodes || []).length;
     return `
-      <div style="border:1px solid var(--steel-line); border-radius:8px; padding:10px; margin-bottom:10px; ${isExcluded ? 'opacity:0.45;' : ''}">
-        <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-          <input type="checkbox" ${isExcluded ? '' : 'checked'} onchange="toggleAiReviewProduct(${pIdx})" title="Bu ürünü içe aktarımdan çıkar/dahil et">
-          <input type="text" value="${(prod.name||'').replace(/"/g,'&quot;')}" oninput="updateAiReviewProductName(${pIdx}, this.value)" style="flex:1; font-weight:700;" placeholder="Ürün adı (kod DEĞİL)">
-        </div>
-        <div style="font-size:11px; color:var(--steel); margin-bottom:6px;">Hangi boru tipine kaydedilecek?</div>
-        <select onchange="setAiReviewTipOverride(${pIdx}, this.value)" style="margin-bottom:8px;" ${isExcluded ? 'disabled' : ''}>
-          <option value="__new__" ${selectedTip === '__new__' ? 'selected' : ''}>🆕 Yeni Tip Olarak Ekle: "${prod.name}"</option>
-          ${Object.entries(pipeTypesData).map(([id, t]) => `<option value="${id}" ${selectedTip === id ? 'selected' : ''}>↪️ Mevcut Tipe Ekle: "${t.name}"</option>`).join('')}
-        </select>
-        <table style="width:100%; font-size:12px; border-collapse:collapse;">
-          <tr style="text-align:left; color:var(--steel);"><th></th><th>Ölçü</th><th>Katalog Fiyatı (₺)</th>${prod.sizes.some(s=>s.code) ? '<th>Kod</th>' : ''}</tr>
-          ${prod.sizes.map((s, sIdx) => {
-            const szKey = pIdx + '-' + sIdx;
-            const szExcluded = aiReviewExcludedSizes.has(szKey);
-            return `
-              <tr style="${szExcluded ? 'opacity:0.4;' : ''}">
-                <td><input type="checkbox" ${szExcluded ? '' : 'checked'} onchange="toggleAiReviewSize(${pIdx},${sIdx})" ${isExcluded ? 'disabled' : ''}></td>
-                <td><input type="text" value="${(s.size||'').replace(/"/g,'&quot;')}" oninput="updateAiReviewSizeField(${pIdx},${sIdx},'size',this.value)" style="width:80px; padding:4px;" ${isExcluded ? 'disabled' : ''}></td>
-                <td><input type="number" step="0.01" value="${s.price||0}" oninput="updateAiReviewSizeField(${pIdx},${sIdx},'price',this.value)" style="width:90px; padding:4px;" ${isExcluded ? 'disabled' : ''}></td>
-                ${prod.sizes.some(x=>x.code) ? `<td style="color:var(--steel); font-family:'IBM Plex Mono';">${s.code||''}</td>` : ''}
-              </tr>
-            `;
-          }).join('')}
-        </table>
-      </div>
+      <label style="display:flex; align-items:center; gap:8px; padding:8px 4px; border-top:1px dashed var(--steel-line); cursor:pointer; ${aiHistorySelected.has(id) ? 'background:#FEE2E2;' : ''}">
+        <input type="checkbox" ${aiHistorySelected.has(id) ? 'checked' : ''} onchange="toggleAiHistorySelect('${id}')" ${createdCount === 0 ? 'disabled title="Bu işlemde yeni ürün oluşturulmadı, sadece mevcut ürünler güncellendi — geri alınacak bir şey yok"' : ''}>
+        <span style="flex:1; font-size:12px;">
+          📄 ${h.pdfName || 'İsimsiz katalog'} ${h.brand ? `<small style="color:var(--steel);">(${h.brand})</small>` : ''}
+          <br><small style="color:var(--steel);">${new Date(h.processedAt).toLocaleString('tr-TR')} · 🆕 ${createdCount} yeni ürün ${updatedCount ? `· ✏️ ${updatedCount} mevcut ürün fiyatı güncellendi (geri alınamaz)` : ''}</small>
+        </span>
+      </label>
     `;
   }).join('');
+
+  const btn = document.getElementById('ai-history-undo-btn');
+  if (btn) btn.disabled = aiHistorySelected.size === 0;
 }
 
-async function confirmAiReviewAndSave() {
-  if (!pendingAiCatalogData) return;
-  const brand = document.getElementById('ai-review-brand').value.trim();
+function toggleAiHistorySelect(id) {
+  if (aiHistorySelected.has(id)) aiHistorySelected.delete(id);
+  else aiHistorySelected.add(id);
+  renderAiHistoryList();
+}
 
-  // Marka sistemde yoksa otomatik ekle (oranlar 0 gelir; gerçek oranları
-  // "Marka İskonto/KDV Ayarları" panelinden girmeniz gerekir).
-  let brandIsNew = false;
-  if (brand && !brandSettingsData[brand]) {
-    await dbBrandSettings.child(brand).set({ discount: 0, vat: 0, profit: 0 });
-    brandSettingsData[brand] = { discount: 0, vat: 0, profit: 0 };
-    brandIsNew = true;
-  }
-  const brandRates = brand ? (brandSettingsData[brand] || {}) : {};
-  const discount = brandRates.discount || 0;
-  const vat = brandRates.vat || 0;
-  const profit = brandRates.profit || 0;
+function toggleAllAiHistory(select) {
+  aiHistorySelected = select ? new Set(Object.keys(catalogAiHistoryData).filter(id => (catalogAiHistoryData[id].createdCodes || []).length > 0)) : new Set();
+  renderAiHistoryList();
+}
 
-  let addedProducts = 0, addedSizes = 0, updatedSizes = 0;
+async function undoSelectedAiHistory() {
+  const ids = Array.from(aiHistorySelected).filter(id => catalogAiHistoryData[id]);
+  if (ids.length === 0) return;
 
-  for (let pIdx = 0; pIdx < pendingAiCatalogData.products.length; pIdx++) {
-    if (aiReviewExcludedProducts.has(pIdx)) continue;
-    const prod = pendingAiCatalogData.products[pIdx];
-    const prodName = (prod.name || '').trim();
-    if (!prodName) continue;
+  const totalCreated = ids.reduce((s, id) => s + (catalogAiHistoryData[id].createdCodes || []).length, 0);
+  if (totalCreated === 0) { showToast("Seçilen yüklemelerde geri alınacak yeni ürün yok."); return; }
 
-    const override = aiReviewTipOverrides[pIdx] || '__new__';
-    let tipId, tipName;
-    if (override === '__new__') {
-      const newTipRef = dbPipeTypes.push();
-      await newTipRef.child('name').set(prodName);
-      tipId = newTipRef.key;
-      tipName = prodName;
-      pipeTypesData[tipId] = { name: prodName };
-      addedProducts++;
-    } else {
-      tipId = override;
-      tipName = pipeTypesData[tipId] ? pipeTypesData[tipId].name : prodName;
-    }
+  const confirmWord = prompt(
+    `${ids.length} yükleme geri alınacak — bu yüklemelerin OLUŞTURDUĞU toplam ${totalCreated} ürün KALICI OLARAK silinecek.\n` +
+    `(Zaten var olup sadece fiyatı güncellenen ürünlere dokunulmayacak.)\n\n` +
+    `Bu işlem geri alınamaz. Onaylamak için kutuya büyük harflerle "SİL" yazın:`
+  );
+  if (confirmWord !== 'SİL') { showToast("İptal edildi, hiçbir şey silinmedi."); return; }
 
-    for (let sIdx = 0; sIdx < prod.sizes.length; sIdx++) {
-      if (aiReviewExcludedSizes.has(pIdx + '-' + sIdx)) continue;
-      const sz = prod.sizes[sIdx];
-      const sizeLabel = (sz.size || '').toString().trim();
-      const catalogPrice = parseFloat(sz.price) || 0;
-      if (!sizeLabel) continue;
+  const btn = document.getElementById('ai-history-undo-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Geri alınıyor...'; }
 
-      const afterDiscount = catalogPrice * (1 - discount / 100);
-      const netCost = afterDiscount * (1 + vat / 100);
-      const salePrice = netCost * (1 + profit / 100);
+  try {
+    const productUpdates = {};
+    const imageUpdates = {};
+    const barcodeUpdates = {};
 
-      const existingEntry = Object.entries(pipeTypesData[tipId] || {}).find(([k, v]) => k !== 'name' && v.size === sizeLabel);
-      const boyutId = existingEntry ? existingEntry[0] : dbPipeTypes.child(tipId).push().key;
-      const existingStock = existingEntry ? (existingEntry[1].stock || 0) : 0;
-
-      const sizeData = {
-        size: sizeLabel, price: Number(salePrice.toFixed(2)), cost: catalogPrice,
-        vat, profit, discount, stock: existingStock, brand: brand || null,
-        updatedAt: new Date().toISOString()
-      };
-
-      await persistPipeSize(tipId, tipName, boyutId, sizeData);
-      pipeTypesData[tipId][boyutId] = sizeData;
-
-      if (existingEntry) updatedSizes++; else addedSizes++;
-    }
-
-    pipeTypeExpanded.add(tipId);
-  }
-
-  // Mükerrer yükleme uyarısı için bu dosyanın özetini kaydet.
-  if (pendingAiCatalogData.fileHash) {
-    await dbCatalogAiHashes.child(pendingAiCatalogData.fileHash).set({
-      brand, fileName: pendingAiCatalogData.fileName, processedAt: new Date().toISOString()
+    ids.forEach(id => {
+      (catalogAiHistoryData[id].createdCodes || []).forEach(code => {
+        productUpdates[code] = null;
+        imageUpdates[code] = null;
+        barcodeUpdates[code] = null;
+      });
     });
-  }
 
-  renderPipeTypesList();
-  if (typeof renderGrid === 'function') renderGrid();
+    if (Object.keys(productUpdates).length > 0) await db.update(productUpdates);
+    if (Object.keys(imageUpdates).length > 0) await dbProductImages.update(imageUpdates);
+    if (Object.keys(barcodeUpdates).length > 0) await dbBarcodeCache.update(barcodeUpdates);
+    Object.keys(productUpdates).forEach(code => delete productsData[code]);
 
-  const statusEl = document.getElementById('katalog-ai-status');
-  if (statusEl) {
-    statusEl.style.display = 'block';
-    statusEl.style.color = '#10B981';
-    statusEl.innerHTML =
-      `✅ ${brand ? `<b>${brand}</b> markası kaydedildi — ` : ''}${addedProducts} yeni ürün tipi, ${addedSizes} yeni ölçü eklendi, ${updatedSizes} ölçü fiyatı güncellendi.` +
-      `<br>Satış fiyatları %${discount} iskonto / %${vat} KDV / %${profit} kâr oranına göre hesaplandı.` +
-      (brandIsNew ? `<br>⚠️ "${brand}" markası sistemde yeni — oranlar şu an 0. Gerçek oranları "Marka İskonto/KDV Ayarları" panelinden girip bu PDF'i tekrar okutursanız fiyatlar otomatik güncellenir.` : '') +
-      `<br>⚠️ Katalogda stok/adet bilgisi olmadığı için yeni eklenen ölçülerin stoğu 0'dır — Kataloglar aramasından "🔢 Stok" ile gerçek miktarı girmeniz gerekir.`;
+    const historyUpdates = {};
+    ids.forEach(id => { historyUpdates[id] = null; });
+    await dbCatalogAiHistory.update(historyUpdates);
+    ids.forEach(id => delete catalogAiHistoryData[id]);
+
+    aiHistorySelected = new Set();
+    renderAiHistoryList();
+    if (typeof renderGrid === 'function') renderGrid();
+    showToast(`✅ ${ids.length} yükleme geri alındı, ${totalCreated} ürün silindi.`);
+  } catch (err) {
+    alert("Geri alma sırasında bir hata oluştu: " + (err.message || err) + "\n\nBazı kayıtlar silinmiş olabilir, lütfen Stok Listesi'ni kontrol edin.");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🗑️ Seçilenleri Geri Al'; }
   }
-  showToast(`Katalog kaydedildi: ${addedProducts} yeni ürün tipi, ${addedSizes + updatedSizes} ölçü işlendi.`);
-  closeAiReviewModal();
 }
-
 
 // ---------- 5) SAYIM OLMADAN SATIŞ İÇİN MANUEL STOK GİRİŞİ ----------
 
