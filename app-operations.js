@@ -1848,7 +1848,7 @@ async function completeGoodsReceipt() {
     if(!item.isNew && !item.justCreated && item.updatePrices) {
       const priceUpdates = {
         lastPriceUpdate: new Date().toISOString(),
-        lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Malzeme Fişi: ' + wholesaler.name + ')'
+        lastUpdatedBy: (getActorLabel()) + ' (Malzeme Fişi: ' + wholesaler.name + ')'
       };
       let hasChange = false;
       if(item.vat !== undefined) { priceUpdates.vat = item.vat; hasChange = true; }
@@ -2161,7 +2161,7 @@ async function executeMergeProducts() {
           dbGoodsReceipts.child(entry.date).child(receiptId).update({
             items: newItems,
             lastEditedAt: new Date().toISOString(),
-            lastEditedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Ürün Birleştirme)'
+            lastEditedBy: (getActorLabel()) + ' (Ürün Birleştirme)'
           })
         );
       }
@@ -2172,7 +2172,7 @@ async function executeMergeProducts() {
     await db.child(mergeCanonicalCode).update({
       qty: newTotalQty,
       lastPriceUpdate: new Date().toISOString(),
-      lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Ürün Birleştirme)'
+      lastUpdatedBy: (getActorLabel()) + ' (Ürün Birleştirme)'
     });
     productsData[mergeCanonicalCode].qty = newTotalQty;
 
@@ -2556,6 +2556,64 @@ async function executeImportCleanup() {
   }
 }
 
+// ============================================================
+// CİHAZLAR — hangi cihazın ne zaman, hangi rolle kullanıldığını gösteren ve
+// gerekirse admin'in uzaktan yeniden adlandırabildiği liste.
+// ============================================================
+function openDevicesModal() {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  renderDevicesList();
+  document.getElementById('devices-modal').style.display = 'flex';
+}
+
+function closeDevicesModal() {
+  document.getElementById('devices-modal').style.display = 'none';
+}
+
+function renderDevicesList() {
+  const box = document.getElementById('devices-list');
+  if (!box) return;
+  const entries = Object.entries(devicesData).sort((a, b) => new Date(b[1].lastSeenAt || 0) - new Date(a[1].lastSeenAt || 0));
+
+  if (entries.length === 0) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz kayıtlı cihaz yok.</p>`;
+    return;
+  }
+
+  box.innerHTML = entries.map(([id, d]) => {
+    const isThisDevice = id === currentDeviceId;
+    const roleLabel = d.lastRole === 'admin' ? 'Yönetici' : (d.lastRole === 'staff' ? 'Çalışan' : d.lastRole || '');
+    return `
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; padding:10px 4px; border-top:1px dashed var(--steel-line);">
+        <div style="font-size:12px;">
+          <strong>📱 ${d.name || 'İsimsiz Cihaz'}</strong> ${isThisDevice ? '<span style="color:var(--success); font-weight:600;">(bu cihaz)</span>' : ''}
+          <br><small style="color:var(--steel);">Son kullanım: ${d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString('tr-TR') : '-'} · ${roleLabel}</small>
+          <br><small style="color:var(--steel);">İlk görülme: ${d.firstSeenAt ? new Date(d.firstSeenAt).toLocaleString('tr-TR') : '-'}</small>
+        </div>
+        <button type="button" class="btn btn-info btn-sm" style="width:auto; flex-shrink:0;" onclick="renameDeviceById('${id}')">✏️ Adı Değiştir</button>
+      </div>
+    `;
+  }).join('');
+}
+
+function renameDeviceById(deviceId) {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  const d = devicesData[deviceId];
+  if (!d) return;
+  const name = prompt("Bu cihazın adını değiştirin:", d.name || '');
+  if (name === null) return;
+  const newName = name.trim() || 'İsimsiz Cihaz';
+  dbDevices.child(deviceId).update({ name: newName }, (err) => {
+    if (err) { alert("Güncellenemedi: " + err.message); return; }
+    if (deviceId === currentDeviceId) {
+      currentDeviceName = newName;
+      try { localStorage.setItem('reyhani_device_name', newName); } catch (e) {}
+      updateDeviceBadge();
+    }
+    showToast("Cihaz adı güncellendi: " + newName);
+  });
+}
+
 function populateReceiptEditProductList() {
   const dl = document.getElementById('receipt-edit-product-list');
   if(!dl) return;
@@ -2856,7 +2914,7 @@ async function saveReceiptEdit() {
 
   const { receiptId, date, original } = receiptEditTarget;
   const wholesalerName = original.wholesalerName || 'Bilinmeyen Toptancı';
-  const editedBy = (currentRole === 'admin' ? 'Yönetici' : 'Çalışan');
+  const editedBy = (getActorLabel());
 
   // 0) Listede "YENİ ÜRÜN" olarak eklenmiş kalemler varsa, önce bunları
   // gerçekten sisteme kaydet (barkod/kod çakışması varsa burada durur).
@@ -3427,7 +3485,7 @@ async function uploadCatalogPdf(event) {
     await newRef.set({
       name, brand: katalogPdfUploadBrand, data: dataUrl, sizeKB,
       uploadedAt: new Date().toISOString(),
-      uploadedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+      uploadedBy: getActorLabel()
     });
 
     statusEl.style.color = '#10B981';
@@ -3502,7 +3560,7 @@ async function uploadSingleReceipt(event) {
       name, brand: brand || null, barcode: barcode || null, catalogPrice,
       note: note || null, photo: fileData, fileType: file.type,
       createdAt: new Date().toISOString(),
-      createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+      createdBy: getActorLabel()
     });
 
     statusEl.style.color = '#10B981';
@@ -3653,7 +3711,7 @@ async function applyToExistingProduct() {
     await db.child(code).update({
       costPrice: cost, vat, targetProfit: profit, price, brand: brand || p.brand || null,
       lastPriceUpdate: new Date().toISOString(),
-      lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog Fiyatlandırma)'
+      lastUpdatedBy: (getActorLabel()) + ' (Katalog Fiyatlandırma)'
     });
     productsData[code] = Object.assign({}, p, { costPrice: cost, vat, targetProfit: profit, price, brand: brand || p.brand || null });
 
@@ -3682,7 +3740,7 @@ async function addAsNewProductFromKatalog() {
     const code = await createNewProductRecord({
       name: katalogPricingContext.name, unit, category: 'Diğer', brand: brand || null,
       cost, vat, targetProfit: profit, price
-    }, (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalogdan Eklendi)');
+    }, (getActorLabel()) + ' (Katalogdan Eklendi)');
 
     showToast(`"${katalogPricingContext.name}" yeni ürün olarak eklendi (${code}). Stok miktarı 0 — malzeme fişiyle veya "🔢 Stok Gir" ile stok girin.`);
     closeKatalogPricingModal();
@@ -3921,7 +3979,7 @@ async function completeKatalogAiImport() {
           category: item.mainGroup || productsData[item.matchedCode].category || 'Diğer',
           productType: item.subGroup || productsData[item.matchedCode].productType || null,
           lastPriceUpdate: new Date().toISOString(),
-          lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')'
+          lastUpdatedBy: (getActorLabel()) + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')'
         });
         productsData[item.matchedCode] = Object.assign({}, productsData[item.matchedCode], {
           costPrice: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price,
@@ -3935,7 +3993,7 @@ async function completeKatalogAiImport() {
         const code = await createNewProductRecord({
           name: item.name, unit: 'Adet', category: item.mainGroup || 'Diğer', productType: item.subGroup || null, brand: item.brand,
           cost: item.cost, vat: item.vat, targetProfit: item.profit, price: item.price
-        }, (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')', usedCodes);
+        }, (getActorLabel()) + ' (Katalog AI: ' + (katalogAiContext?.brand || '') + ')', usedCodes);
         usedCodes.add(code);
         createdCodes.push(code);
       }
@@ -3952,7 +4010,7 @@ async function completeKatalogAiImport() {
       brand: katalogAiContext?.brand || null,
       pdfName: katalogAiContext ? ((catalogPdfsData[katalogAiContext.brandKey] || {})[katalogAiContext.pdfId] || {}).name : null,
       processedAt: new Date().toISOString(),
-      processedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan'),
+      processedBy: (getActorLabel()),
       createdCodes, updatedCodes
     });
   }
@@ -4172,7 +4230,7 @@ async function persistPipeSize(tipId, tipName, boyutId, sizeData) {
     vat: sizeData.vat || 0, targetProfit: sizeData.profit || 0,
     category: 'Boru/Fitings', brand: sizeData.brand || null,
     lastPriceUpdate: new Date().toISOString(),
-    lastUpdatedBy: (currentRole === 'admin' ? 'Yönetici' : 'Çalışan') + ' (Boru Tipi: ' + tipName + ')'
+    lastUpdatedBy: (getActorLabel()) + ' (Boru Tipi: ' + tipName + ')'
   };
   await db.child(productCode).set(productRecord);
   productsData[productCode] = productRecord;
