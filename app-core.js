@@ -114,6 +114,99 @@ async function sha256Hex(text) {
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
+// ============================================================
+// CİHAZ KİMLİĞİ (İşlem Takibi İçin) — Cihaz Yetkilendirme (güvenlik) ile
+// KARIŞTIRILMAMALI, o ayrı bir sistem. Burada amaç: her tarayıcıya kalıcı,
+// benzersiz bir kimlik verip, ilk girişte kullanıcıdan bu cihaza bir isim
+// vermesini istemek (örn. "İşyeri Bilgisayarı", "Ahmet - Telefon"). Bu isim,
+// o cihazdan yapılan her fiyat/stok/kayıt güncellemesinde "kim tarafından"
+// bilgisine otomatik eklenir — böylece hangi işlemin hangi cihazdan, ne
+// zaman yapıldığı görülebilir (bkz. Ana Sayfa > Son Güncellenenler).
+// ============================================================
+const dbDevices = dbRoot.child('devices');
+let devicesData = {};
+let currentDeviceId = null;
+let currentDeviceName = null;
+
+function getOrCreateDeviceId() {
+  try {
+    let id = localStorage.getItem('reyhani_device_id');
+    if (!id) {
+      id = (crypto.randomUUID ? crypto.randomUUID() : 'dev-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      localStorage.setItem('reyhani_device_id', id);
+    }
+    return id;
+  } catch (e) {
+    return 'dev-unknown-' + Math.random().toString(36).slice(2);
+  }
+}
+
+// Girişten hemen sonra çağrılır: bu cihazın daha önce verilmiş bir adı var mı
+// kontrol eder (önce bu tarayıcının kendi hafızası, yoksa sistemdeki kayıt),
+// hâlâ yoksa kullanıcıya bir isim sorar ve kaydeder.
+async function ensureDeviceNamed() {
+  currentDeviceId = getOrCreateDeviceId();
+  try { currentDeviceName = localStorage.getItem('reyhani_device_name') || null; }
+  catch (e) { currentDeviceName = null; }
+
+  if (!currentDeviceName) {
+    try {
+      const snap = await dbDevices.child(currentDeviceId).once('value');
+      const existing = snap.val();
+      if (existing && existing.name) {
+        currentDeviceName = existing.name;
+        try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
+      }
+    } catch (e) { /* yoksay, aşağıda soracağız */ }
+  }
+
+  if (!currentDeviceName) {
+    const name = prompt("Bu cihazdan sisteme ilk kez giriş yapılıyor.\n\nBu cihaza bir isim verin (örn. 'İşyeri Bilgisayarı', 'Ahmet - Telefon') — bundan sonra yaptığınız her güncellemede bu isim görünecek:");
+    currentDeviceName = (name || '').trim() || 'İsimsiz Cihaz';
+    try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
+    await dbDevices.child(currentDeviceId).set({
+      name: currentDeviceName,
+      firstSeenAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+      lastRole: currentRole
+    });
+  } else {
+    dbDevices.child(currentDeviceId).update({ lastSeenAt: new Date().toISOString(), lastRole: currentRole });
+  }
+
+  updateDeviceBadge();
+}
+
+// Rol + cihaz adını birleştiren TEK merkezi fonksiyon — sistemdeki her "kim
+// yaptı" alanı (lastUpdatedBy, createdBy, uploadedBy, processedBy...) bunu kullanır.
+function getActorLabel() {
+  const role = currentRole === 'admin' ? 'Yönetici' : 'Çalışan';
+  return currentDeviceName ? `${role} (${currentDeviceName})` : role;
+}
+
+function updateDeviceBadge() {
+  const badge = document.getElementById('device-badge');
+  const nameEl = document.getElementById('device-badge-name');
+  if (!badge || !nameEl) return;
+  if (currentRole !== 'guest' && currentDeviceName) {
+    nameEl.textContent = currentDeviceName;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renameCurrentDevice() {
+  if (currentRole === 'guest' || !currentDeviceId) return;
+  const name = prompt("Bu cihazın sistemdeki adını değiştirin:", currentDeviceName || '');
+  if (name === null) return;
+  currentDeviceName = name.trim() || 'İsimsiz Cihaz';
+  try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
+  dbDevices.child(currentDeviceId).update({ name: currentDeviceName, lastSeenAt: new Date().toISOString() });
+  updateDeviceBadge();
+  showToast("Cihaz adı güncellendi: " + currentDeviceName);
+}
+
 let reyhaniDirHandle = null;
 
 async function getReyhaniFolder() {
@@ -412,6 +505,11 @@ dbCatalogAiHistory.on('value', (snapshot) => {
   if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderAiHistoryList === 'function') renderAiHistoryList();
 });
 
+dbDevices.on('value', (snapshot) => {
+  devicesData = snapshot.val() || {};
+  if (typeof renderDevicesList === 'function') renderDevicesList();
+});
+
 dbZReports.on('value', (snapshot) => {
   const data = snapshot.val() || {};
   const listDiv = document.getElementById('past-z-reports-list');
@@ -512,7 +610,7 @@ function clearSalesHistory() {
 function logMovement(code, name, change, type) {
   const dateStr = new Date().toISOString().slice(0, 10);
   const timeStr = new Date().toLocaleTimeString('tr-TR');
-  dbMovements.child(dateStr).push({ time: timeStr, code: code, name: name, change: change, type: type });
+  dbMovements.child(dateStr).push({ time: timeStr, code: code, name: name, change: change, type: type, by: getActorLabel() });
   // Her giriş/çıkışta, otomatik güncelleme açıksa güncel stok Excel dosyasını sessizce yeniden yaz.
   autoUpdateStockExcel();
 }
@@ -580,8 +678,10 @@ async function toggleAuth() {
     if(hash === ADMIN_HASH) { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
     else if(hash === STAFF_HASH) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
     else { alert("Hatalı Şifre!"); return; }
+    await ensureDeviceNamed();
   } else {
     currentRole = 'guest'; showToast("Çıkış yapıldı.");
+    updateDeviceBadge();
   }
   updateAuthUI();
 }
@@ -869,6 +969,9 @@ function updateAuthUI() {
   if(mergeProductsBtn) mergeProductsBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   const importCleanupBtn = document.getElementById('import-cleanup-btn');
   if(importCleanupBtn) importCleanupBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+  const devicesBtn = document.getElementById('devices-btn');
+  if(devicesBtn) devicesBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+  updateDeviceBadge();
   const canAccessKatalog = (currentRole === 'admin' || currentRole === 'staff');
   const katalogBtn = document.getElementById('nav-katalog-btn');
   if(katalogBtn) katalogBtn.style.display = canAccessKatalog ? 'block' : 'none';
@@ -1241,7 +1344,7 @@ function addCustomerDebt() {
     date: dateStr,
     time: timeStr,
     createdAt: now.toISOString(),
-    lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+    lastUpdatedBy: getActorLabel()
   };
 
   dbCustomerDebts.push(debtData, (err) => {
@@ -1692,7 +1795,7 @@ function upsertCustomerAccount(name, phone) {
     tckn: '',
     note: '',
     createdAt: new Date().toISOString(),
-    createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan',
+    createdBy: getActorLabel(),
     autoCreated: true
   });
 }
@@ -1716,7 +1819,7 @@ function registerCustomerAccount() {
   dbCustomers.push({
     name, phone, address, tckn, note,
     createdAt: new Date().toISOString(),
-    createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+    createdBy: getActorLabel()
   }, (err) => {
     if (!err) {
       showToast("Müşteri kaydedildi!");
@@ -2108,7 +2211,7 @@ function saveLedgerTransaction() {
     date: dateStr,
     time: timeStr,
     createdAt: now.toISOString(),
-    lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan',
+    lastUpdatedBy: getActorLabel(),
     saleType: hasCart ? 'borc_sale' : 'manuel_borc'
   };
   if (hasCart) {
@@ -2293,7 +2396,7 @@ function printSenet(key) {
         issueDate: duzenlemeTarihi,
         dueDate: vadeTarihi,
         createdAt: now.toISOString(),
-        createdBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+        createdBy: getActorLabel()
       });
 
       dbCustomerDebts.child(key).update({ senetNo: senetNo, senetDate: duzenlemeTarihi });
@@ -2310,28 +2413,3 @@ function printSenet(key) {
     });
   });
 }
-document.addEventListener("DOMContentLoaded", () => {
-    const geceModuButonu = document.getElementById("geceModuButonu");
-    const body = document.body;
-
-    // Sayfa yüklendiğinde eski tercihi kontrol et
-    if (localStorage.getItem("geceModu") === "aktif") {
-        body.classList.add("dark-mode");
-        if(geceModuButonu) geceModuButonu.textContent = "Gündüz Modu ☀️";
-    }
-
-    // Butona tıklandığında modu değiştir
-    if(geceModuButonu) {
-        geceModuButonu.addEventListener("click", () => {
-            body.classList.toggle("dark-mode");
-
-            if (body.classList.contains("dark-mode")) {
-                localStorage.setItem("geceModu", "aktif");
-                geceModuButonu.textContent = "Gündüz Modu ☀️";
-            } else {
-                localStorage.setItem("geceModu", "pasif");
-                geceModuButonu.textContent = "Gece Modu 🌙";
-            }
-        });
-    }
-});
