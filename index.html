@@ -48,6 +48,7 @@
     <div class="auth-status">
       <button class="cmdk-trigger-btn" onclick="openCommandPalette()" title="Hızlı Arama">🔎 Ara <span class="cmdk-trigger-kbd">Ctrl+K</span></button>
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
+      <span id="device-badge" style="display:none; align-items:center; gap:4px; font-size:11px; color:var(--steel); cursor:pointer; padding:4px 8px; border:1px dashed var(--steel-line); border-radius:12px;" onclick="renameCurrentDevice()" title="Bu cihazın adını değiştirmek için tıklayın">📱 <span id="device-badge-name"></span> ✏️</span>
       <button class="btn btn-primary btn-sm" id="auth-btn" onclick="toggleAuth()">Giriş Yap</button>
     </div>
   </header>
@@ -202,6 +203,7 @@
         <button class="btn btn-primary btn-sm" id="print-all-btn" onclick="printAllLabels()" style="display:none;">🖨️ Toplu Etiket Bas</button>
         <button class="btn btn-warning btn-sm" id="merge-products-btn" onclick="openMergeProductsModal()" style="display:none;" title="Yanlışlıkla birden fazla barkodla kaydedilmiş aynı ürünleri tek kayıtta birleştirir">🔗 Mükerrer Ürünleri Birleştir</button>
         <button class="btn btn-danger btn-sm" id="import-cleanup-btn" onclick="openImportCleanupModal()" style="display:none;" title="Excel ile toplu içe aktarılmış veya Kataloglar modülünden otomatik oluşmuş (ve o zamandan beri elle değiştirilmemiş) ürünleri toplu olarak siler">🗑️ Toplu/Otomatik Eklenenleri Geri Al</button>
+        <button class="btn btn-info btn-sm" id="devices-btn" onclick="openDevicesModal()" style="display:none;" title="Sisteme hangi cihazlardan giriş yapıldığını ve en son ne zaman kullanıldığını gösterir">📱 Cihazlar</button>
       </div>
       <div id="grid" class="grid"></div>
       <div id="grid-load-more-wrap" style="text-align:center; margin-top:20px;"></div>
@@ -1359,6 +1361,18 @@
   </div>
 </div>
 
+<!-- CİHAZLAR MODALI -->
+<div class="modal-overlay" id="devices-modal" style="display:none;">
+  <div class="modal-content" style="max-width:600px;">
+    <button class="modal-close" onclick="closeDevicesModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">📱 Cihazlar</h3>
+    <p style="font-size:12px; color:var(--steel); margin-top:-6px;">
+      Sisteme giriş yapmış her cihazın kendi verdiği isim, en son ne zaman ve hangi rolle kullanıldığı burada listelenir. Bir cihazın adını buradan da değiştirebilirsiniz (örn. yanlış/eksik bir isim girildiyse).
+    </p>
+    <div id="devices-list" style="max-height:400px; overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- MÜKERRER FİŞ İNCELEME/BİRLEŞTİRME MODALI -->
 <div class="modal-overlay" id="duplicate-receipt-modal" style="display:none;">
   <div class="modal-content" style="max-width:680px;">
@@ -1757,8 +1771,8 @@
   </div>
 </div>
 
-<script src="app-core.js?v=7"></script>
-<script src="app-operations.js?v=10"></script>
+<script src="app-core.js?v=8"></script>
+<script src="app-operations.js?v=11"></script>
 <script src="app-inventory.js?v=4"></script>
 </body>
 </html>
