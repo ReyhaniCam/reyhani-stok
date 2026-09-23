@@ -1136,7 +1136,7 @@ async function saveEditProduct() {
     unit: document.getElementById('edit-unit').value,
     category: document.getElementById('edit-category').value,
     lastPriceUpdate: new Date().toISOString(),
-    lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+    lastUpdatedBy: getActorLabel()
   };
 
   if (currentRole === 'admin') {
