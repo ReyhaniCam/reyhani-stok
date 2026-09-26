@@ -946,7 +946,7 @@ function addProduct() {
     if(snapshot.exists()) {
       alert(`HATA: '${code}' barkod numarası zaten başka bir üründe kullanılıyor!`);
     } else {
-      db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, vat, targetProfit, code, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (error) => {
+      db.child(code).set({ name, qty, price, unit, category, brand: brand || null, costPrice, vat, targetProfit, code, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: getActorLabel() }, (error) => {
         if(!error) {
           if(qty > 0) logMovement(code, name, qty, 'YENİ ÜRÜN GİRİŞİ');
           if (!code.startsWith('RYH-')) {
@@ -954,7 +954,8 @@ function addProduct() {
           }
           dbNotifications.push({
             text: `Yeni Ürün Eklendi: ${name} (${qty} ${unit}) - Kategori: ${category}`,
-            time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+            time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}),
+            by: getActorLabel()
           });
           showToast("Ürün eklendi ve bildirim gönderildi!");
           document.getElementById('f-name').value = ''; 
@@ -1006,7 +1007,7 @@ function updatePrice(code) {
   if (newPrice === null) return;
   const parsed = parseFloat(newPrice);
   if (!isNaN(parsed) && parsed >= 0) {
-    db.child(code).update({ price: parsed, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'Yönetici' }, (err) => {
+    db.child(code).update({ price: parsed, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: getActorLabel() }, (err) => {
       if (!err) showToast("Fiyat güncellendi!");
     });
   }
@@ -1136,7 +1137,7 @@ async function saveEditProduct() {
     unit: document.getElementById('edit-unit').value,
     category: document.getElementById('edit-category').value,
     lastPriceUpdate: new Date().toISOString(),
-    lastUpdatedBy: getActorLabel()
+    lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
   };
 
   if (currentRole === 'admin') {
@@ -1695,7 +1696,8 @@ function generateDailyZReport() {
     malCikisi: 0,
     paraGirisi: totalSales,
     paraCikisi: 0,
-    movements: movementsData[dateStr] || {}
+    movements: movementsData[dateStr] || {},
+    createdBy: getActorLabel()
   };
 
   dbZReports.child(dateStr).set(reportData, (err) => {
