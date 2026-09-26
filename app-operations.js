@@ -842,7 +842,7 @@ function renderNotifications() {
       <div style="background:#F1F5F9; border:1px solid var(--steel-line); padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; gap:10px;">
          <div>
             <div style="font-size:12px; font-weight:bold; color:var(--charcoal);">📥 ${n.text}</div>
-            <div style="font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';">🕒 ${n.time}</div>
+            <div style="font-size:10px; color:var(--steel); font-family:'IBM Plex Mono';">🕒 ${n.time}${n.by ? ` · 📱 ${n.by}` : ''}</div>
          </div>
          <div style="display:flex; flex-direction:column; gap:4px;">
            <button class="btn btn-primary btn-sm" onclick="convertNotifToTask('${key}')" style="white-space:nowrap;">Çalışana Görev Ata</button>
@@ -872,7 +872,8 @@ function convertNotifToTask(notifKey) {
     person: assignedPerson,
     category: "Ürün Kabul",
     status: "Bekliyor",
-    time: "-"
+    time: "-",
+    createdBy: getActorLabel()
   }, (err) => {
     if(!err) {
       dbNotifications.child(notifKey).remove();
@@ -895,7 +896,8 @@ function handleManagerAssignTask(e) {
     person: person,
     category: "Yönetici Talimatı",
     status: "Bekliyor",
-    time: "-"
+    time: "-",
+    createdBy: getActorLabel()
   }, (err) => {
     if(!err) {
       document.getElementById('m-task-desc').value = '';
@@ -914,7 +916,8 @@ function toggleTaskStatus(taskId) {
   
   dbTasks.child(taskId).update({
     status: newStatus,
-    time: newTime
+    time: newTime,
+    completedBy: newStatus === 'Tamamlandı' ? getActorLabel() : null
   }, (err) => {
     if(!err) {
       showToast(newStatus === 'Tamamlandı' ? "Görev tamamlandı olarak işaretlendi! ✅" : "Görev durumu güncellendi.");
@@ -1023,10 +1026,12 @@ function renderTasks() {
         <td style="padding:10px 4px;">
           <strong>${t.text}</strong><br>
           <span style="font-size:10px; color:var(--steel);">Kategori: ${t.category || 'Genel'}</span>
+          ${t.createdBy ? `<br><span style="font-size:10px; color:var(--info);">📱 Atayan: ${t.createdBy}</span>` : ''}
         </td>
         <td style="padding:10px 4px; font-weight:500;">${t.person}</td>
         <td style="padding:10px 4px;">
           ${isDone ? `<span style="color:var(--success); font-weight:bold; font-size:12px;">✅ Tamamlandı (${t.time})</span>` : `<span style="color:var(--rust); font-weight:bold; font-size:12px;">⏳ Bekliyor</span>`}
+          ${isDone && t.completedBy ? `<br><span style="font-size:10px; color:var(--info);">📱 ${t.completedBy}</span>` : ''}
         </td>
         <td style="padding:10px 4px; text-align:center; white-space:nowrap;">
           <button class="btn btn-sm ${isDone ? 'btn-success' : 'btn-dark'}" onclick="toggleTaskStatus('${key}')">
@@ -1305,7 +1310,7 @@ async function completeOrder() {
     });
   });
 
-  const orderData = { time: timeStr, items: cart, total: grandTotal };
+  const orderData = { time: timeStr, items: cart, total: grandTotal, processedBy: getActorLabel() };
   
   dbOrders.child(dateStr).child(orderId).set(orderData, async (err) => {
     if(!err) {
@@ -1870,7 +1875,8 @@ async function completeGoodsReceipt() {
     time: timeStr,
     items: finalItems,
     total: grandTotal,
-    addedToDebt: addDebt
+    addedToDebt: addDebt,
+    processedBy: getActorLabel() // hangi cihazdan/kim tarafından girildiği
   };
 
   dbGoodsReceipts.child(dateStr).child(receiptId).set(receiptData, (err) => {
@@ -1889,7 +1895,8 @@ async function completeGoodsReceipt() {
       }
       dbNotifications.push({
         text: `Malzeme Fişi: ${wholesaler.name} firmasından ${finalItems.length} kalem malzeme girişi yapıldı (₺${formatMoney(grandTotal)}).`,
-        time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+        time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}),
+        by: getActorLabel() // hangi cihazdan/kim tarafından girildiği
       });
 
       goodsReceiptCart = [];
@@ -3036,7 +3043,8 @@ async function saveReceiptEdit() {
 
     dbNotifications.push({
       text: `Malzeme fişi düzenlendi: ${wholesalerName} (${date}) — ${editedBy} tarafından güncellendi.`,
-      time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'})
+      time: new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'}),
+      by: editedBy // hangi cihazdan/kim tarafından yapıldığı
     });
 
     showToast("Fiş güncellendi, stok ve bakiye farka göre düzeltildi!");
@@ -3422,7 +3430,7 @@ function renderBrandCatalogList() {
           ? `<p style="font-size:11px; color:var(--steel); margin:6px 0 0;">Bu markaya henüz katalog yüklenmedi.</p>`
           : pdfEntries.map(([pdfId, p]) => `
               <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-top:1px dashed var(--steel-line); font-size:12px; gap:6px; flex-wrap:wrap;">
-                <span style="cursor:pointer; color:var(--info); text-decoration:underline;" onclick="openKatalogPdfPreview('${brandKey}','${pdfId}')">📄 ${p.name} <small style="color:var(--steel);">(${p.sizeKB||0} KB · ${new Date(p.uploadedAt).toLocaleDateString('tr-TR')})</small></span>
+                <span style="cursor:pointer; color:var(--info); text-decoration:underline;" onclick="openKatalogPdfPreview('${brandKey}','${pdfId}')">📄 ${p.name} <small style="color:var(--steel);">(${p.sizeKB||0} KB · ${new Date(p.uploadedAt).toLocaleDateString('tr-TR')}${p.uploadedBy ? ' · 📱 ' + p.uploadedBy : ''})</small></span>
                 <span style="display:flex; gap:6px;">
                   <button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="readCatalogPdfWithAI('${brandKey}','${pdfId}')">🤖 AI ile Oku</button>
                   <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="deleteCatalogPdf('${brandKey}','${pdfId}')">🗑</button>
@@ -3588,6 +3596,7 @@ function renderSingleReceipts() {
       <span>
         <strong>${m.name}</strong> ${m.brand ? `<small style="color:var(--steel);">(${m.brand})</small>` : ''}
         ${m.catalogPrice ? `<br><small style="color:var(--steel);">Katalog Fiyatı: ₺${formatMoney(m.catalogPrice)}</small>` : ''}
+        ${m.createdBy ? `<br><small style="color:var(--info);">📱 ${m.createdBy}</small>` : ''}
       </span>
       <span style="display:flex; gap:6px; flex-shrink:0;">
         <button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="viewSingleReceiptFile('${id}')">👁</button>
