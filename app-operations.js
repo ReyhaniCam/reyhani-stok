@@ -2596,6 +2596,7 @@ function renderDevicesList() {
           <strong>📱 ${d.name || 'İsimsiz Cihaz'}</strong> ${isThisDevice ? '<span style="color:var(--success); font-weight:600;">(bu cihaz)</span>' : ''}
           <br><small style="color:var(--steel);">Son kullanım: ${d.lastSeenAt ? new Date(d.lastSeenAt).toLocaleString('tr-TR') : '-'} · ${roleLabel}</small>
           <br><small style="color:var(--steel);">İlk görülme: ${d.firstSeenAt ? new Date(d.firstSeenAt).toLocaleString('tr-TR') : '-'}</small>
+          ${d.lastIP ? `<br><small style="color:var(--info); font-weight:600;">🌐 Son IP: ${d.lastIP}${d.env ? ' · ' + d.env : ''}</small>` : ''}
         </div>
         <button type="button" class="btn btn-info btn-sm" style="width:auto; flex-shrink:0;" onclick="renameDeviceById('${id}')">✏️ Adı Değiştir</button>
       </div>
