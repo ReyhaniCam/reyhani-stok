@@ -432,6 +432,7 @@ dbGoodsReceipts.on('value', snapshot => {
                  ${rec.lastEditedAt ? `<div style="font-size:9px; color:var(--steel); margin-top:4px;">✏️ Düzenlendi (${rec.lastEditedBy || '-'})</div>` : ''}
               </div>
            </div>
+           ${rec.processedBy ? `<div style="font-size:10px; color:var(--info); margin-top:6px;">📱 İşlemi Yapan: <b>${rec.processedBy}</b></div>` : ''}
            <div style="font-size:11px; color:var(--steel); margin-top:8px; line-height:1.4;">${itemsSummary}</div>
            ${rec.note ? `<div style="font-size:11px; color:var(--charcoal); margin-top:4px; font-style:italic;">Not: ${rec.note}</div>` : ''}
         </div>
@@ -529,6 +530,7 @@ dbZReports.on('value', (snapshot) => {
          <div>
             <div class="tag-title">📅 Z Raporu: ${rep.date}</div>
             <div class="tag-code">🕒 Oluşturma: ${rep.time || 'N/A'} | 📦 Mal Giriş: ${rep.malGirisi} | 📤 Mal Çıkış: ${rep.malCikisi}</div>
+            ${rep.createdBy ? `<div style="font-size:10px; color:var(--info); margin-top:2px;">📱 ${rep.createdBy}</div>` : ''}
             <div style="font-size:12px; margin-top:4px; color:var(--charcoal);">
                Para Girişi: <strong style="color:var(--success);">₺${formatMoney(rep.paraGirisi)}</strong> | 
                Para Çıkışı: <strong style="color:var(--rust);">₺${formatMoney(rep.paraCikisi)}</strong>
@@ -574,6 +576,7 @@ dbOrders.on('value', snapshot => {
            <div>
               <div class="tag-title">Satış / Sipariş: ${dateStr}</div>
               <div class="tag-code">🕒 ${order.time} | 📦 ${order.items.length} Çeşit Ürün</div>
+              ${order.processedBy ? `<div style="font-size:10px; color:var(--info); margin-top:2px;">📱 ${order.processedBy}</div>` : ''}
            </div>
            <div style="text-align:right;">
               <div style="font-family:'IBM Plex Mono'; font-weight:bold; font-size:15px; margin-bottom:4px; color:var(--charcoal);">₺${formatMoney(order.total)}</div>
@@ -1239,7 +1242,7 @@ function completeBorcSale() {
     date: dateStr,
     time: timeStr,
     createdAt: now.toISOString(),
-    lastUpdatedBy: 'Yönetici',
+    lastUpdatedBy: getActorLabel(),
     items: borcCart.map(item => ({
       code: item.code,
       name: item.name,
@@ -1406,6 +1409,7 @@ function renderCustomerDebts() {
                 <br>📝 ${d.description}
                 ${d.note ? `<br>📌 ${d.note}` : ''}
                 ${d.senetNo ? `<br>🖋️ Senet No: ${d.senetNo} (${d.senetDate || ''})` : ''}
+                ${d.lastUpdatedBy ? `<br><span style="color:var(--info);">📱 ${d.lastUpdatedBy}</span>` : ''}
               </div>
             </div>
             <div style="text-align:right; display:flex; flex-direction:column; gap:4px;">
@@ -1457,7 +1461,7 @@ function payDebt(key, totalAmount) {
     dbCustomerDebts.child(key).update({
       remaining: newRemaining,
       status: newStatus,
-      lastUpdatedBy: 'Yönetici'
+      lastUpdatedBy: getActorLabel()
     }, (err) => {
       if (!err) {
         showToast(`${parsed}₺ ödeme alındı! Kalan: ${newRemaining}₺`);
@@ -1474,7 +1478,7 @@ function markDebtClosed(key) {
   dbCustomerDebts.child(key).update({
     remaining: 0,
     status: 'Kapalı',
-    lastUpdatedBy: 'Yönetici'
+    lastUpdatedBy: getActorLabel()
   }, (err) => {
     if (!err) {
       showToast("Borç kapatıldı!");
