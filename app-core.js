@@ -127,6 +127,7 @@ const dbDevices = dbRoot.child('devices');
 let devicesData = {};
 let currentDeviceId = null;
 let currentDeviceName = null;
+let currentDeviceIP = null; // Bu cihazın gerçek genel (public) IP adresi — girişte otomatik alınır
 
 function getOrCreateDeviceId() {
   try {
@@ -141,6 +142,47 @@ function getOrCreateDeviceId() {
   }
 }
 
+// Cihazın kendi yazdığı isimle SINIRLI kalmamak için, bu cihazın bağlandığı
+// ağın gerçek genel IP adresini otomatik olarak alır (ücretsiz, anahtarsız
+// bir dış servisten). Aynı mağazadaki cihazlar aynı IP'yi paylaşabilir
+// (aynı modem/router), ama farklı bir yerden (ev, mobil veri, başka şube)
+// yapılan HER işlem farklı bir IP ile anında ayırt edilir — isim ise
+// kullanıcı tarafından yazıldığı için tek başına güvenilir değildir.
+async function fetchPublicIP() {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000); // IP servisi yavaş/erişilemezse girişi kilitleme
+    const res = await fetch('https://api.ipify.org?format=json', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    const data = await res.json();
+    currentDeviceIP = data && data.ip ? data.ip : null;
+  } catch (e) {
+    currentDeviceIP = null; // İnternet erişimi/CORS engeli/zaman aşımı olursa sessizce yoksay
+  }
+  return currentDeviceIP;
+}
+
+// Tarayıcının kendi bildirdiği işletim sistemi/tarayıcı bilgisinden basit bir
+// etiket üretir (örn. "Windows - Chrome", "iPhone/iPad - Safari"). IP ile
+// birlikte kullanıldığında "hangi bilgisayardan" sorusuna çok daha net bir
+// cevap verir.
+function getDeviceEnvironmentLabel() {
+  const ua = navigator.userAgent || '';
+  let os = 'Bilinmeyen Cihaz';
+  if (/Windows/i.test(ua)) os = 'Windows';
+  else if (/Android/i.test(ua)) os = 'Android';
+  else if (/iPhone|iPad|iPod/i.test(ua)) os = 'iPhone/iPad';
+  else if (/Macintosh|Mac OS/i.test(ua)) os = 'Mac';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+  let browser = '';
+  if (/Edg\//i.test(ua)) browser = 'Edge';
+  else if (/OPR\//i.test(ua)) browser = 'Opera';
+  else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+  else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+  else if (/Safari\//i.test(ua)) browser = 'Safari';
+  return browser ? `${os} - ${browser}` : os;
+}
+
 // Girişten hemen sonra çağrılır: bu cihazın daha önce verilmiş bir adı var mı
 // kontrol eder (önce bu tarayıcının kendi hafızası, yoksa sistemdeki kayıt),
 // hâlâ yoksa kullanıcıya bir isim sorar ve kaydeder.
@@ -148,6 +190,11 @@ async function ensureDeviceNamed() {
   currentDeviceId = getOrCreateDeviceId();
   try { currentDeviceName = localStorage.getItem('reyhani_device_name') || null; }
   catch (e) { currentDeviceName = null; }
+
+  // Gerçek IP adresini ve cihaz türünü HER girişte tazele — bu bilgiler
+  // kullanıcı tarafından değiştirilemez, sadece isim değiştirilebilir.
+  await fetchPublicIP();
+  const envLabel = getDeviceEnvironmentLabel();
 
   if (!currentDeviceName) {
     try {
@@ -161,27 +208,34 @@ async function ensureDeviceNamed() {
   }
 
   if (!currentDeviceName) {
-    const name = prompt("Bu cihazdan sisteme ilk kez giriş yapılıyor.\n\nBu cihaza bir isim verin (örn. 'İşyeri Bilgisayarı', 'Ahmet - Telefon') — bundan sonra yaptığınız her güncellemede bu isim görünecek:");
+    const name = prompt("Bu cihazdan sisteme ilk kez giriş yapılıyor.\n\nBu cihaza bir isim verin (örn. 'İşyeri Bilgisayarı', 'Ahmet - Telefon') — bundan sonra yaptığınız her güncellemede bu isim, gerçek IP adresiniz ve cihaz türünüz (Windows/Android/iPhone vb.) birlikte kaydedilecek:");
     currentDeviceName = (name || '').trim() || 'İsimsiz Cihaz';
     try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
     await dbDevices.child(currentDeviceId).set({
       name: currentDeviceName,
       firstSeenAt: new Date().toISOString(),
       lastSeenAt: new Date().toISOString(),
-      lastRole: currentRole
+      lastRole: currentRole,
+      lastIP: currentDeviceIP,
+      env: envLabel
     });
   } else {
-    dbDevices.child(currentDeviceId).update({ lastSeenAt: new Date().toISOString(), lastRole: currentRole });
+    dbDevices.child(currentDeviceId).update({ lastSeenAt: new Date().toISOString(), lastRole: currentRole, lastIP: currentDeviceIP, env: envLabel });
   }
 
   updateDeviceBadge();
 }
 
-// Rol + cihaz adını birleştiren TEK merkezi fonksiyon — sistemdeki her "kim
-// yaptı" alanı (lastUpdatedBy, createdBy, uploadedBy, processedBy...) bunu kullanır.
+// Rol + cihaz adı + gerçek IP adresini birleştiren TEK merkezi fonksiyon —
+// sistemdeki her "kim yaptı" alanı (lastUpdatedBy, createdBy, uploadedBy,
+// processedBy...) bunu kullanır. Bu fonksiyonu güncellemek, sistemdeki HER
+// modüldeki kaydı otomatik olarak IP adresiyle birlikte gösterir hâle getirir.
 function getActorLabel() {
   const role = currentRole === 'admin' ? 'Yönetici' : 'Çalışan';
-  return currentDeviceName ? `${role} (${currentDeviceName})` : role;
+  let label = role;
+  if (currentDeviceName) label += ` (${currentDeviceName})`;
+  if (currentDeviceIP) label += ` [IP: ${currentDeviceIP}]`;
+  return label;
 }
 
 function updateDeviceBadge() {
@@ -189,7 +243,7 @@ function updateDeviceBadge() {
   const nameEl = document.getElementById('device-badge-name');
   if (!badge || !nameEl) return;
   if (currentRole !== 'guest' && currentDeviceName) {
-    nameEl.textContent = currentDeviceName;
+    nameEl.textContent = currentDeviceName + (currentDeviceIP ? ' · ' + currentDeviceIP : '');
     badge.style.display = 'inline-flex';
   } else {
     badge.style.display = 'none';
