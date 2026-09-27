@@ -1216,21 +1216,136 @@ function renderFisWholesalerOptions() {
   if (current && wholesalersData[current]) sel.value = current;
 }
 
+// ============================================================
+// SEPETE ÜRÜN ÇÖZÜMLEME MOTORU
+// Eski sistem sadece "KOD - İsim" biçiminde birebir eşleşme arıyordu; hem
+// barkod okutulduğunda (kod formatı tutmadığı için) hem de öneri listesinden
+// TIKLANMADAN yazı yazıldığında (özellikle mobilde native <datalist>
+// güvenilir çalışmadığı için) "Ürün bulunamadı" hatası veriyordu. Bu fonksiyon
+// tek bir yerden dört farklı yolla ürünü bulmayı dener.
+// ============================================================
+function resolveProductInput(inputValRaw) {
+  const inputVal = (inputValRaw || '').trim();
+  if (!inputVal) return null;
+
+  // 1) Tam kod eşleşmesi (ürünün kendi kodu, ya da kodu=barkodu olan ürünlerde barkodun kendisi)
+  if (productsData[inputVal]) return productsData[inputVal];
+
+  // 2) "KOD - İsim" biçimi (öneri listesinden seçildiğinde bu formatta gelir)
+  if (inputVal.includes(' - ')) {
+    const codePart = inputVal.split(' - ')[0].trim();
+    if (productsData[codePart]) return productsData[codePart];
+  }
+
+  // 3) Barkod önbelleği: bu barkod daha önce (başka bir üründe/ilk kayıtta)
+  // bir isimle eşleştirilmişse, o ismi stoktaki ürünlerle eşleştirmeyi dene.
+  const cached = barcodeCacheData[inputVal];
+  if (cached && cached.name) {
+    const { product, score } = findBestProductMatch(cached.name);
+    if (product && score >= FIS_MATCH_THRESHOLD) return product;
+  }
+
+  // 4) Bulanık isim arama: yazım/Türkçe karakter farkı olsa bile en yakın
+  // ürünü bulmayı dener (aynı motor katalog/fiş modüllerinde de kullanılıyor).
+  const matches = findSimilarProducts(inputVal, 1);
+  if (matches.length > 0 && matches[0].score >= 0.85) return matches[0].product;
+
+  // 5) Kısmi kod eşleşmesi: kısa barkod/kod parçaları isim aramasının (min 4
+  // karakter) yakalayamayacağı durumları kapsar.
+  if (inputVal.length >= 3) {
+    const partial = Object.values(productsData).find(p => p.code && p.code.toLowerCase().includes(inputVal.toLowerCase()));
+    if (partial) return partial;
+  }
+
+  return null;
+}
+
+// Yazarken (veya kutuya odaklanınca) canlı öneri listesi gösterir — telefon/
+// tablette native <datalist> açılır menüsü güvenilir çalışmadığı için bunun
+// yerine kendi çizdiğimiz, her cihazda aynı şekilde çalışan bir liste kullanıyoruz.
+function renderCartProductSuggestions() {
+  const input = document.getElementById('cart-product');
+  const box = document.getElementById('cart-product-suggestions');
+  if (!input || !box) return;
+  const raw = input.value.trim();
+
+  if (!raw) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const results = [];
+  if (productsData[raw]) results.push(productsData[raw]);
+
+  findSimilarProducts(raw, 8).forEach(m => {
+    if (!results.some(p => p.code === m.product.code)) results.push(m.product);
+  });
+
+  if (results.length < 8 && raw.length >= 2) {
+    Object.values(productsData).forEach(p => {
+      if (results.length >= 8) return;
+      if (p.code && p.code.toLowerCase().includes(raw.toLowerCase()) && !results.some(r => r.code === p.code)) {
+        results.push(p);
+      }
+    });
+  }
+
+  if (results.length === 0) {
+    box.style.display = 'block';
+    box.innerHTML = `<div style="padding:10px; font-size:12px; color:var(--steel);">Eşleşen ürün bulunamadı. "Sepete Ekle"ye basarsanız barkod önbelleği de ayrıca kontrol edilecek.</div>`;
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = results.slice(0, 8).map(p => `
+    <div style="padding:8px 10px; cursor:pointer; border-top:1px dashed var(--steel-line); font-size:12px;" onmousedown="selectCartProduct('${p.code}')">
+      <strong>${p.name}</strong> <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code})</span>
+      <br><small style="color:var(--steel);">Stok: ${p.qty || 0} ${p.unit || 'Adet'} · ₺${formatMoney(p.price || 0)}</small>
+    </div>
+  `).join('');
+}
+
+function selectCartProduct(code) {
+  const input = document.getElementById('cart-product');
+  const box = document.getElementById('cart-product-suggestions');
+  const p = productsData[code];
+  if (!input || !p) return;
+  input.value = `${p.code} - ${p.name}`;
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  const qtyInput = document.getElementById('cart-qty');
+  if (qtyInput) { qtyInput.focus(); qtyInput.select(); }
+}
+
+// Kutunun dışına tıklanınca öneri listesini kapat.
+document.addEventListener('click', function(e) {
+  const box = document.getElementById('cart-product-suggestions');
+  const input = document.getElementById('cart-product');
+  if (box && input && box.style.display !== 'none' && !box.contains(e.target) && e.target !== input) {
+    box.style.display = 'none';
+  }
+});
+
 function addToCart() {
   if(currentRole !== 'admin' && currentRole !== 'staff') return;
-  const inputVal = document.getElementById('cart-product').value;
+  const inputEl = document.getElementById('cart-product');
+  const inputVal = inputEl.value;
   const qty = parseFloat(document.getElementById('cart-qty').value);
-  
+
   if(!inputVal || isNaN(qty) || qty <= 0) {
     alert("Lütfen geçerli bir ürün ve miktar girin.");
     return;
   }
-  
-  const code = inputVal.split(' - ')[0].trim();
-  const p = productsData[code];
-  
-  if(!p) { alert("Ürün bulunamadı! Lütfen listeden seçin."); return; }
-  
+
+  const p = resolveProductInput(inputVal);
+
+  if(!p) {
+    const looksLikeBarcode = /^\d{6,}$/.test(inputVal.trim());
+    alert(
+      looksLikeBarcode
+        ? `"${inputVal.trim()}" barkodu stoktaki hiçbir ürünle eşleşmedi.\n\nBu ürün sisteme farklı bir kodla (barkodundan başka bir kodla) kaydedilmiş olabilir. Ürünü isim yazarak aramayı deneyin, ya da "Ürün Ekle" ekranından bu barkodu ürüne tanıtın.`
+        : `"${inputVal.trim()}" için stokta eşleşen bir ürün bulunamadı.\n\nÜrün adının birkaç harfini yazıp açılan öneri listesinden seçmeyi deneyin.`
+    );
+    return;
+  }
+
+  const code = p.code;
   const existingIndex = cart.findIndex(item => item.code === code);
   if(existingIndex !== -1) {
     cart[existingIndex].qty += qty;
@@ -1239,11 +1354,14 @@ function addToCart() {
     const price = Number(p.price || 0);
     cart.push({ code: p.code, name: p.name, price: price, qty: qty, unit: p.unit || 'Adet', total: price * qty });
   }
-  
-  document.getElementById('cart-product').value = '';
+
+  inputEl.value = '';
   document.getElementById('cart-qty').value = '1';
+  const box = document.getElementById('cart-product-suggestions');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   renderCart();
-  showToast("Ürün sepete eklendi!");
+  showToast(`"${p.name}" sepete eklendi!`);
+  inputEl.focus();
 }
 
 function renderCart() {
