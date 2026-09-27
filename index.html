@@ -49,9 +49,17 @@
       <button class="cmdk-trigger-btn" onclick="openCommandPalette()" title="Hızlı Arama">🔎 Ara <span class="cmdk-trigger-kbd">Ctrl+K</span></button>
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
       <span id="device-badge" style="display:none; align-items:center; gap:4px; font-size:11px; color:var(--steel); cursor:pointer; padding:4px 8px; border:1px dashed var(--steel-line); border-radius:12px;" onclick="renameCurrentDevice()" title="Bu cihazın adını değiştirmek için tıklayın">📱 <span id="device-badge-name"></span> ✏️</span>
+      <button class="btn btn-warning btn-sm" id="issue-report-btn" style="display:none; width:auto;" onclick="openIssueReportModal()" title="Bir sorun mu yaşadınız? Yapay zeka yardımıyla bildirin">🚨 Sorun Bildir</button>
+      <button class="btn btn-dark btn-sm" id="issue-admin-btn" style="display:none; width:auto; position:relative;" onclick="openIssueAdminModal()" title="Kullanıcı bildirimlerini görüntüle">📋 Talepler <span id="issue-admin-badge" style="display:none; background:var(--rust); color:#fff; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; margin-left:4px;">0</span></button>
       <button class="btn btn-primary btn-sm" id="auth-btn" onclick="toggleAuth()">Giriş Yap</button>
     </div>
   </header>
+
+  <!-- YÖNETİCİYE: ÇÖZÜLMEMİŞ KULLANICI BİLDİRİMİ UYARI ÇUBUĞU -->
+  <div id="issue-alert-banner" style="display:none; align-items:center; justify-content:center; gap:14px; background:var(--rust); color:#fff; padding:10px 16px; text-align:center; font-size:13px; font-weight:700;">
+    <span style="cursor:pointer;" onclick="openIssueAdminModal()">🚨 <span id="issue-alert-banner-text"></span> — İncelemek için tıklayın</span>
+    <button onclick="dismissIssueAlertBanner()" style="background:none; border:none; color:#fff; font-size:16px; cursor:pointer; line-height:1; padding:0;" title="Kapat">✕</button>
+  </div>
 
   <!-- GLOBAL ARAMA / COMMAND PALETTE -->
   <div class="modal-overlay" id="command-palette-overlay" style="display:none; align-items:flex-start; z-index:2000;" onclick="if(event.target===this) closeCommandPalette()">
@@ -1373,6 +1381,41 @@
   </div>
 </div>
 
+<!-- SORUN / HATA BİLDİRME MODALI (herkes kullanabilir) -->
+<div class="modal-overlay" id="issue-report-modal" style="display:none;">
+  <div class="modal-content" style="max-width:600px;">
+    <button class="modal-close" onclick="closeIssueReportModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">🚨 Sorun / Hata Bildir</h3>
+    <p style="font-size:12px; color:var(--steel); margin-top:-6px; margin-bottom:12px;">
+      Karşılaştığınız sorunu kendi cümlelerinizle, aklınıza geldiği gibi yazın (örn. "satış yaptım ama sisteme kayıt düşmedi"). Yapay zeka bunu yöneticiye iletilecek düzgün bir metne çevirecek — siz sadece ne olduğunu anlatın. Bildiriminizle birlikte hangi cihazdan ve kim tarafından gönderildiği de otomatik kaydedilir.
+    </p>
+    <div id="issue-report-step-1">
+      <textarea id="issue-report-raw" rows="4" placeholder="Örn: Az önce satış yaptım, ürünü sepete ekleyip ödemeyi aldım ama stok listesinde hiçbir şey değişmedi, kayıt düşmemiş gibi görünüyor..." style="width:100%; resize:vertical;"></textarea>
+      <button type="button" class="btn btn-warning" style="margin-top:10px; width:100%;" onclick="submitIssueReportToAI()">🤖 Yapay Zekaya Düzenlet</button>
+    </div>
+    <div id="issue-report-step-2" style="display:none; margin-top:14px;">
+      <div id="issue-report-ai-status" style="font-size:12px; font-weight:600; margin-bottom:8px;"></div>
+      <div id="issue-report-ai-preview" style="display:none; background:rgba(0,0,0,0.03); border:1px solid var(--steel-line); border-radius:8px; padding:12px; font-size:13px; white-space:pre-wrap; line-height:1.4;"></div>
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button type="button" class="btn btn-dark" style="width:auto;" onclick="backToIssueReportEdit()">◀ Geri Dön</button>
+        <button type="button" class="btn btn-success" style="flex:1;" id="issue-report-send-btn" onclick="finalizeIssueReportSend()" disabled>✅ Bu Şekilde Gönder</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TALEPLER (YÖNETİCİ) MODALI -->
+<div class="modal-overlay" id="issue-admin-modal" style="display:none;">
+  <div class="modal-content" style="max-width:700px;">
+    <button class="modal-close" onclick="closeIssueAdminModal()">X</button>
+    <h3 style="margin-top:0; font-family:'Oswald';">📋 Kullanıcı Sorun / Talep Bildirimleri</h3>
+    <p style="font-size:12px; color:var(--steel); margin-top:-6px; margin-bottom:12px;">
+      Çalışanların veya diğer cihazların bildirdiği sorunlar, yapay zeka tarafından düzenlenmiş hâliyle burada listelenir; hangi cihazdan geldiği de görünür. Bir sorunu çözdüğünüzde "Çözüldü" olarak işaretleyin — bildiren kişiye site üzerinden otomatik bilgi gider.
+    </p>
+    <div id="issue-admin-list" style="max-height:500px; overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- MÜKERRER FİŞ İNCELEME/BİRLEŞTİRME MODALI -->
 <div class="modal-overlay" id="duplicate-receipt-modal" style="display:none;">
   <div class="modal-content" style="max-width:680px;">
@@ -1773,6 +1816,6 @@
 
 <script src="app-core.js?v=8"></script>
 <script src="app-operations.js?v=11"></script>
-<script src="app-inventory.js?v=5"></script>
+<script src="app-inventory.js?v=4"></script>
 </body>
 </html>
