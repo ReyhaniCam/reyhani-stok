@@ -129,6 +129,16 @@ let currentDeviceId = null;
 let currentDeviceName = null;
 let currentDeviceIP = null; // Bu cihazın gerçek genel (public) IP adresi — girişte otomatik alınır
 
+// ---------- SORUN / HATA BİLDİRİM SİSTEMİ (AI destekli) ----------
+// Kullanıcı sorunu kendi cümleleriyle yazar → yapay zeka bunu düzgün, net bir
+// metne çevirir → yönetici panelinde "Talepler" olarak görünür. Yönetici
+// çözünce, bildiren cihaza site üzerinden otomatik bilgi gider.
+const dbIssueReports = dbRoot.child('issue_reports');
+let issueReportsData = {};
+let issueReportSeenIds = new Set(); // bu oturumda zaten gösterdiğimiz "çözüldü" uyarıları tekrar açılmasın
+let issueAdminDismissedCount = 0;   // yönetici üstteki kırmızı uyarı çubuğunu kapattığında, aynı sayıda açık talep için tekrar açılmasın
+let pendingIssueReport = null;      // AI'nin ürettiği metin, kullanıcı onaylayana kadar burada bekler
+
 function getOrCreateDeviceId() {
   try {
     let id = localStorage.getItem('reyhani_device_id');
@@ -248,6 +258,210 @@ function updateDeviceBadge() {
   } else {
     badge.style.display = 'none';
   }
+}
+
+// ============================================================
+// SORUN / HATA BİLDİRİM SİSTEMİ — AI destekli
+// ============================================================
+
+// Yönetici rozetini ve üstteki kırmızı uyarı çubuğunu günceller. Açık talep
+// sayısı, yönetici en son kapattığı sayıdan FAZLAYSA çubuk tekrar açılır —
+// böylece hem girişte hem de yeni bir talep geldiğinde otomatik uyarı verilir.
+function updateIssueAdminBadge() {
+  const btn = document.getElementById('issue-admin-btn');
+  const badge = document.getElementById('issue-admin-badge');
+  const banner = document.getElementById('issue-alert-banner');
+  const bannerText = document.getElementById('issue-alert-banner-text');
+  if (!btn || !badge) return;
+
+  if (currentRole !== 'admin') {
+    btn.style.display = 'none';
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+  btn.style.display = 'inline-flex';
+
+  const openCount = Object.values(issueReportsData).filter(r => r.status !== 'Çözüldü').length;
+  badge.textContent = openCount;
+  badge.style.display = openCount > 0 ? 'inline-block' : 'none';
+
+  if (banner && bannerText) {
+    if (openCount > 0 && openCount > issueAdminDismissedCount) {
+      bannerText.textContent = `${openCount} adet çözülmemiş kullanıcı bildirimi var!`;
+      banner.style.display = 'flex';
+    } else if (openCount === 0) {
+      banner.style.display = 'none';
+      issueAdminDismissedCount = 0;
+    }
+  }
+}
+
+// Yönetici üstteki uyarı çubuğunu kapatır (paneli açmadan "görüldü" sayar).
+function dismissIssueAlertBanner() {
+  const banner = document.getElementById('issue-alert-banner');
+  if (banner) banner.style.display = 'none';
+  issueAdminDismissedCount = Object.values(issueReportsData).filter(r => r.status !== 'Çözüldü').length;
+}
+
+// Bu cihazdan gönderilmiş, yönetici tarafından çözülmüş ama henüz
+// görülmemiş bir talep var mı diye bakar; varsa kullanıcıya açık bir
+// mesajla bildirir ki işlemine güvenle devam edebilsin.
+function checkIssueReportsForCurrentDevice() {
+  if (!currentDeviceId) return;
+  Object.entries(issueReportsData).forEach(([id, r]) => {
+    if (r.deviceId === currentDeviceId && r.status === 'Çözüldü' && !r.seenByReporter && !issueReportSeenIds.has(id)) {
+      issueReportSeenIds.add(id);
+      showIssueResolvedBanner(r);
+      dbIssueReports.child(id).update({ seenByReporter: true });
+    }
+  });
+}
+
+function showIssueResolvedBanner(report) {
+  alert(
+    "✅ Bildirdiğiniz sorun çözüldü!\n\n" +
+    "Bildiriminiz: \"" + (report.aiText || report.rawText || '') + "\"\n\n" +
+    (report.resolutionNote ? ("Yönetici notu: " + report.resolutionNote + "\n\n") : "") +
+    "İşleminize güvenle devam edebilirsiniz."
+  );
+}
+
+function openIssueReportModal() {
+  if (currentRole === 'guest') { alert("Bu özelliği kullanmak için giriş yapmalısınız."); return; }
+  document.getElementById('issue-report-raw').value = '';
+  document.getElementById('issue-report-step-1').style.display = 'block';
+  document.getElementById('issue-report-step-2').style.display = 'none';
+  const previewEl = document.getElementById('issue-report-ai-preview');
+  previewEl.style.display = 'none';
+  previewEl.textContent = '';
+  document.getElementById('issue-report-ai-status').textContent = '';
+  const sendBtn = document.getElementById('issue-report-send-btn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '✅ Bu Şekilde Gönder';
+  pendingIssueReport = null;
+  document.getElementById('issue-report-modal').style.display = 'flex';
+}
+
+function closeIssueReportModal() {
+  document.getElementById('issue-report-modal').style.display = 'none';
+}
+
+function backToIssueReportEdit() {
+  document.getElementById('issue-report-step-1').style.display = 'block';
+  document.getElementById('issue-report-step-2').style.display = 'none';
+}
+
+// Kullanıcının yazdığı ham metni, sistemin diğer yerlerinde kullanılan AYNI
+// yapay zeka modeliyle (Gemini) düzgün, profesyonel bir metne çevirir.
+async function submitIssueReportToAI() {
+  const rawText = (document.getElementById('issue-report-raw').value || '').trim();
+  if (!rawText) { alert("Lütfen yaşadığınız sorunu kısaca yazın."); return; }
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:");
+    if (!apiKey) return;
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  document.getElementById('issue-report-step-1').style.display = 'none';
+  document.getElementById('issue-report-step-2').style.display = 'block';
+  const statusEl = document.getElementById('issue-report-ai-status');
+  const previewEl = document.getElementById('issue-report-ai-preview');
+  const sendBtn = document.getElementById('issue-report-send-btn');
+  statusEl.style.color = '#F59E0B';
+  statusEl.textContent = '⏳ Yapay zeka mesajınızı düzenliyor...';
+  previewEl.style.display = 'none';
+  sendBtn.disabled = true;
+
+  try {
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: "Sen bir hırdavat/nalburiye/cam mağazasının stok takip sisteminde çalışan bir destek asistanısın. Bir çalışan/kullanıcı, sistemde yaşadığı bir sorunu aşağıda kendi cümleleriyle anlattı. Bunu, işletme sahibine/yöneticiye iletilecek NET, KISA ve PROFESYONEL bir Türkçe metne dönüştür. Kurallar: 1) Sorunu OLDUĞU GİBİ aktar, abartma veya uydurma detay ekleme, kullanıcının belirtmediği bir bilgiyi varsaymadan yazma. 2) Mümkünse 'Sorun:' ve varsa 'Ne zaman/hangi işlemde oldu:' şeklinde kısa başlıklarla düzenle. 3) SADECE düzenlenmiş metni yaz; başka hiçbir açıklama, giriş cümlesi, selamlama veya markdown işareti ekleme. Çalışanın yazdığı orijinal metin: \"" + rawText.replace(/"/g, "'") + "\""
+          }]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    const aiText = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text)
+      ? data.candidates[0].content.parts[0].text.trim()
+      : null;
+    if (!aiText) throw new Error("Yapay zeka bir yanıt üretemedi.");
+
+    pendingIssueReport = { rawText, aiText };
+    statusEl.style.color = '#10B981';
+    statusEl.textContent = '✅ Mesajınız hazır. Göndermeden önce kontrol edebilirsiniz:';
+    previewEl.style.display = 'block';
+    previewEl.textContent = aiText;
+    sendBtn.disabled = false;
+  } catch (err) {
+    statusEl.style.color = '#EF4444';
+    statusEl.textContent = '❌ Düzenlenemedi: ' + (typeof friendlyAIErrorMessage === 'function' ? friendlyAIErrorMessage(err) : err.message);
+    // Yapay zeka başarısız olsa bile kullanıcı mağdur kalmasın diye ham metni
+    // olduğu gibi göndermeyi teklif ediyoruz.
+    pendingIssueReport = { rawText, aiText: rawText };
+    previewEl.style.display = 'block';
+    previewEl.textContent = rawText;
+    sendBtn.disabled = false;
+    sendBtn.textContent = '✅ Düzenlenmeden Gönder';
+  }
+}
+
+// AI'nin hazırladığı (veya ham) metni, hangi cihazdan/kimden geldiği bilgisiyle
+// birlikte "Talepler" kutusuna gönderir.
+function finalizeIssueReportSend() {
+  if (!pendingIssueReport) return;
+  const payload = {
+    rawText: pendingIssueReport.rawText,
+    aiText: pendingIssueReport.aiText,
+    reportedBy: getActorLabel(),
+    deviceId: currentDeviceId,
+    reportedAt: new Date().toISOString(),
+    status: 'Açık',
+    seenByReporter: false
+  };
+  dbIssueReports.push(payload, (err) => {
+    if (err) { alert("Gönderilemedi: " + err.message); return; }
+    closeIssueReportModal();
+    showToast("✅ Bildiriminiz iletildi, en kısa sürede incelenecektir.");
+  });
+}
+
+function openIssueAdminModal() {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  dismissIssueAlertBanner();
+  if (typeof renderIssueAdminList === 'function') renderIssueAdminList();
+  document.getElementById('issue-admin-modal').style.display = 'flex';
+}
+
+function closeIssueAdminModal() {
+  document.getElementById('issue-admin-modal').style.display = 'none';
+}
+
+// Yönetici bir talebi çözdüğünde: durumu günceller, isteğe bağlı bir not
+// ekler; bildiren cihaz sisteme girdiğinde (veya hâlâ açıksa anında) bunu
+// "işlem tamamlandı" mesajıyla görür.
+function resolveIssueReport(id) {
+  if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  const note = prompt("İsteğe bağlı: çözüm hakkında kısa bir not ekleyin (bildiren kişi bu notu görecek):", "");
+  if (note === null) return; // vazgeçildi
+  dbIssueReports.child(id).update({
+    status: 'Çözüldü',
+    resolvedBy: getActorLabel(),
+    resolvedAt: new Date().toISOString(),
+    resolutionNote: note.trim() || null,
+    seenByReporter: false
+  }, (err) => {
+    if (err) { alert("Güncellenemedi: " + err.message); return; }
+    showToast("Bildirim çözüldü olarak işaretlendi.");
+  });
 }
 
 function renameCurrentDevice() {
@@ -563,6 +777,13 @@ dbCatalogAiHistory.on('value', (snapshot) => {
 dbDevices.on('value', (snapshot) => {
   devicesData = snapshot.val() || {};
   if (typeof renderDevicesList === 'function') renderDevicesList();
+});
+
+dbIssueReports.on('value', (snapshot) => {
+  issueReportsData = snapshot.val() || {};
+  if (typeof renderIssueAdminList === 'function') renderIssueAdminList();
+  updateIssueAdminBadge();
+  checkIssueReportsForCurrentDevice();
 });
 
 dbZReports.on('value', (snapshot) => {
@@ -1029,6 +1250,12 @@ function updateAuthUI() {
   const devicesBtn = document.getElementById('devices-btn');
   if(devicesBtn) devicesBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   updateDeviceBadge();
+
+  // Sorun/Hata Bildir: giriş yapmış (misafir olmayan) herkes görebilir.
+  const issueReportBtn = document.getElementById('issue-report-btn');
+  if (issueReportBtn) issueReportBtn.style.display = (currentRole === 'admin' || currentRole === 'staff') ? 'inline-flex' : 'none';
+  // Talepler paneli ve giriş uyarısı: sadece yönetici görür.
+  if (typeof updateIssueAdminBadge === 'function') updateIssueAdminBadge();
   const canAccessKatalog = (currentRole === 'admin' || currentRole === 'staff');
   const katalogBtn = document.getElementById('nav-katalog-btn');
   if(katalogBtn) katalogBtn.style.display = canAccessKatalog ? 'block' : 'none';
