@@ -98,7 +98,7 @@
   .brand h1{font-family:'Oswald',sans-serif;font-size:22px;margin:0;letter-spacing:0.5px;text-transform:uppercase;color:#fff;}
   .brand span{display:block;font-size:11px;color:#BFD4FF;font-weight:400;letter-spacing:0.3px;}
 
-  .auth-status{display:flex;align-items:center;gap:12px;}
+  .auth-status{display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:8px;justify-content:flex-end;}
   .admin-badge{font-size:11px;padding:5px 14px;border-radius:20px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,0.15);}
   .admin-badge.role-admin{background:var(--success);color:#fff;}
   .admin-badge.role-staff{background:var(--info);color:#fff;}
