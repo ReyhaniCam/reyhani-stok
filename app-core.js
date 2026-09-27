@@ -33,6 +33,7 @@ const DEFAULT_BRANDS = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX",
 let brandSeedChecked = false;
 
 let productsData = {};
+let barcodeCacheData = {}; // dbBarcodeCache'in hafızadaki kopyası — satış sepeti gibi ekranlarda barkodu anında (beklemeden) çözebilmek için
 let wholesalersData = {};
 let globalPastOrders = {};
 let globalZReports = {};
@@ -777,6 +778,10 @@ dbCatalogAiHistory.on('value', (snapshot) => {
 dbDevices.on('value', (snapshot) => {
   devicesData = snapshot.val() || {};
   if (typeof renderDevicesList === 'function') renderDevicesList();
+});
+
+dbBarcodeCache.on('value', (snapshot) => {
+  barcodeCacheData = snapshot.val() || {};
 });
 
 dbIssueReports.on('value', (snapshot) => {
