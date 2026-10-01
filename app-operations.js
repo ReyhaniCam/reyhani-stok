@@ -2700,6 +2700,14 @@ function closeDevicesModal() {
 function renderIssueAdminList() {
   const box = document.getElementById('issue-admin-list');
   if (!box) return;
+
+  // Firebase'den veri henüz hiç gelmediyse "boş" değil "yükleniyor" göster —
+  // aksi hâlde yavaş bağlantılarda "talepler kayboldu" izlenimi verebiliyordu.
+  if (!issueReportsLoaded) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">⏳ Bildirimler yükleniyor...</p>`;
+    return;
+  }
+
   const entries = Object.entries(issueReportsData).sort((a, b) => new Date(b[1].reportedAt || 0) - new Date(a[1].reportedAt || 0));
 
   if (entries.length === 0) {
@@ -2707,7 +2715,11 @@ function renderIssueAdminList() {
     return;
   }
 
-  box.innerHTML = entries.map(([id, r]) => {
+  const openCount = entries.filter(([, r]) => r.status !== 'Çözüldü').length;
+  const resolvedCount = entries.length - openCount;
+  const summaryHtml = `<div style="font-size:11px; color:var(--steel); margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--steel-line);">Toplam <b>${entries.length}</b> bildirim · 🚨 <b>${openCount}</b> açık · ✅ <b>${resolvedCount}</b> çözülmüş</div>`;
+
+  box.innerHTML = summaryHtml + entries.map(([id, r]) => {
     const isOpen = r.status !== 'Çözüldü';
     const mainText = (r.aiText || r.rawText || '').replace(/</g, '&lt;');
     const showOriginal = r.rawText && r.aiText && r.rawText !== r.aiText;
@@ -2722,7 +2734,10 @@ function renderIssueAdminList() {
         <div style="font-size:13px; margin-top:8px; white-space:pre-wrap; line-height:1.4;">${mainText}</div>
         ${showOriginal ? `<details style="margin-top:6px;"><summary style="font-size:10px; color:var(--steel); cursor:pointer;">Orijinal mesajı gör</summary><div style="font-size:11px; color:var(--steel); margin-top:4px; white-space:pre-wrap;">${r.rawText.replace(/</g, '&lt;')}</div></details>` : ''}
         ${!isOpen && r.resolvedBy ? `<div style="font-size:10px; color:var(--success); margin-top:6px;">✅ ${r.resolvedBy} tarafından çözüldü (${r.resolvedAt ? new Date(r.resolvedAt).toLocaleString('tr-TR') : ''})${r.resolutionNote ? ' — "' + r.resolutionNote.replace(/</g, '&lt;') + '"' : ''}</div>` : ''}
-        ${isOpen ? `<button type="button" class="btn btn-success btn-sm" style="width:auto; margin-top:8px;" onclick="resolveIssueReport('${id}')">✅ Çözüldü Olarak İşaretle</button>` : ''}
+        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="copyIssueReportText('${id}')">📋 Metni Kopyala (Geliştiriciye İlet)</button>
+          ${isOpen ? `<button type="button" class="btn btn-success btn-sm" style="width:auto;" onclick="resolveIssueReport('${id}')">✅ Çözüldü Olarak İşaretle</button>` : ''}
+        </div>
       </div>
     `;
   }).join('');
