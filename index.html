@@ -1391,7 +1391,7 @@
     <button class="modal-close" onclick="closeIssueReportModal()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';">🚨 Sorun / Hata Bildir</h3>
     <p style="font-size:12px; color:var(--steel); margin-top:-6px; margin-bottom:12px;">
-      Karşılaştığınız sorunu kendi cümlelerinizle, aklınıza geldiği gibi yazın (örn. "satış yaptım ama sisteme kayıt düşmedi"). Yapay zeka bunu yöneticiye iletilecek düzgün bir metne çevirecek — siz sadece ne olduğunu anlatın. Bildiriminizle birlikte hangi cihazdan ve kim tarafından gönderildiği de otomatik kaydedilir.
+      Karşılaştığınız sorunu kendi cümlelerinizle, aklınıza geldiği gibi yazın (örn. "satış yaptım ama sisteme kayıt düşmedi"). Yapay zeka bunu, yöneticinin doğrudan bir yazılım geliştiriciye iletebileceği <b>teknik bir hata raporu</b> (etkilenen bölüm, beklenen/gerçekleşen davranış, olası neden) hâline getirecek — siz sadece ne olduğunu anlatın. Bildiriminizle birlikte hangi cihazdan ve kim tarafından gönderildiği de otomatik kaydedilir.
     </p>
     <div id="issue-report-step-1">
       <textarea id="issue-report-raw" rows="4" placeholder="Örn: Az önce satış yaptım, ürünü sepete ekleyip ödemeyi aldım ama stok listesinde hiçbir şey değişmedi, kayıt düşmemiş gibi görünüyor..." style="width:100%; resize:vertical;"></textarea>
@@ -1414,7 +1414,7 @@
     <button class="modal-close" onclick="closeIssueAdminModal()">X</button>
     <h3 style="margin-top:0; font-family:'Oswald';">📋 Kullanıcı Sorun / Talep Bildirimleri</h3>
     <p style="font-size:12px; color:var(--steel); margin-top:-6px; margin-bottom:12px;">
-      Çalışanların veya diğer cihazların bildirdiği sorunlar, yapay zeka tarafından düzenlenmiş hâliyle burada listelenir; hangi cihazdan geldiği de görünür. Bir sorunu çözdüğünüzde "Çözüldü" olarak işaretleyin — bildiren kişiye site üzerinden otomatik bilgi gider.
+      Çalışanların veya diğer cihazların bildirdiği sorunlar, yapay zeka tarafından <b>teknik hata raporu</b> formatına (etkilenen bölüm, beklenen/gerçekleşen davranış, olası neden) çevrilmiş hâliyle burada listelenir — bu metni doğrudan kopyalayıp bir geliştiriciye/yapay zekaya iletebilirsiniz. Hangi cihazdan geldiği de görünür. Bir sorunu çözdüğünüzde "Çözüldü" olarak işaretleyin — bildiren kişiye site üzerinden otomatik bilgi gider.
     </p>
     <div id="issue-admin-list" style="max-height:500px; overflow-y:auto;"></div>
   </div>
