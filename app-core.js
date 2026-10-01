@@ -136,6 +136,7 @@ let currentDeviceIP = null; // Bu cihazın gerçek genel (public) IP adresi — 
 // çözünce, bildiren cihaza site üzerinden otomatik bilgi gider.
 const dbIssueReports = dbRoot.child('issue_reports');
 let issueReportsData = {};
+let issueReportsLoaded = false;     // Firebase'den veri en az bir kez geldi mi? ("boş" ile "henüz yüklenmedi" ayrımı için
 let issueReportSeenIds = new Set(); // bu oturumda zaten gösterdiğimiz "çözüldü" uyarıları tekrar açılmasın
 let issueAdminDismissedCount = 0;   // yönetici üstteki kırmızı uyarı çubuğunu kapattığında, aynı sayıda açık talep için tekrar açılmasın
 let pendingIssueReport = null;      // AI'nin ürettiği metin, kullanıcı onaylayana kadar burada bekler
@@ -383,7 +384,7 @@ async function submitIssueReportToAI() {
       body: JSON.stringify({
         contents: [{
           parts: [{
-            text: "Sen bir hırdavat/nalburiye/cam mağazasının stok takip sisteminde çalışan bir destek asistanısın. Bir çalışan/kullanıcı, sistemde yaşadığı bir sorunu aşağıda kendi cümleleriyle anlattı. Bunu, işletme sahibine/yöneticiye iletilecek NET, KISA ve PROFESYONEL bir Türkçe metne dönüştür. Kurallar: 1) Sorunu OLDUĞU GİBİ aktar, abartma veya uydurma detay ekleme, kullanıcının belirtmediği bir bilgiyi varsaymadan yazma. 2) Mümkünse 'Sorun:' ve varsa 'Ne zaman/hangi işlemde oldu:' şeklinde kısa başlıklarla düzenle. 3) SADECE düzenlenmiş metni yaz; başka hiçbir açıklama, giriş cümlesi, selamlama veya markdown işareti ekleme. Çalışanın yazdığı orijinal metin: \"" + rawText.replace(/"/g, "'") + "\""
+            text: "Sen, bir hırdavat/nalburiye/cam mağazasının Firebase tabanlı stok-satış takip web uygulamasında çalışan kıdemli bir yazılım mühendisi/QA uzmanısın. Sistemin ana modülleri şunlar: Stok Listesi (ürün arama/listeleme), Satış Sepeti (ürün arayıp sepete ekleme, barkod okutma), Malzeme Fişi (toptancıdan mal girişi), Borç/Veresiye, Katalog (PDF/AI ile ürün okuma), Kasa/Z Raporu, Görevler, Cihaz Takibi. Bir çalışan/kullanıcı, yaşadığı bir sorunu aşağıda GÜNLÜK KONUŞMA DİLİYLE, teknik olmayan şekilde anlattı. Bunu, işi bu uygulamanın kodunu düzeltmek olan bir yazılım mühendisine (bir sonraki adımda bu metni doğrudan ona iletecek olan yöneticiye) aktarılacak YAPILANDIRILMIŞ bir TEKNİK HATA RAPORUNA (bug report) dönüştür. ŞU BAŞLIKLARI KULLAN (başlık bulunamıyorsa o satırı 'Belirtilmemiş' yaz, uydurma): '🔧 Başlık:' (sorunun 5-8 kelimelik özeti) / '📍 Etkilenen Modül (tahmini):' (yukarıdaki modül listesinden kullanıcının anlattığına en çok uyanı seç) / '👤 Kullanıcının Anlattığı Durum:' (kullanıcının söylediklerini sadeleştirip birebir, abartmadan ve uydurma detay EKLEMEDEN aktar) / '🎯 Beklenen Davranış:' (normalde ne olması gerekiyordu) / '❌ Gerçekleşen Davranış:' (bunun yerine ne oldu) / '🔁 Tekrar Üretme Adımları:' (kullanıcının anlattığından çıkarabildiğin kadarıyla numaralı adımlar; çıkaramıyorsan 'Kullanıcı net adım belirtmedi' yaz) / '💡 Olası Teknik Neden (TAHMİN - doğrulanmadı):' (bir yazılım mühendisinin bu tür bir semptomdan yola çıkarak düşüneceği, kodla ilgili 1-2 makul hipotez; örn. 'arama/eşleştirme fonksiyonu girilen değeri normalize etmiyor olabilir', 'ilgili Firebase yazma işlemi sessizce başarısız oluyor olabilir', 'bu alan responsive/mobil tarayıcıda farklı davranıyor olabilir' gibi GENEL YAZILIM MÜHENDİSLİĞİ KALIPLARI kullan; KESİN TEŞHİS KOYMA, bunun bir varsayım olduğunu belirt). KURALLAR: 1) Kullanıcının belirtmediği hiçbir somut bilgiyi (hata kodu, saat, ürün adı vb.) UYDURMA. 2) 'Olası Teknik Neden' kısmı HER ZAMAN bir tahmin olduğu açık olacak şekilde yazılmalı. 3) SADECE yukarıdaki başlıklı metni yaz; başka hiçbir açıklama, giriş cümlesi, selamlama veya markdown (** gibi) işareti ekleme, başlıkları olduğu gibi kullan. Çalışanın yazdığı orijinal metin: \"" + rawText.replace(/"/g, "'") + "\""
           }]
         }]
       })
@@ -419,20 +420,36 @@ async function submitIssueReportToAI() {
 // birlikte "Talepler" kutusuna gönderir.
 function finalizeIssueReportSend() {
   if (!pendingIssueReport) return;
+  // Firebase, bir alanı "undefined" olan nesneleri SESSİZCE DEĞİL, senkron bir
+  // hatayla reddeder (ör. cihaz kimliği henüz oluşmamışsa) — bu da kaydın hiç
+  // atılmamasına, kullanıcının ise bunu fark etmemesine yol açabilir. Bu yüzden
+  // her alan için güvenli bir yedek değer veriyor ve işlemi try/catch içine alıyoruz.
   const payload = {
-    rawText: pendingIssueReport.rawText,
-    aiText: pendingIssueReport.aiText,
-    reportedBy: getActorLabel(),
-    deviceId: currentDeviceId,
+    rawText: pendingIssueReport.rawText || '',
+    aiText: pendingIssueReport.aiText || pendingIssueReport.rawText || '',
+    reportedBy: getActorLabel() || 'Bilinmeyen Kullanıcı',
+    deviceId: currentDeviceId || 'bilinmeyen-cihaz',
     reportedAt: new Date().toISOString(),
     status: 'Açık',
     seenByReporter: false
   };
-  dbIssueReports.push(payload, (err) => {
-    if (err) { alert("Gönderilemedi: " + err.message); return; }
-    closeIssueReportModal();
-    showToast("✅ Bildiriminiz iletildi, en kısa sürede incelenecektir.");
-  });
+
+  try {
+    dbIssueReports.push(payload, (err) => {
+      if (err) {
+        console.error('Sorun bildirimi kaydedilemedi:', err);
+        alert("❌ Bildirim gönderilemedi: " + err.message + "\n\nLütfen internet bağlantınızı kontrol edip tekrar deneyin.");
+        return;
+      }
+      closeIssueReportModal();
+      showToast("✅ Bildiriminiz iletildi, en kısa sürede incelenecektir.");
+    });
+  } catch (err) {
+    // push() senkron olarak hata fırlatırsa (ör. geçersiz veri), kullanıcıyı
+    // sessizce yarı yolda bırakmamak için burada da yakalıyoruz.
+    console.error('Sorun bildirimi gönderilirken beklenmeyen hata:', err);
+    alert("❌ Bildirim gönderilirken beklenmeyen bir hata oluştu: " + (err.message || err) + "\n\nSayfayı yenileyip tekrar deneyin.");
+  }
 }
 
 function openIssueAdminModal() {
@@ -453,16 +470,39 @@ function resolveIssueReport(id) {
   if (currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   const note = prompt("İsteğe bağlı: çözüm hakkında kısa bir not ekleyin (bildiren kişi bu notu görecek):", "");
   if (note === null) return; // vazgeçildi
-  dbIssueReports.child(id).update({
-    status: 'Çözüldü',
-    resolvedBy: getActorLabel(),
-    resolvedAt: new Date().toISOString(),
-    resolutionNote: note.trim() || null,
-    seenByReporter: false
-  }, (err) => {
-    if (err) { alert("Güncellenemedi: " + err.message); return; }
-    showToast("Bildirim çözüldü olarak işaretlendi.");
-  });
+  try {
+    dbIssueReports.child(id).update({
+      status: 'Çözüldü',
+      resolvedBy: getActorLabel() || 'Bilinmeyen Kullanıcı',
+      resolvedAt: new Date().toISOString(),
+      resolutionNote: note.trim() || null,
+      seenByReporter: false
+    }, (err) => {
+      if (err) { console.error('Talep güncellenemedi:', err); alert("Güncellenemedi: " + err.message); return; }
+      showToast("Bildirim çözüldü olarak işaretlendi.");
+    });
+  } catch (err) {
+    console.error('Talep güncellenirken beklenmeyen hata:', err);
+    alert("Güncellenirken beklenmeyen bir hata oluştu: " + (err.message || err));
+  }
+}
+
+// Yöneticinin, AI'nin hazırladığı teknik raporu tek tıkla kopyalayıp bir
+// geliştiriciye veya yapay zekaya (ör. Claude sohbetine) yapıştırabilmesi için.
+function copyIssueReportText(id) {
+  const r = issueReportsData[id];
+  if (!r) return;
+  const text = r.aiText || r.rawText || '';
+  const finish = () => showToast("📋 Rapor metni kopyalandı — doğrudan yapıştırabilirsiniz.");
+  const fail = () => {
+    // Pano erişimi engellendiyse (izin/http vb.) kullanıcı en azından metni görüp elle kopyalayabilsin.
+    prompt("Otomatik kopyalama başarısız oldu. Aşağıdaki metni elle kopyalayın:", text);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(finish).catch(fail);
+  } else {
+    fail();
+  }
 }
 
 function renameCurrentDevice() {
@@ -786,9 +826,17 @@ dbBarcodeCache.on('value', (snapshot) => {
 
 dbIssueReports.on('value', (snapshot) => {
   issueReportsData = snapshot.val() || {};
+  issueReportsLoaded = true;
   if (typeof renderIssueAdminList === 'function') renderIssueAdminList();
   updateIssueAdminBadge();
   checkIssueReportsForCurrentDevice();
+}, (err) => {
+  // Firebase izin/bağlantı hatası olursa sessizce kaybolmasın — konsola ve
+  // (panel açıksa) ekrana yazdır ki "neden boş görünüyor" sorusu kaybolmasın.
+  console.error('Sorun bildirimleri okunamadı:', err);
+  issueReportsLoaded = true;
+  const box = document.getElementById('issue-admin-list');
+  if (box) box.innerHTML = `<p style="font-size:12px; color:var(--rust); text-align:center; padding:10px 0;">⚠️ Bildirimler yüklenemedi: ${err.message || err}</p>`;
 });
 
 dbZReports.on('value', (snapshot) => {
