@@ -1398,33 +1398,104 @@ function updateBorcOrderProductList() {
   });
 }
 
+// Satış sepetindeki ile AYNI canlı öneri listesi (native <datalist> yerine) —
+// kod/barkod/isim farkları artık burada da "ürün bulunamadı" hatası vermiyor.
+function renderBorcCartProductSuggestions() {
+  const input = document.getElementById('borc-cart-product');
+  const box = document.getElementById('borc-cart-product-suggestions');
+  if (!input || !box) return;
+  const raw = input.value.trim();
+
+  if (!raw) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+  const results = [];
+  if (productsData[raw]) results.push(productsData[raw]);
+
+  if (typeof findSimilarProducts === 'function') {
+    findSimilarProducts(raw, 8).forEach(m => {
+      if (!results.some(p => p.code === m.product.code)) results.push(m.product);
+    });
+  }
+
+  if (results.length < 8 && raw.length >= 2) {
+    Object.values(productsData).forEach(p => {
+      if (results.length >= 8) return;
+      if (p.code && p.code.toLowerCase().includes(raw.toLowerCase()) && !results.some(r => r.code === p.code)) {
+        results.push(p);
+      }
+    });
+  }
+
+  if (results.length === 0) {
+    box.style.display = 'block';
+    box.innerHTML = `<div style="padding:10px; font-size:12px; color:var(--steel);">Eşleşen ürün bulunamadı. "Sepete Ekle"ye basarsanız barkod önbelleği de ayrıca kontrol edilecek.</div>`;
+    return;
+  }
+
+  box.style.display = 'block';
+  box.innerHTML = results.slice(0, 8).map(p => `
+    <div style="padding:8px 10px; cursor:pointer; border-top:1px dashed var(--steel-line); font-size:12px;" onmousedown="selectBorcCartProduct('${p.code}')">
+      <strong>${p.name}</strong> <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code})</span>
+      <br><small style="color:var(--steel);">Stok: ${p.qty || 0} ${p.unit || 'Adet'} · ₺${formatMoney(p.price || 0)}</small>
+    </div>
+  `).join('');
+}
+
+function selectBorcCartProduct(code) {
+  const input = document.getElementById('borc-cart-product');
+  const box = document.getElementById('borc-cart-product-suggestions');
+  const p = productsData[code];
+  if (!input || !p) return;
+  input.value = `${p.code} - ${p.name}`;
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+  const qtyInput = document.getElementById('borc-cart-qty');
+  if (qtyInput) { qtyInput.focus(); qtyInput.select(); }
+}
+
+document.addEventListener('click', function(e) {
+  const box = document.getElementById('borc-cart-product-suggestions');
+  const input = document.getElementById('borc-cart-product');
+  if (box && input && box.style.display !== 'none' && !box.contains(e.target) && e.target !== input) {
+    box.style.display = 'none';
+  }
+});
+
 function addToBorcCart() {
   if (currentRole !== 'admin' && currentRole !== 'staff') {
     alert("Bu işlem için yetkiniz yok!");
     return;
   }
-  
-  const inputVal = document.getElementById('borc-cart-product').value;
+
+  const inputEl = document.getElementById('borc-cart-product');
+  const inputVal = inputEl.value;
   const qty = parseFloat(document.getElementById('borc-cart-qty').value);
-  
+
   if (!inputVal || isNaN(qty) || qty <= 0) {
     alert("Lütfen geçerli bir ürün ve miktar girin.");
     return;
   }
-  
-  const code = inputVal.split(' - ')[0].trim();
-  const p = productsData[code];
-  
+
+  // Satış sepetindeki ile AYNI merkezi çözümleyici: tam kod → "KOD - İsim" →
+  // barkod önbelleği → bulanık isim arama → kısmi kod eşleşmesi.
+  const p = (typeof resolveProductInput === 'function') ? resolveProductInput(inputVal) : productsData[inputVal.split(' - ')[0].trim()];
+
   if (!p) {
-    alert("Ürün bulunamadı! Lütfen listeden seçin.");
+    const looksLikeBarcode = /^\d{6,}$/.test(inputVal.trim());
+    alert(
+      looksLikeBarcode
+        ? `"${inputVal.trim()}" barkodu stoktaki hiçbir ürünle eşleşmedi.\n\nBu ürün sisteme farklı bir kodla kaydedilmiş olabilir. Ürünü isim yazarak aramayı deneyin.`
+        : `"${inputVal.trim()}" için stokta eşleşen bir ürün bulunamadı.\n\nÜrün adının birkaç harfini yazıp açılan öneri listesinden seçmeyi deneyin.`
+    );
     return;
   }
-  
+
+  const code = p.code;
+
   if (p.qty < qty) {
     alert(`Yetersiz stok! Mevcut: ${p.qty} ${p.unit || 'Adet'}`);
     return;
   }
-  
+
   const existingIndex = borcCart.findIndex(item => item.code === code);
   if (existingIndex !== -1) {
     const newQty = borcCart[existingIndex].qty + qty;
@@ -1445,11 +1516,221 @@ function addToBorcCart() {
       total: price * qty
     });
   }
-  
-  document.getElementById('borc-cart-product').value = '';
+
+  inputEl.value = '';
   document.getElementById('borc-cart-qty').value = '1';
+  const box = document.getElementById('borc-cart-product-suggestions');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   renderBorcCart();
-  showToast("Ürün sepete eklendi!");
+  showToast(`"${p.name}" borç sepetine eklendi!`);
+  inputEl.focus();
+}
+
+// ============================================================
+// BORÇ KAĞIDI / SİPARİŞ NOTU FOTOĞRAFINDAN AI İLE BORÇ SEPETİNE AKTARMA
+// Satış sepetindeki foto-okuma sistemiyle BİREBİR AYNI motor; tek fark,
+// sonuçların cart yerine borcCart'a eklenmesi.
+// ============================================================
+let borcCartPhotoReviewItems = [];
+
+async function processBorcCartPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (currentRole !== 'admin' && currentRole !== 'staff') {
+    alert("Bu işlem için yetkiniz yok.");
+    event.target.value = '';
+    return;
+  }
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:");
+    if (!apiKey) { event.target.value = ''; return; }
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  const statusEl = document.getElementById('borc-cart-photo-status');
+  const reviewBox = document.getElementById('borc-cart-photo-review');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = '#F59E0B';
+    statusEl.innerHTML = '⏳ Fotoğraf inceleniyor...';
+  }
+  borcCartPhotoReviewItems = [];
+  if (reviewBox) reviewBox.style.display = 'none';
+
+  try {
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = e => reject(e);
+    });
+    const pureBase64 = base64Data.split(',')[1];
+
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: "Görseldeki, bir hırdavat/nalburiye/cam mağazası müşterisine ait EL YAZISI veya BASILI bir BORÇ KAĞIDI / SİPARİŞ NOTUDUR. Üzerindeki HER ürün satırını tespit et: ürün adı (name — varsa ölçüsünü/ebadını da ismin içine dahil et, örn. 'Dirsek 50'), ve miktarı (qty — belirtilmemişse 1 yaz). Fiyat varsa dikkate ALMA, sadece ürün adı ve miktarı çıkar. El yazısı bozuk/belirsizse bağlamdan en mantıklı hırdavat/nalburiye/cam ürünü adını tahmin et ama tamamen alakasız bir şey uydurma. SADECE geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya markdown işareti ekleme. Örnek: [{\"name\": \"Dirsek 50\", \"qty\": 3}, {\"name\": \"Silikon Beyaz\", \"qty\": 1}]" },
+            { inlineData: { mimeType: file.type || "image/jpeg", data: pureBase64 } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zeka görselden veri okuyamadı.");
+    }
+
+    let textResult = data.candidates[0].content.parts[0].text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const parsedItems = JSON.parse(textResult);
+    if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw new Error("Notta ürün bulunamadı.");
+
+    borcCartPhotoReviewItems = parsedItems.map(item => {
+      const aiName = (item.name || '').trim();
+      const qty = parseFloat(item.qty) || 1;
+      const { product, score } = aiName ? findBestProductMatch(aiName) : { product: null, score: 0 };
+      const isMatch = !!(product && score >= FIS_MATCH_THRESHOLD);
+      return {
+        aiName,
+        qty,
+        matchedCode: isMatch ? product.code : null,
+        matchedName: isMatch ? product.name : null,
+        matchedPrice: isMatch ? (product.price || 0) : 0,
+        matchedStock: isMatch ? (product.qty || 0) : 0,
+        include: isMatch,
+        matched: isMatch
+      };
+    }).filter(it => it.aiName);
+
+    renderBorcCartPhotoReview();
+
+    const matchedCount = borcCartPhotoReviewItems.filter(i => i.matched).length;
+    const unmatchedCount = borcCartPhotoReviewItems.length - matchedCount;
+    if (statusEl) {
+      statusEl.style.color = '#10B981';
+      statusEl.innerHTML = `✅ ${borcCartPhotoReviewItems.length} satır okundu (${matchedCount} stokla eşleşti, ${unmatchedCount} eşleşmedi). Borç sepetine eklemeden önce kontrol edin!`;
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.style.color = '#EF4444';
+      statusEl.innerHTML = '❌ Not okunamadı: ' + (typeof friendlyAIErrorMessage === 'function' ? friendlyAIErrorMessage(err) : err.message);
+    }
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function renderBorcCartPhotoReview() {
+  const box = document.getElementById('borc-cart-photo-review');
+  const itemsEl = document.getElementById('borc-cart-photo-items');
+  if (!box || !itemsEl) return;
+
+  if (borcCartPhotoReviewItems.length === 0) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+
+  itemsEl.innerHTML = borcCartPhotoReviewItems.map((it, i) => {
+    // Eşleşmeyen satırlar için satış sepetindeki ile AYNI "bunu mu
+    // aramıştınız?" benzer-ürün önerisi (findSimilarProducts).
+    const suggestions = !it.matched && it.aiName && typeof findSimilarProducts === 'function' ? findSimilarProducts(it.aiName, 3) : [];
+
+    return `
+    <div style="padding:8px 0; border-top:1px dashed var(--steel-line);">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <input type="checkbox" ${it.include ? 'checked' : ''} ${!it.matched ? 'disabled' : ''} onchange="borcCartPhotoReviewItems[${i}].include=this.checked">
+        <div style="flex:1; min-width:160px;">
+          <input type="text" value="${(it.aiName || '').replace(/"/g, '&quot;')}" style="width:100%; font-size:12px;" oninput="borcCartPhotoReviewItems[${i}].aiName=this.value">
+          ${it.matched
+            ? `<small style="color:var(--success);">✅ Eşleşti: ${it.matchedName} (${it.matchedCode}) · Stok: ${it.matchedStock} · ₺${formatMoney(it.matchedPrice)}</small>`
+            : `<small style="color:var(--rust);">⚠️ "${it.aiName}" adıyla birebir eşleşen ürün yok</small>`}
+        </div>
+        <input type="number" value="${it.qty}" min="0.1" step="any" style="width:70px; font-size:12px;" oninput="borcCartPhotoReviewItems[${i}].qty=parseFloat(this.value)||0">
+        ${!it.matched ? `<button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="researchBorcCartPhotoItem(${i})">🔍 Yeniden Ara</button>` : ''}
+      </div>
+      ${suggestions.length > 0 ? `
+        <div style="margin:6px 0 0 26px; font-size:11px;">
+          <span style="color:var(--steel);">Böyle bir ürün mevcut değil, bunu mu aramıştınız?</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+            ${suggestions.map(s => `
+              <button type="button" class="btn btn-warning btn-sm" style="width:auto;" onclick="selectBorcCartPhotoSuggestion(${i}, '${s.product.code}')">
+                ${s.product.name} <small>(stokta mevcut, ${s.product.qty ?? 0} ${s.product.unit || 'Adet'})</small>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+  }).join('');
+}
+
+function researchBorcCartPhotoItem(i) {
+  const it = borcCartPhotoReviewItems[i];
+  if (!it) return;
+  const { product, score } = findBestProductMatch(it.aiName);
+  const isMatch = !!(product && score >= FIS_MATCH_THRESHOLD);
+  it.matched = isMatch;
+  it.matchedCode = isMatch ? product.code : null;
+  it.matchedName = isMatch ? product.name : null;
+  it.matchedPrice = isMatch ? (product.price || 0) : 0;
+  it.matchedStock = isMatch ? (product.qty || 0) : 0;
+  it.include = isMatch;
+  renderBorcCartPhotoReview();
+  if (!isMatch) showToast("Yine birebir eşleşen bir ürün bulunamadı — aşağıdaki \"bunu mu aramıştınız?\" önerilerine bakın.");
+}
+
+function selectBorcCartPhotoSuggestion(i, code) {
+  const it = borcCartPhotoReviewItems[i];
+  const p = productsData[code];
+  if (!it || !p) return;
+  it.matched = true;
+  it.matchedCode = p.code;
+  it.matchedName = p.name;
+  it.matchedPrice = p.price || 0;
+  it.matchedStock = p.qty || 0;
+  it.include = true;
+  renderBorcCartPhotoReview();
+}
+
+function confirmBorcCartPhotoItems() {
+  const selected = borcCartPhotoReviewItems.filter(it => it.include && it.matched && it.matchedCode);
+  if (selected.length === 0) { alert("Borç sepetine eklemek için en az bir eşleşen ve işaretli ürün olmalı."); return; }
+
+  let blocked = [];
+  selected.forEach(it => {
+    const p = productsData[it.matchedCode];
+    if (!p) return;
+    const qty = it.qty > 0 ? it.qty : 1;
+    const existingIndex = borcCart.findIndex(ci => ci.code === p.code);
+    const currentCartQty = existingIndex !== -1 ? borcCart[existingIndex].qty : 0;
+    if (p.qty < currentCartQty + qty) {
+      blocked.push(`${p.name} (stokta ${p.qty}, istenen ${currentCartQty + qty})`);
+      return;
+    }
+    if (existingIndex !== -1) {
+      borcCart[existingIndex].qty += qty;
+      borcCart[existingIndex].total = borcCart[existingIndex].qty * borcCart[existingIndex].price;
+    } else {
+      const price = Number(p.price || 0);
+      borcCart.push({ code: p.code, name: p.name, price: price, qty: qty, unit: p.unit || 'Adet', total: price * qty });
+    }
+  });
+
+  borcCartPhotoReviewItems = borcCartPhotoReviewItems.filter(it => !(it.include && it.matched));
+  renderBorcCartPhotoReview();
+  renderBorcCart();
+
+  if (blocked.length > 0) {
+    alert("⚠️ Şu ürünler yetersiz stok nedeniyle eklenemedi:\n\n" + blocked.join('\n'));
+  } else {
+    showToast(`✅ ${selected.length} ürün borç sepetine eklendi!`);
+  }
 }
 
 function renderBorcCart() {
