@@ -57,6 +57,7 @@ let catalogAiHistoryData = {}; // { historyId: {brand, fileName, processedAt, to
 let html5QrcodeScanner = null;
 let currentRole = 'guest';
 let cart = JSON.parse(localStorage.getItem('reyhani_cart') || '[]'); // Sepet kalıcılığı: sayfa/oturum kapansa da sepet kaybolmasın
+let cartPhotoReviewItems = []; // Borç kağıdı/not fotoğrafından AI ile okunan, onay bekleyen kalemler
 let goodsReceiptCart = [];
 let fisEditingIndex = null; // null = yeni ekleme modu; sayı ise o index düzenleniyor demektir
 let globalPastReceipts = {};
