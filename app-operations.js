@@ -1322,6 +1322,173 @@ document.addEventListener('click', function(e) {
   }
 });
 
+// ============================================================
+// BORÇ KAĞIDI / SİPARİŞ NOTU FOTOĞRAFINDAN AI İLE SEPETE AKTARMA
+// Müşterinin elle yazdığı veya gönderdiği bir not/borç kağıdının fotoğrafı
+// AYNI yapay zeka modeliyle (Gemini) okunur, her satır stoktaki AYNI
+// eşleştirme motoruyla (findBestProductMatch) bir ürüne bağlanmaya çalışılır.
+// Hiçbir şey otomatik sepete düşmez — personel onaylamadan eklenmez.
+// ============================================================
+async function processCartPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (currentRole !== 'admin' && currentRole !== 'staff') {
+    alert("Bu işlem için yetkiniz yok.");
+    event.target.value = '';
+    return;
+  }
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt("Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:");
+    if (!apiKey) { event.target.value = ''; return; }
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  const statusEl = document.getElementById('cart-photo-status');
+  const reviewBox = document.getElementById('cart-photo-review');
+  if (statusEl) {
+    statusEl.style.display = 'block';
+    statusEl.style.color = '#F59E0B';
+    statusEl.innerHTML = '⏳ Fotoğraf inceleniyor...';
+  }
+  cartPhotoReviewItems = [];
+  if (reviewBox) reviewBox.style.display = 'none';
+
+  try {
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = e => reject(e);
+    });
+    const pureBase64 = base64Data.split(',')[1];
+
+    const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: "Görseldeki, bir hırdavat/nalburiye/cam mağazası müşterisine ait EL YAZISI veya BASILI bir BORÇ KAĞIDI / SİPARİŞ NOTUDUR. Üzerindeki HER ürün satırını tespit et: ürün adı (name — varsa ölçüsünü/ebadını da ismin içine dahil et, örn. 'Dirsek 50'), ve miktarı (qty — belirtilmemişse 1 yaz). Fiyat varsa dikkate ALMA, sadece ürün adı ve miktarı çıkar. El yazısı bozuk/belirsizse bağlamdan en mantıklı hırdavat/nalburiye/cam ürünü adını tahmin et ama tamamen alakasız bir şey uydurma. SADECE geçerli bir JSON dizisi döndür, başka hiçbir açıklama veya markdown işareti ekleme. Örnek: [{\"name\": \"Dirsek 50\", \"qty\": 3}, {\"name\": \"Silikon Beyaz\", \"qty\": 1}]" },
+            { inlineData: { mimeType: file.type || "image/jpeg", data: pureBase64 } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+    if (data.error) throw new Error(data.error.message);
+    if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+      throw new Error("Yapay zeka görselden veri okuyamadı.");
+    }
+
+    let textResult = data.candidates[0].content.parts[0].text.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const parsedItems = JSON.parse(textResult);
+    if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw new Error("Notta ürün bulunamadı.");
+
+    cartPhotoReviewItems = parsedItems.map(item => {
+      const aiName = (item.name || '').trim();
+      const qty = parseFloat(item.qty) || 1;
+      const { product, score } = aiName ? findBestProductMatch(aiName) : { product: null, score: 0 };
+      const isMatch = !!(product && score >= FIS_MATCH_THRESHOLD);
+      return {
+        aiName,
+        qty,
+        matchedCode: isMatch ? product.code : null,
+        matchedName: isMatch ? product.name : null,
+        matchedPrice: isMatch ? (product.price || 0) : 0,
+        matchedStock: isMatch ? (product.qty || 0) : 0,
+        include: isMatch,
+        matched: isMatch
+      };
+    }).filter(it => it.aiName);
+
+    renderCartPhotoReview();
+
+    const matchedCount = cartPhotoReviewItems.filter(i => i.matched).length;
+    const unmatchedCount = cartPhotoReviewItems.length - matchedCount;
+    if (statusEl) {
+      statusEl.style.color = '#10B981';
+      statusEl.innerHTML = `✅ ${cartPhotoReviewItems.length} satır okundu (${matchedCount} stokla eşleşti, ${unmatchedCount} eşleşmedi). Sepete eklemeden önce kontrol edin!`;
+    }
+  } catch (err) {
+    if (statusEl) {
+      statusEl.style.color = '#EF4444';
+      statusEl.innerHTML = '❌ Not okunamadı: ' + (typeof friendlyAIErrorMessage === 'function' ? friendlyAIErrorMessage(err) : err.message);
+    }
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function renderCartPhotoReview() {
+  const box = document.getElementById('cart-photo-review');
+  const itemsEl = document.getElementById('cart-photo-items');
+  if (!box || !itemsEl) return;
+
+  if (cartPhotoReviewItems.length === 0) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+
+  itemsEl.innerHTML = cartPhotoReviewItems.map((it, i) => `
+    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px dashed var(--steel-line); flex-wrap:wrap;">
+      <input type="checkbox" ${it.include ? 'checked' : ''} ${!it.matched ? 'disabled' : ''} onchange="cartPhotoReviewItems[${i}].include=this.checked">
+      <div style="flex:1; min-width:160px;">
+        <input type="text" value="${(it.aiName || '').replace(/"/g, '&quot;')}" style="width:100%; font-size:12px;" oninput="cartPhotoReviewItems[${i}].aiName=this.value">
+        ${it.matched
+          ? `<small style="color:var(--success);">✅ Eşleşti: ${it.matchedName} (${it.matchedCode}) · Stok: ${it.matchedStock} · ₺${formatMoney(it.matchedPrice)}</small>`
+          : `<small style="color:var(--rust);">⚠️ Stokta eşleşen ürün bulunamadı</small>`}
+      </div>
+      <input type="number" value="${it.qty}" min="0.1" step="any" style="width:70px; font-size:12px;" oninput="cartPhotoReviewItems[${i}].qty=parseFloat(this.value)||0">
+      ${!it.matched ? `<button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="researchCartPhotoItem(${i})">🔍 Yeniden Ara</button>` : ''}
+    </div>
+  `).join('');
+}
+
+// Kullanıcı eşleşmeyen bir satırın adını düzeltip bu butonla tekrar
+// aratabilir — AYNI eşleştirme motoru (findBestProductMatch) kullanılır.
+function researchCartPhotoItem(i) {
+  const it = cartPhotoReviewItems[i];
+  if (!it) return;
+  const { product, score } = findBestProductMatch(it.aiName);
+  const isMatch = !!(product && score >= FIS_MATCH_THRESHOLD);
+  it.matched = isMatch;
+  it.matchedCode = isMatch ? product.code : null;
+  it.matchedName = isMatch ? product.name : null;
+  it.matchedPrice = isMatch ? (product.price || 0) : 0;
+  it.matchedStock = isMatch ? (product.qty || 0) : 0;
+  it.include = isMatch;
+  renderCartPhotoReview();
+  if (!isMatch) showToast("Yine eşleşen bir ürün bulunamadı. Adı daha fazla netleştirmeyi deneyin.");
+}
+
+// İşaretli ve eşleşmiş kalemleri gerçek sepete (cart) aktarır — aynı sepet,
+// aynı renderCart(), aynı ödeme akışı; fotoğraftan gelmiş olması bir şeyi değiştirmez.
+function confirmCartPhotoItems() {
+  const selected = cartPhotoReviewItems.filter(it => it.include && it.matched && it.matchedCode);
+  if (selected.length === 0) { alert("Sepete eklemek için en az bir eşleşen ve işaretli ürün olmalı."); return; }
+
+  selected.forEach(it => {
+    const p = productsData[it.matchedCode];
+    if (!p) return;
+    const qty = it.qty > 0 ? it.qty : 1;
+    const existingIndex = cart.findIndex(ci => ci.code === p.code);
+    if (existingIndex !== -1) {
+      cart[existingIndex].qty += qty;
+      cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
+    } else {
+      const price = Number(p.price || 0);
+      cart.push({ code: p.code, name: p.name, price: price, qty: qty, unit: p.unit || 'Adet', total: price * qty });
+    }
+  });
+
+  cartPhotoReviewItems = cartPhotoReviewItems.filter(it => !(it.include && it.matched));
+  renderCartPhotoReview();
+  renderCart();
+  showToast(`✅ ${selected.length} ürün sepete eklendi!`);
+}
+
 function addToCart() {
   if(currentRole !== 'admin' && currentRole !== 'staff') return;
   const inputEl = document.getElementById('cart-product');
