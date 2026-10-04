@@ -1431,19 +1431,43 @@ function renderCartPhotoReview() {
   if (cartPhotoReviewItems.length === 0) { box.style.display = 'none'; return; }
   box.style.display = 'block';
 
-  itemsEl.innerHTML = cartPhotoReviewItems.map((it, i) => `
-    <div style="display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px dashed var(--steel-line); flex-wrap:wrap;">
-      <input type="checkbox" ${it.include ? 'checked' : ''} ${!it.matched ? 'disabled' : ''} onchange="cartPhotoReviewItems[${i}].include=this.checked">
-      <div style="flex:1; min-width:160px;">
-        <input type="text" value="${(it.aiName || '').replace(/"/g, '&quot;')}" style="width:100%; font-size:12px;" oninput="cartPhotoReviewItems[${i}].aiName=this.value">
-        ${it.matched
-          ? `<small style="color:var(--success);">✅ Eşleşti: ${it.matchedName} (${it.matchedCode}) · Stok: ${it.matchedStock} · ₺${formatMoney(it.matchedPrice)}</small>`
-          : `<small style="color:var(--rust);">⚠️ Stokta eşleşen ürün bulunamadı</small>`}
+  itemsEl.innerHTML = cartPhotoReviewItems.map((it, i) => {
+    // Eşleşmeyen satırlar için, sistemin başka yerlerinde de (ör. yeni ürün
+    // eklerken "bu ürün zaten kayıtlı olabilir" uyarısında) kullanılan AYNI
+    // benzer-ürün motorunu (findSimilarProducts) çalıştırıp "bunu mu demek
+    // istediniz?" önerileri çıkarıyoruz — yazım/marka farkları (ör. not'ta
+    // "siyah eldiven" yazması ama stokta "Alper Siyah Eldiven" olarak kayıtlı
+    // olması gibi durumlar) burada yakalanır.
+    const suggestions = !it.matched && it.aiName ? findSimilarProducts(it.aiName, 3) : [];
+
+    return `
+    <div style="padding:8px 0; border-top:1px dashed var(--steel-line);">
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <input type="checkbox" ${it.include ? 'checked' : ''} ${!it.matched ? 'disabled' : ''} onchange="cartPhotoReviewItems[${i}].include=this.checked">
+        <div style="flex:1; min-width:160px;">
+          <input type="text" value="${(it.aiName || '').replace(/"/g, '&quot;')}" style="width:100%; font-size:12px;" oninput="cartPhotoReviewItems[${i}].aiName=this.value">
+          ${it.matched
+            ? `<small style="color:var(--success);">✅ Eşleşti: ${it.matchedName} (${it.matchedCode}) · Stok: ${it.matchedStock} · ₺${formatMoney(it.matchedPrice)}</small>`
+            : `<small style="color:var(--rust);">⚠️ "${it.aiName}" adıyla birebir eşleşen ürün yok</small>`}
+        </div>
+        <input type="number" value="${it.qty}" min="0.1" step="any" style="width:70px; font-size:12px;" oninput="cartPhotoReviewItems[${i}].qty=parseFloat(this.value)||0">
+        ${!it.matched ? `<button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="researchCartPhotoItem(${i})">🔍 Yeniden Ara</button>` : ''}
       </div>
-      <input type="number" value="${it.qty}" min="0.1" step="any" style="width:70px; font-size:12px;" oninput="cartPhotoReviewItems[${i}].qty=parseFloat(this.value)||0">
-      ${!it.matched ? `<button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="researchCartPhotoItem(${i})">🔍 Yeniden Ara</button>` : ''}
+      ${suggestions.length > 0 ? `
+        <div style="margin:6px 0 0 26px; font-size:11px;">
+          <span style="color:var(--steel);">Böyle bir ürün mevcut değil, bunu mu aramıştınız?</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
+            ${suggestions.map(s => `
+              <button type="button" class="btn btn-warning btn-sm" style="width:auto;" onclick="selectCartPhotoSuggestion(${i}, '${s.product.code}')">
+                ${s.product.name} <small>(stokta mevcut, ${s.product.qty ?? 0} ${s.product.unit || 'Adet'})</small>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 // Kullanıcı eşleşmeyen bir satırın adını düzeltip bu butonla tekrar
@@ -1460,7 +1484,21 @@ function researchCartPhotoItem(i) {
   it.matchedStock = isMatch ? (product.qty || 0) : 0;
   it.include = isMatch;
   renderCartPhotoReview();
-  if (!isMatch) showToast("Yine eşleşen bir ürün bulunamadı. Adı daha fazla netleştirmeyi deneyin.");
+  if (!isMatch) showToast("Yine birebir eşleşen bir ürün bulunamadı — aşağıdaki \"bunu mu aramıştınız?\" önerilerine bakın.");
+}
+
+// "Bunu mu aramıştınız?" önerisine tıklanınca o satırı doğrudan o ürünle eşleştirir.
+function selectCartPhotoSuggestion(i, code) {
+  const it = cartPhotoReviewItems[i];
+  const p = productsData[code];
+  if (!it || !p) return;
+  it.matched = true;
+  it.matchedCode = p.code;
+  it.matchedName = p.name;
+  it.matchedPrice = p.price || 0;
+  it.matchedStock = p.qty || 0;
+  it.include = true;
+  renderCartPhotoReview();
 }
 
 // İşaretli ve eşleşmiş kalemleri gerçek sepete (cart) aktarır — aynı sepet,
