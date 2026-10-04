@@ -756,6 +756,20 @@
           </div>
         </div>
         <p style="font-size:11px; color:var(--steel); margin-top:8px; margin-bottom:0;">💡 Barkod okuyucu kullanıyorsanız imleci bu kutuya bırakıp doğrudan okutabilirsiniz — okuma bitince otomatik olarak sepete eklenir.</p>
+
+        <div style="margin-top:14px; padding:12px; background:rgba(0,0,0,0.03); border-radius:8px; border:1px dashed var(--steel-line);">
+          <label style="font-size:12px; font-weight:700; color:var(--charcoal); display:block;">📷 Borç Kağıdı / Sipariş Notu Fotoğrafından Oku (AI)</label>
+          <p style="font-size:11px; color:var(--steel); margin:4px 0 8px;">Müşterinin elle yazdığı veya gönderdiği bir not/borç kağıdının fotoğrafını çekin ya da yükleyin — yapay zeka üzerindeki ürünleri okuyup stoktaki karşılıklarını bulur, siz onaylayınca sepete eklenir.</p>
+          <input type="file" accept="image/*" capture="environment" id="cart-photo-input" onchange="processCartPhoto(event)" style="font-size:12px;">
+          <div id="cart-photo-status" style="font-size:12px; margin-top:8px; display:none; font-weight:600;"></div>
+        </div>
+
+        <div id="cart-photo-review" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--steel-line);">
+          <h4 style="margin:0 0 4px; font-family:'Oswald'; font-size:14px;">📋 Fotoğraftan Okunanlar</h4>
+          <p style="font-size:11px; color:var(--steel); margin-top:0; margin-bottom:10px;">Yapay zeka yanlış okuyabilir veya yanlış ürünle eşleştirebilir — sepete eklemeden önce kontrol edin. Eşleşmeyen bir satır için adı düzeltip "Yeniden Ara"yı deneyin.</p>
+          <div id="cart-photo-items"></div>
+          <button type="button" class="btn btn-success" style="margin-top:10px; width:100%;" onclick="confirmCartPhotoItems()">✅ İşaretlileri Sepete Ekle</button>
+        </div>
       </div>
       
       <div id="cart-container" class="form-card" style="display:none; padding:12px;">
