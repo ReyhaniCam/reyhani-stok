@@ -1214,6 +1214,7 @@ function renderFisWholesalerOptions() {
     sel.appendChild(opt);
   });
   if (current && wholesalersData[current]) sel.value = current;
+  if (typeof updateFisSlipSummary === 'function') updateFisSlipSummary();
 }
 
 // ============================================================
@@ -2065,6 +2066,71 @@ function renderGoodsReceiptCart() {
   tbody.innerHTML = __fisParts.join('');
 
   document.getElementById('fis-total').textContent = "₺" + formatMoney(grandTotal);
+  updateFisSlipSummary();
+}
+
+// "2.115,00" / "2,115.00" / 2115 / "38.714" -> sayı. Okunamazsa null.
+function parseTrNumber(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  let t = String(v).replace(/[^0-9.,\-]/g, '');
+  if (!t) return null;
+  const lastDot = t.lastIndexOf('.'), lastComma = t.lastIndexOf(',');
+  if (lastDot > -1 && lastComma > -1) {
+    if (lastComma > lastDot) t = t.replace(/\./g, '').replace(',', '.');
+    else t = t.replace(/,/g, '');
+  } else if (lastComma > -1) {
+    t = /,\d{1,2}$/.test(t) ? t.replace(',', '.') : t.replace(/,/g, '');
+  } else if (lastDot > -1) {
+    if (!/\.\d{1,2}$/.test(t)) t = t.replace(/\./g, '');
+  }
+  const n = parseFloat(t);
+  return isNaN(n) ? null : n;
+}
+
+// Fiş altındaki cari hesap kutusunu (eski bakiye + yeni mallar = yeni borç) günceller
+function updateFisSlipSummary() {
+  const box = document.getElementById('fis-slip-summary');
+  if (!box) return;
+  const items = goodsReceiptCart.reduce((a, i) => a + (Number(i.total) || 0), 0);
+  const prev = parseTrNumber(document.getElementById('fis-prev-balance')?.value);
+  const slipGrand = parseTrNumber(document.getElementById('fis-slip-grand')?.value);
+  const sync = !!document.getElementById('fis-sync-balance')?.checked;
+  const addDebt = !!document.getElementById('fis-add-debt')?.checked;
+  const wKey = document.getElementById('fis-wholesaler')?.value;
+  const w = wKey ? wholesalersData[wKey] : null;
+  const sysDebt = w ? -(Number(w.balance) || 0) : null;
+  const m = (x) => '₺' + formatMoney(x);
+  const rows = [];
+
+  if (prev !== null && sync) {
+    rows.push(`<div>Eski bakiye (fişte): <b>${m(prev)}</b></div>`);
+    rows.push(`<div>+ Bu fişteki mallar: <b>${m(items)}</b></div>`);
+    rows.push(`<div>= Yeni borç olacak: <b style="color:var(--rust); font-size:16px;">${m(prev + items)}</b></div>`);
+  } else if (w) {
+    rows.push(`<div>Sistemdeki mevcut borç: <b>${m(sysDebt)}</b></div>`);
+    rows.push(`<div>+ Bu fişteki mallar: <b>${m(items)}</b></div>`);
+    rows.push(`<div>= Yeni borç olacak: <b style="color:var(--rust); font-size:16px;">${m(sysDebt + items)}</b></div>`);
+  } else {
+    rows.push(`<div>Bu fişteki mallar: <b>${m(items)}</b> <span style="color:var(--steel);">(toptancı seçilince yeni borç hesaplanır)</span></div>`);
+  }
+
+  const warn = (t) => rows.push(`<div style="color:#B45309; font-weight:700; font-family:inherit;">⚠️ ${t}</div>`);
+  const info = (t) => rows.push(`<div style="color:#1D4ED8; font-family:inherit;">ℹ️ ${t}</div>`);
+
+  if (fisSlipInfo && fisSlipInfo.subtotal !== null && Math.abs(fisSlipInfo.subtotal - items) > 0.5) {
+    warn(`Fişteki mal ara toplamı ${m(fisSlipInfo.subtotal)}, kalemlerin toplamı ${m(items)}. Okuma hatası olabilir; miktar/fiyatları kontrol edin.`);
+  }
+  if (slipGrand !== null && prev !== null) {
+    if (Math.abs(slipGrand - (prev + items)) > 0.5) warn(`Fişteki genel toplam ${m(slipGrand)}, hesaplanan ${m(prev + items)}. Rakamlardan biri yanlış okunmuş olabilir.`);
+    else rows.push(`<div style="color:#15803D; font-family:inherit;">✅ Fişteki genel toplamla (${m(slipGrand)}) uyuşuyor.</div>`);
+  }
+  if (w && prev !== null && Math.abs(sysDebt - prev) > 0.5) {
+    if (sync) info(`Sistemde bu toptancının borcu ${m(sysDebt)}, fişte eski bakiye ${m(prev)}. Onaylayınca sistem fişteki rakama eşitlenir (fark ${m(prev - sysDebt)}) ve hesap ekstresine düzeltme kaydı düşülür.`);
+    else warn(`Sistemdeki borç (${m(sysDebt)}) ile fişteki eski bakiye (${m(prev)}) farklı. Eşitleme kapalı: yalnızca bu fişin tutarı mevcut sistem borcuna eklenecek.`);
+  }
+  if (!addDebt) info('"Tutarı toptancı cari hesabına borç olarak işle" kutusu kapalı: bakiye değişmeyecek.');
+  box.innerHTML = rows.join('');
 }
 
 function markFisItemAsNew(index) {
@@ -2177,6 +2243,18 @@ async function completeGoodsReceipt() {
   const note = document.getElementById('fis-note').value.trim();
   const addDebt = document.getElementById('fis-add-debt').checked;
 
+  // Fişteki eski bakiye (varsa) ve eşitleme tercihi
+  const slipPrev = parseTrNumber(document.getElementById('fis-prev-balance')?.value);
+  const slipGrandVal = parseTrNumber(document.getElementById('fis-slip-grand')?.value);
+  const syncBalance = addDebt && slipPrev !== null && !!document.getElementById('fis-sync-balance')?.checked;
+  if (syncBalance) {
+    const sysDebtNow = -(Number(wholesaler.balance) || 0);
+    const itemsSum = goodsReceiptCart.reduce((a, i) => a + (Number(i.total) || 0), 0);
+    if (Math.abs(sysDebtNow - slipPrev) > 0.005) {
+      if (!confirm(`${wholesaler.name} için sistemde kayıtlı borç: ₺${formatMoney(sysDebtNow)}\nFişteki eski bakiye: ₺${formatMoney(slipPrev)}\n\nSistem borcu fişteki rakama eşitlenip bu fişin ₺${formatMoney(itemsSum)} tutarı eklenecek.\nYeni borç: ₺${formatMoney(slipPrev + itemsSum)}\n\nOnaylıyor musunuz?`)) return;
+    }
+  }
+
   const dateStr = new Date().toISOString().slice(0, 10);
   const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const receiptId = "FIS-" + new Date().getTime();
@@ -2266,19 +2344,38 @@ async function completeGoodsReceipt() {
     items: finalItems,
     total: grandTotal,
     addedToDebt: addDebt,
+    previousBalanceOnSlip: slipPrev !== null ? slipPrev : null,
+    slipGrandTotal: slipGrandVal !== null ? slipGrandVal : null,
     processedBy: getActorLabel() // hangi cihazdan/kim tarafından girildiği
   };
 
   dbGoodsReceipts.child(dateStr).child(receiptId).set(receiptData, (err) => {
     if(!err) {
-      if(addDebt && grandTotal > 0) {
-        dbWholesalers.child(wKey).child('balance').transaction(cur => (cur || 0) - grandTotal, (err2) => {
-          if(!err2) {
+      if(addDebt && (grandTotal > 0 || syncBalance)) {
+        let seenCur = 0, syncDiff = 0;
+        dbWholesalers.child(wKey).child('balance').transaction(cur => {
+          seenCur = Number(cur || 0);
+          let base = seenCur;
+          syncDiff = 0;
+          if (syncBalance) { base = -slipPrev; syncDiff = base - seenCur; }   // sistem borcunu fişteki eski bakiyeye eşitle
+          return Math.round((base - grandTotal) * 100) / 100;                 // + bu fişin mallarını borç olarak ekle
+        }, (err2, committed) => {
+          if(err2 || !committed) return;
+          const tDate = new Date().toLocaleString('tr-TR');
+          if (syncBalance && Math.abs(syncDiff) > 0.005) {
+            dbWholesalers.child(wKey).child('transactions').push({
+              desc: `Fiş eski bakiye mutabakatı (sistem ₺${formatMoney(-seenCur)} → fiş ₺${formatMoney(slipPrev)})`,
+              amount: Math.abs(syncDiff),
+              type: syncDiff < 0 ? 'borc' : 'odeme',
+              date: tDate
+            });
+          }
+          if (grandTotal > 0) {
             dbWholesalers.child(wKey).child('transactions').push({
               desc: 'Malzeme Fişi: ' + (fisNo || receiptId),
               amount: grandTotal,
               type: 'borc',
-              date: new Date().toLocaleString('tr-TR')
+              date: tDate
             });
           }
         });
@@ -2299,6 +2396,10 @@ async function completeGoodsReceipt() {
       document.getElementById('fis-wholesaler').value = '';
       document.getElementById('fis-no').value = '';
       document.getElementById('fis-note').value = '';
+      fisSlipInfo = null;
+      const prevBalEl = document.getElementById('fis-prev-balance'); if (prevBalEl) prevBalEl.value = '';
+      const slipGrandEl = document.getElementById('fis-slip-grand'); if (slipGrandEl) slipGrandEl.value = '';
+      const syncEl = document.getElementById('fis-sync-balance'); if (syncEl) syncEl.checked = true;
       const bulkApplyEl = document.getElementById('fis-bulk-price-apply');
       const bulkProfitEl = document.getElementById('fis-bulk-profit');
       const bulkVatEl = document.getElementById('fis-bulk-vat');
