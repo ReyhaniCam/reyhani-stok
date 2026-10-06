@@ -1853,6 +1853,15 @@ async function createNewProductRecord(item, sourceLabel, extraUsedCodes) {
 }
 
 async function addToGoodsReceipt() {
+  try {
+    await addToGoodsReceiptCore();
+  } catch (err) {
+    console.error(err);
+    alert("Kalem kaydedilemedi: " + (err && err.message ? err.message : err));
+  }
+}
+
+async function addToGoodsReceiptCore() {
   if(currentRole !== 'admin' && currentRole !== 'staff') return;
   const inputVal = document.getElementById('fis-product').value.trim();
   const qty = parseFloat(document.getElementById('fis-qty').value);
@@ -1866,6 +1875,22 @@ async function addToGoodsReceipt() {
 
   const possibleCode = inputVal.split(' - ')[0].trim();
   const p = productsData[possibleCode];
+
+  // Düzenleme modunda ürün adı değiştirildiyse (örn. AI'ın yanlış okuduğu adı düzeltme) bunu stoktaki ürüne işle.
+  // Önceden ad kutusundaki değişiklik sessizce yok sayılıyordu.
+  if (p && fisEditingIndex !== null) {
+    const sepIdx = inputVal.indexOf(' - ');
+    const typedName = sepIdx > -1 ? inputVal.slice(sepIdx + 3).trim() : '';
+    const prevItem = goodsReceiptCart[fisEditingIndex];
+    if (typedName && typedName !== p.name) {
+      const createdHere = !!(prevItem && prevItem.justCreated);
+      if (createdHere || confirm(`Stoktaki ürünün adı\n"${p.name}"\n→ "${typedName}"\nolarak değiştirilsin mi?`)) {
+        await db.child(p.code).update({ name: typedName });
+        p.name = typedName;
+        if (productsData[p.code]) productsData[p.code].name = typedName;
+      }
+    }
+  }
 
   let item;
   if(p) {
@@ -2232,7 +2257,22 @@ function cancelFisEdit() {
 }
 
 async function completeGoodsReceipt() {
+  try {
+    await completeGoodsReceiptCore();
+  } catch (err) {
+    console.error(err);
+    alert("Fiş kaydedilirken hata oluştu: " + (err && err.message ? err.message : err));
+  }
+}
+
+async function completeGoodsReceiptCore() {
   if(currentRole !== 'admin' && currentRole !== 'staff') return;
+  // Bir kalem düzenleme modundaysa ve "💾 Düzenlemeyi Kaydet"e basılmadıysa değişiklikler kaybolmasın
+  if (fisEditingIndex !== null) {
+    if (!confirm("Düzenlemekte olduğunuz kalem henüz kaydedilmedi.\n\nTamam: düzenlemeyi kaydet ve fişe devam et\nİptal: işlemi durdur")) return;
+    await addToGoodsReceiptCore();
+    if (fisEditingIndex !== null) return; // kaydedilemediyse durdur
+  }
   if(goodsReceiptCart.length === 0) return;
 
   const wKey = document.getElementById('fis-wholesaler').value;
