@@ -1231,6 +1231,13 @@ function resolveProductInput(inputValRaw) {
   // 1) Tam kod eşleşmesi (ürünün kendi kodu, ya da kodu=barkodu olan ürünlerde barkodun kendisi)
   if (productsData[inputVal]) return productsData[inputVal];
 
+  // 1b) Ürüne AYRICA kaydedilmiş gerçek barkod alanı (code'dan bağımsız).
+  // Bir ürünün sistem kodu "RYH-000123" gibi dahili bir kod olsa bile, üzerine
+  // kayıtlı gerçek barkodu buradan bulunur — kasadan barkod okutma/ürüne
+  // barkod bağlama akışının çalışabilmesi için bu katman ZORUNLU.
+  const byBarcodeField = Object.values(productsData).find(p => p.barcode && p.barcode === inputVal);
+  if (byBarcodeField) return byBarcodeField;
+
   // 2) "KOD - İsim" biçimi (öneri listesinden seçildiğinde bu formatta gelir)
   if (inputVal.includes(' - ')) {
     const codePart = inputVal.split(' - ')[0].trim();
@@ -1263,6 +1270,12 @@ function resolveProductInput(inputValRaw) {
 // Yazarken (veya kutuya odaklanınca) canlı öneri listesi gösterir — telefon/
 // tablette native <datalist> açılır menüsü güvenilir çalışmadığı için bunun
 // yerine kendi çizdiğimiz, her cihazda aynı şekilde çalışan bir liste kullanıyoruz.
+// Tanınmayan bir barkod okutulduğunda burada tutulur: kullanıcı aşağıdan
+// doğru ürünü seçtiğinde bu barkod kalıcı olarak o ürüne bağlanır, bir daha
+// okutulduğunda anında tanınır. Böylece sistem her okutmada kendi kendini
+// zenginleştirir.
+let pendingBarcodeToLink = null;
+
 function renderCartProductSuggestions() {
   const input = document.getElementById('cart-product');
   const box = document.getElementById('cart-product-suggestions');
@@ -1287,17 +1300,24 @@ function renderCartProductSuggestions() {
     });
   }
 
+  const linkHint = pendingBarcodeToLink
+    ? `<div style="padding:8px 10px; background:rgba(245,158,11,0.12); font-size:11px; color:#92400E; font-weight:600; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+         <span>🔗 "${pendingBarcodeToLink}" barkodu seçeceğiniz ürüne kaydedilecek.</span>
+         <button type="button" onmousedown="cancelPendingBarcodeLink()" style="background:none; border:none; color:#92400E; font-size:11px; text-decoration:underline; cursor:pointer; flex-shrink:0;">Vazgeç</button>
+       </div>`
+    : '';
+
   if (results.length === 0) {
     box.style.display = 'block';
-    box.innerHTML = `<div style="padding:10px; font-size:12px; color:var(--steel);">Eşleşen ürün bulunamadı. "Sepete Ekle"ye basarsanız barkod önbelleği de ayrıca kontrol edilecek.</div>`;
+    box.innerHTML = linkHint + `<div style="padding:10px; font-size:12px; color:var(--steel);">Eşleşen ürün bulunamadı. Ürün adını yazmayı deneyin.</div>`;
     return;
   }
 
   box.style.display = 'block';
-  box.innerHTML = results.slice(0, 8).map(p => `
+  box.innerHTML = linkHint + results.slice(0, 8).map(p => `
     <div style="padding:8px 10px; cursor:pointer; border-top:1px dashed var(--steel-line); font-size:12px;" onmousedown="selectCartProduct('${p.code}')">
       <strong>${p.name}</strong> <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${p.code})</span>
-      <br><small style="color:var(--steel);">Stok: ${p.qty || 0} ${p.unit || 'Adet'} · ₺${formatMoney(p.price || 0)}</small>
+      <br><small style="color:var(--steel);">Stok: ${p.qty || 0} ${p.unit || 'Adet'} · ₺${formatMoney(p.price || 0)}${p.barcode ? ' · 🔗 ' + p.barcode : ''}</small>
     </div>
   `).join('');
 }
@@ -1307,10 +1327,41 @@ function selectCartProduct(code) {
   const box = document.getElementById('cart-product-suggestions');
   const p = productsData[code];
   if (!input || !p) return;
+
+  // Bekleyen bir barkod bağlama varsa: barkodu bu ürüne kalıcı olarak kaydet
+  // ve seçimi doğrudan sepete ekleme olarak tamamla — tekrar okutulduğunda
+  // bu ürün anında tanınacak.
+  if (pendingBarcodeToLink) {
+    const barcode = pendingBarcodeToLink;
+    pendingBarcodeToLink = null;
+    db.child(code).update({ barcode: barcode }, (err) => {
+      if (err) { alert("Barkod kaydedilemedi: " + err.message); return; }
+      productsData[code] = Object.assign({}, productsData[code], { barcode: barcode });
+      showToast(`🔗 "${barcode}" barkodu "${p.name}" ürününe kaydedildi — bir daha anında tanınacak.`);
+    });
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    const qty = parseFloat(document.getElementById('cart-qty').value) || 1;
+    addProductToCartCore(p, qty);
+    input.value = '';
+    document.getElementById('cart-qty').value = '1';
+    input.focus();
+    return;
+  }
+
   input.value = `${p.code} - ${p.name}`;
   if (box) { box.style.display = 'none'; box.innerHTML = ''; }
   const qtyInput = document.getElementById('cart-qty');
   if (qtyInput) { qtyInput.focus(); qtyInput.select(); }
+}
+
+// Kullanıcı barkod bağlama ekranından vazgeçmek isterse.
+function cancelPendingBarcodeLink() {
+  pendingBarcodeToLink = null;
+  const input = document.getElementById('cart-product');
+  if (input) { input.value = ''; }
+  renderCartProductSuggestions();
+  const box = document.getElementById('cart-product-suggestions');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
 }
 
 // Kutunun dışına tıklanınca öneri listesini kapat.
@@ -1321,6 +1372,21 @@ document.addEventListener('click', function(e) {
     box.style.display = 'none';
   }
 });
+
+// Sepete ürün+miktar ekleme işleminin ortak çekirdeği — normal arama ile
+// barkod bağlama akışından gelen ekleme AYNI bu fonksiyonu kullanır.
+function addProductToCartCore(p, qty) {
+  const existingIndex = cart.findIndex(item => item.code === p.code);
+  if (existingIndex !== -1) {
+    cart[existingIndex].qty += qty;
+    cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
+  } else {
+    const price = Number(p.price || 0);
+    cart.push({ code: p.code, name: p.name, price: price, qty: qty, unit: p.unit || 'Adet', total: price * qty });
+  }
+  renderCart();
+  showToast(`"${p.name}" sepete eklendi!`);
+}
 
 // ============================================================
 // BORÇ KAĞIDI / SİPARİŞ NOTU FOTOĞRAFINDAN AI İLE SEPETE AKTARMA
@@ -1541,31 +1607,32 @@ function addToCart() {
   const p = resolveProductInput(inputVal);
 
   if(!p) {
-    const looksLikeBarcode = /^\d{6,}$/.test(inputVal.trim());
-    alert(
-      looksLikeBarcode
-        ? `"${inputVal.trim()}" barkodu stoktaki hiçbir ürünle eşleşmedi.\n\nBu ürün sisteme farklı bir kodla (barkodundan başka bir kodla) kaydedilmiş olabilir. Ürünü isim yazarak aramayı deneyin, ya da "Ürün Ekle" ekranından bu barkodu ürüne tanıtın.`
-        : `"${inputVal.trim()}" için stokta eşleşen bir ürün bulunamadı.\n\nÜrün adının birkaç harfini yazıp açılan öneri listesinden seçmeyi deneyin.`
-    );
+    const trimmed = inputVal.trim();
+    const looksLikeBarcode = /^\d{6,}$/.test(trimmed);
+
+    if (looksLikeBarcode) {
+      // Engelleyici bir alert yerine: bu barkodu kalıcı olarak bir ürüne
+      // bağlama moduna geçiyoruz. Kullanıcı ürünün adını yazıp öneri
+      // listesinden seçtiği an, barkod o ürüne kaydedilir VE aynı anda
+      // sepete eklenir — bir daha okutulduğunda anında tanınacaktır.
+      pendingBarcodeToLink = trimmed;
+      inputEl.value = '';
+      inputEl.placeholder = `"${trimmed}" barkodu için ürün adı yazın...`;
+      inputEl.focus();
+      renderCartProductSuggestions();
+      showToast(`🔗 "${trimmed}" barkodu tanınmıyor. Ürünün adını yazıp listeden seçin, barkodu o ürüne kaydedelim.`);
+    } else {
+      alert(`"${trimmed}" için stokta eşleşen bir ürün bulunamadı.\n\nÜrün adının birkaç harfini yazıp açılan öneri listesinden seçmeyi deneyin.`);
+    }
     return;
   }
 
-  const code = p.code;
-  const existingIndex = cart.findIndex(item => item.code === code);
-  if(existingIndex !== -1) {
-    cart[existingIndex].qty += qty;
-    cart[existingIndex].total = cart[existingIndex].qty * cart[existingIndex].price;
-  } else {
-    const price = Number(p.price || 0);
-    cart.push({ code: p.code, name: p.name, price: price, qty: qty, unit: p.unit || 'Adet', total: price * qty });
-  }
-
+  addProductToCartCore(p, qty);
   inputEl.value = '';
+  inputEl.placeholder = 'Yazmaya başlayın veya barkod okutun...';
   document.getElementById('cart-qty').value = '1';
   const box = document.getElementById('cart-product-suggestions');
   if (box) { box.style.display = 'none'; box.innerHTML = ''; }
-  renderCart();
-  showToast(`"${p.name}" sepete eklendi!`);
   inputEl.focus();
 }
 
