@@ -656,6 +656,10 @@
         <button class="btn btn-primary" id="fis-add-btn" onclick="addToGoodsReceipt()">+ Fişe Malzeme Ekle</button>
       </div>
 
+      <div id="fis-undo-bar" style="display:none; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:#F1F5F9; border:1px solid var(--steel-line); border-radius:8px; padding:8px 12px; margin-bottom:10px;">
+        <span id="fis-undo-info" style="font-size:12px; color:var(--steel);"></span>
+        <button type="button" id="fis-undo-btn" class="btn btn-dark btn-sm" style="width:auto;" onclick="fisUndo()">↩️ Geri Al</button>
+      </div>
       <div id="fis-container" class="form-card" style="display:none; padding:12px;">
         <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Fiş Kalemleri</h3>
 
