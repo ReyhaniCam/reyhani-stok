@@ -755,7 +755,7 @@
             <button class="btn btn-primary" style="width:auto; padding:10px 15px;" onclick="addToCart()">Sepete Ekle</button>
           </div>
         </div>
-        <p style="font-size:11px; color:var(--steel); margin-top:8px; margin-bottom:0;">💡 Barkod okuyucu kullanıyorsanız imleci bu kutuya bırakıp doğrudan okutabilirsiniz — okuma bitince otomatik olarak sepete eklenir.</p>
+        <p style="font-size:11px; color:var(--steel); margin-top:8px; margin-bottom:0;">💡 Barkod okuyucu kullanıyorsanız imleci bu kutuya bırakıp doğrudan okutabilirsiniz. Tanınan bir barkodsa anında sepete eklenir. Tanınmayan bir barkodsa, ürünün adını yazıp listeden seçmeniz istenir — seçtiğiniz anda barkod o ürüne kalıcı olarak kaydedilir ve bir daha okutulduğunda anında tanınır.</p>
 
         <div style="margin-top:14px; padding:12px; background:rgba(0,0,0,0.03); border-radius:8px; border:1px dashed var(--steel-line);">
           <label style="font-size:12px; font-weight:700; color:var(--charcoal); display:block;">📷 Borç Kağıdı / Sipariş Notu Fotoğrafından Oku (AI)</label>
@@ -1573,10 +1573,16 @@
       <div><label>Ürün Adı</label><input type="text" id="edit-name"></div>
       <div><label>Miktar</label><input type="number" id="edit-qty" step="any"></div>
     </div>
+    <div class="form-row">
+      <div>
+        <label>Barkod <span style="text-transform:none; color:var(--steel); font-size:9px;">— kasada okutulduğunda bu ürünü bulmak için kullanılır</span></label>
+        <input type="text" id="edit-barcode" placeholder="Örn: 8690123456789">
+      </div>
+    </div>
     <div class="form-row" id="edit-code-section" style="display:none;">
       <div>
-        <label>Barkod / Ürün Kodu <span style="text-transform:none; color:var(--steel); font-size:9px;">— otomatik atanmış kodu gerçek barkodla değiştirebilirsiniz</span></label>
-        <input type="text" id="edit-code-visible" placeholder="Örn: 8690123456789">
+        <label>Ürün Kodu (Sistem Kodu) <span style="text-transform:none; color:var(--steel); font-size:9px;">— ileri seviye: otomatik atanmış dahili kodu değiştirir</span></label>
+        <input type="text" id="edit-code-visible" placeholder="Örn: RYH-000123">
         <div id="edit-code-status" style="font-size:10px; color:var(--rust); margin-top:4px;"></div>
       </div>
     </div>
