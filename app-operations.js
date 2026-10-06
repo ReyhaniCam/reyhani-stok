@@ -1939,6 +1939,7 @@ async function addToGoodsReceiptCore() {
   item.total = Math.max(0, item.qty * item.cost - item.discount);
 
   const wasEditing = fisEditingIndex !== null;
+  pushFisUndo(wasEditing ? 'Kalem düzenleme (' + item.name + ')' : 'Kalem ekleme (' + item.name + ')');
   if (wasEditing) {
     // Düzenleme modu: yeni bir kalem eklemek yerine, düzenlenen kalemin yerine koy.
     goodsReceiptCart[fisEditingIndex] = item;
@@ -2008,6 +2009,7 @@ function applyBulkFisPricing() {
 
   const profit = Math.max(0, parseFloat(profitRaw) || 0);
   const vat = Math.max(0, parseFloat(vatRaw) || 0);
+  pushFisUndo('Toplu fiyat uygulama');
   let calculated = 0;
   let waitingCost = 0;
 
@@ -2158,9 +2160,48 @@ function updateFisSlipSummary() {
   box.innerHTML = rows.join('');
 }
 
+// ---------- GERİ ALMA (UNDO) ----------
+// Kalem listesinde yapılan her değişiklikten önce listenin kopyası saklanır.
+function pushFisUndo(label) {
+  const now = Date.now();
+  const top = fisUndoStack[fisUndoStack.length - 1];
+  // Toplu fiyat kutusuna yazarken her tuşta ayrı kayıt oluşmasın
+  if (label === 'Toplu fiyat uygulama' && top && top.label === label && now - top.t < 8000) return;
+  fisUndoStack.push({ label, t: now, cart: JSON.parse(JSON.stringify(goodsReceiptCart)) });
+  if (fisUndoStack.length > 30) fisUndoStack.shift();
+  updateFisUndoBar();
+}
+
+function updateFisUndoBar() {
+  const bar = document.getElementById('fis-undo-bar');
+  if (!bar) return;
+  const top = fisUndoStack[fisUndoStack.length - 1];
+  bar.style.display = top ? 'flex' : 'none';
+  const info = document.getElementById('fis-undo-info');
+  if (info && top) info.textContent = 'Son işlem: ' + top.label + (fisUndoStack.length > 1 ? ' · geri alınabilir işlem: ' + fisUndoStack.length : '');
+}
+
+function fisUndo() {
+  const snap = fisUndoStack.pop();
+  if (!snap) return;
+  // Bu fişte stoğa hemen kaydedilmiş ürünler geri alınan listeden çıkıyorsa kullanıcıyı bilgilendir
+  const keep = new Set(snap.cart.map(i => i.code).filter(Boolean));
+  const orphans = goodsReceiptCart.filter(i => i.justCreated && i.code && !keep.has(i.code)).length;
+  goodsReceiptCart = snap.cart;
+  const bulkChk = document.getElementById('fis-bulk-price-apply');
+  if (bulkChk && snap.label === 'Toplu fiyat uygulama') {
+    bulkChk.checked = false;
+    const st = document.getElementById('fis-bulk-price-status'); if (st) st.textContent = '';
+  }
+  cancelFisEdit(); // düzenleme modunu kapatır, formu temizler ve listeyi yeniden çizer
+  updateFisUndoBar();
+  showToast('↩️ Geri alındı: ' + snap.label + (orphans ? ` (Not: ${orphans} ürün stokta 0 adetlik kayıt olarak kaldı)` : ''));
+}
+
 function markFisItemAsNew(index) {
   const item = goodsReceiptCart[index];
   if (!item) return;
+  pushFisUndo('Yeni ürün olarak işaretleme (' + item.name + ')');
   item.code = null;
   item.isNew = true;
   item.matched = false;
@@ -2171,6 +2212,7 @@ function markFisItemAsNew(index) {
 }
 
 function removeFromGoodsReceipt(index) {
+  if (goodsReceiptCart[index]) pushFisUndo('Kalem silme (' + goodsReceiptCart[index].name + ')');
   goodsReceiptCart.splice(index, 1);
 
   // Silinen kalem şu an düzenlenen kalemse, düzenleme modunu iptal et.
@@ -2427,6 +2469,8 @@ async function completeGoodsReceiptCore() {
       });
 
       goodsReceiptCart = [];
+      fisUndoStack = [];
+      updateFisUndoBar();
       fisEditingIndex = null;
       const editBanner = document.getElementById('fis-edit-banner');
       if (editBanner) editBanner.style.display = 'none';
