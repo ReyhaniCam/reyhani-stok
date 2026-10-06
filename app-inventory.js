@@ -1940,6 +1940,7 @@ async function processReceiptWithAI(event) {
     if (prevEl) prevEl.value = (slipPrev !== null) ? slipPrev : '';
     if (grandEl) grandEl.value = (slipGrand !== null) ? slipGrand : '';
 
+    pushFisUndo('AI fiş okuma');
     let addedCount = 0;
     let matchedCount = 0;
     let newCount = 0;
