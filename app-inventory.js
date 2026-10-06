@@ -1021,6 +1021,7 @@ function openEditModal(code) {
   document.getElementById('edit-code').value = p.code;
   document.getElementById('edit-code-visible').value = p.code;
   document.getElementById('edit-code-status').innerHTML = '';
+  document.getElementById('edit-barcode').value = p.barcode || '';
   document.getElementById('edit-code-section').style.display = currentRole === 'admin' ? 'block' : 'none';
   document.getElementById('edit-name').value = p.name || '';
   document.getElementById('edit-qty').value = p.qty || 0;
@@ -1131,13 +1132,23 @@ async function saveEditProduct() {
     return;
   }
 
+  const barcodeRaw = (document.getElementById('edit-barcode').value || '').trim();
+  if (barcodeRaw) {
+    const barcodeOwner = Object.values(productsData).find(bp => bp.barcode === barcodeRaw && bp.code !== oldCode);
+    if (barcodeOwner) {
+      if (statusEl) statusEl.innerHTML = `HATA: '${barcodeRaw}' barkodu zaten '${barcodeOwner.name}' ürününde kayıtlı!`;
+      return;
+    }
+  }
+
   const updates = {
     name: document.getElementById('edit-name').value.trim(),
     qty: parseFloat(document.getElementById('edit-qty').value) || 0,
     unit: document.getElementById('edit-unit').value,
     category: document.getElementById('edit-category').value,
+    barcode: barcodeRaw || null,
     lastPriceUpdate: new Date().toISOString(),
-    lastUpdatedBy: currentRole === 'admin' ? 'Yönetici' : 'Çalışan'
+    lastUpdatedBy: typeof getActorLabel === 'function' ? getActorLabel() : (currentRole === 'admin' ? 'Yönetici' : 'Çalışan')
   };
 
   if (currentRole === 'admin') {
