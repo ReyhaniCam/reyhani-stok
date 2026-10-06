@@ -59,6 +59,7 @@ let currentRole = 'guest';
 let cart = JSON.parse(localStorage.getItem('reyhani_cart') || '[]'); // Sepet kalıcılığı: sayfa/oturum kapansa da sepet kaybolmasın
 let cartPhotoReviewItems = []; // Borç kağıdı/not fotoğrafından AI ile okunan, onay bekleyen kalemler
 let goodsReceiptCart = [];
+let fisSlipInfo = null; // Fişten okunan eski bakiye / ara toplam / genel toplam bilgisi
 let fisEditingIndex = null; // null = yeni ekleme modu; sayı ise o index düzenleniyor demektir
 let globalPastReceipts = {};
 let gridCurrentPage = 1;
