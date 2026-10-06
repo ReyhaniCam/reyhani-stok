@@ -565,7 +565,7 @@
         <div class="form-row">
           <div>
             <label>Toptancı / Firma</label>
-            <select id="fis-wholesaler"><option value="">-- Toptancı Seçin --</option></select>
+            <select id="fis-wholesaler" onchange="updateFisSlipSummary()"><option value="">-- Toptancı Seçin --</option></select>
           </div>
           <div><label>İrsaliye / Fiş No (Opsiyonel)</label><input type="text" id="fis-no" placeholder="Örn: İRS-00123"></div>
         </div>
@@ -699,10 +699,25 @@
         <div style="text-align:right; font-size:16px; margin-top:15px; font-family:'IBM Plex Mono'; padding-top:10px; border-top:1px solid var(--steel-line);">
             Fiş Toplamı: <span id="fis-total" style="font-size:22px; font-weight:bold; color:var(--charcoal);">₺0,00</span>
         </div>
+
+        <!-- TOPTANCI CARİ HESAP / ESKİ BAKİYE MUTABAKATI -->
+        <div id="fis-slip-box" style="background:#EEF6FF; border:1px solid #93C5FD; border-radius:8px; padding:12px; margin-top:14px;">
+          <div style="font-weight:800; font-size:13px; color:#0F172A;">🧾 Cari Hesap: Fişteki Eski Bakiye + Yeni Mallar</div>
+          <div style="font-size:11px; color:#475569; margin-top:3px;">Toptancı fişin altına eski bakiyeyi yazıyorsa buraya girin (fotoğraftan otomatik okunur, yanlışsa düzeltin). Alacaklıysanız eksi (-) yazın. Boş bırakırsanız sadece bu fişin tutarı mevcut borca eklenir.</div>
+          <div class="form-row" style="grid-template-columns:1fr 1fr; margin:10px 0 0 0;">
+            <div><label style="margin-bottom:4px;">Fişteki Eski Bakiye (₺ borç)</label><input type="number" id="fis-prev-balance" step="0.01" placeholder="Örn: 38714" oninput="updateFisSlipSummary()"></div>
+            <div><label style="margin-bottom:4px;">Fişteki Genel Toplam (₺) <span style="text-transform:none; font-size:9px; color:var(--steel);">(kontrol için)</span></label><input type="number" id="fis-slip-grand" step="0.01" placeholder="Örn: 40829" oninput="updateFisSlipSummary()"></div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:10px;">
+            <input type="checkbox" id="fis-sync-balance" checked style="width:auto;" onchange="updateFisSlipSummary()">
+            <label style="margin:0; text-transform:none; font-size:12px;">Sistemdeki toptancı borcunu fişteki eski bakiyeye eşitle, sonra yeni malları üstüne ekle</label>
+          </div>
+          <div id="fis-slip-summary" style="margin-top:10px; font-size:13px; line-height:1.7; font-family:'IBM Plex Mono';"></div>
+        </div>
         <div class="form-row" style="margin-top:12px; align-items:flex-end;">
           <div><label>Fiş Notu (Opsiyonel)</label><input type="text" id="fis-note" placeholder="Örn: Kısmi teslimat, eksikler sonra gelecek"></div>
           <div style="display:flex; align-items:center; gap:6px; padding-bottom:10px;">
-            <input type="checkbox" id="fis-add-debt" checked style="width:auto;">
+            <input type="checkbox" id="fis-add-debt" checked style="width:auto;" onchange="updateFisSlipSummary()">
             <label style="margin:0; text-transform:none; font-size:12px;">Tutarı toptancı cari hesabına borç olarak işle</label>
           </div>
         </div>
