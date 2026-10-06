@@ -1477,7 +1477,7 @@ function renderWholesalers() {
           ` : ''}
         </div>
         <div class="balance-box ${isNegative ? 'balance-negative' : 'balance-positive'}">
-          Bakiye: ₺${formatMoney(w.balance || 0)}
+          ${(w.balance || 0) < 0 ? 'Borç: ₺' + formatMoney(-(w.balance || 0)) : ((w.balance || 0) > 0 ? 'Alacak: ₺' + formatMoney(w.balance) : 'Bakiye: ₺0,00')}
         </div>
         <div class="action-grid">
           <button class="btn btn-success btn-sm" onclick="updateBalance('${key}', 1)">+ Ödeme Yap</button>
@@ -1903,10 +1903,11 @@ async function processReceiptWithAI(event) {
       body: JSON.stringify({
         contents: [{
           parts: [
-            { text: "Sen bir fiş okuma sistemisin. Fişteki ürün adlarını (name), miktarlarını (qty) ve birim geliş fiyatlarını (cost) tespit et. SADECE geçerli JSON dizisi ver. Örnek: [{\"name\": \"Silikon\", \"qty\": 10, \"cost\": 45.50}]" },
+            { text: "Sen bir toptancı sipariş/malzeme fişi okuma sistemisin. Fiş genellikle EL YAZISIYLA doldurulmuş bir 'Sipariş Fişi'dir (sütunlar: Miktarı, Birim, Cinsi, Fiyatı, Tutarı). Kalemlerin altında çizgiyle ayrılmış toplamlar olabilir: önce bu fişteki malların ara toplamı, sonra ESKİ BAKİYE (önceki borç / devir), en altta GENEL TOPLAM. SADECE geçerli bir JSON nesnesi ver, başka hiçbir şey yazma. Şema: {\"items\": [{\"name\": \"Ürün adı\", \"qty\": 5, \"cost\": 75}], \"itemsSubtotal\": 2115, \"previousBalance\": 38714, \"grandTotal\": 40829}. Kurallar: (1) name = Cinsi sütunundaki ürün adı, el yazısını en makul Türkçe ürün adı olarak oku. (2) qty = Miktarı sütunu. (3) cost = BİRİM FİYAT (Fiyatı sütunu); Tutarı sütununu cost olarak yazma. Birim fiyat okunamıyorsa Tutar / Miktar hesapla. (4) Rakamlarda nokta/virgül binlik ya da ondalık ayracı olabilir: 2.115,00 ve 2,115.00 ikisi de 2115 demektir; sayıları düz sayı olarak ver. (5) itemsSubtotal, previousBalance, grandTotal fişte yoksa null yaz; UYDURMA. Kalem toplamı + eski bakiye = genel toplam olmalı, okuduğun rakamları buna göre kontrol et." },
             { inlineData: { mimeType: file.type || "image/jpeg", data: pureBase64 } }
           ]
-        }]
+        }],
+        generationConfig: { responseMimeType: "application/json" }
       })
     });
 
@@ -1922,17 +1923,30 @@ async function processReceiptWithAI(event) {
       .replace(/```/g, '')
       .trim();
 
-    const parsedItems = JSON.parse(textResult);
+    const parsedRoot = JSON.parse(textResult);
+    // Eski biçim (düz dizi) ve yeni biçim ({items, previousBalance, ...}) ikisi de desteklenir
+    const parsedItems = Array.isArray(parsedRoot) ? parsedRoot : (parsedRoot.items || []);
+    const slipMeta = Array.isArray(parsedRoot) ? {} : parsedRoot;
 
     if (!Array.isArray(parsedItems) || parsedItems.length === 0) throw new Error("Ürün bulunamadı");
+
+    // Fişin altındaki eski bakiye / ara toplam / genel toplam bilgisi
+    const slipPrev = parseTrNumber(slipMeta.previousBalance);
+    const slipSub = parseTrNumber(slipMeta.itemsSubtotal);
+    const slipGrand = parseTrNumber(slipMeta.grandTotal);
+    fisSlipInfo = { previousBalance: slipPrev, subtotal: slipSub, grandTotal: slipGrand };
+    const prevEl = document.getElementById('fis-prev-balance');
+    const grandEl = document.getElementById('fis-slip-grand');
+    if (prevEl) prevEl.value = (slipPrev !== null) ? slipPrev : '';
+    if (grandEl) grandEl.value = (slipGrand !== null) ? slipGrand : '';
 
     let addedCount = 0;
     let matchedCount = 0;
     let newCount = 0;
     parsedItems.forEach(item => {
       const aiName = item.name || 'Bilinmeyen Ürün';
-      const qty = parseFloat(item.qty) || 1;
-      const cost = parseFloat(item.cost) || 0;
+      const qty = parseTrNumber(item.qty) || 1;
+      const cost = parseTrNumber(item.cost) || 0;
       const { product: matchedProduct, score } = findBestProductMatch(aiName);
       const isMatch = !!(matchedProduct && score >= FIS_MATCH_THRESHOLD);
 
@@ -1969,7 +1983,7 @@ async function processReceiptWithAI(event) {
     
     if (statusMsg) {
       statusMsg.style.color = '#10B981';
-      statusMsg.innerHTML = `✅ ${addedCount} ürün tabloya eklendi — 🔴 ${matchedCount} tanesi stokta bulundu, 🔵 ${newCount} tanesi yeni ürün gibi görünüyor. Tamamlamadan önce listeyi kontrol edin!`;
+      statusMsg.innerHTML = `✅ ${addedCount} ürün tabloya eklendi — 🔴 ${matchedCount} tanesi stokta bulundu, 🔵 ${newCount} tanesi yeni ürün gibi görünüyor. Tamamlamadan önce listeyi kontrol edin!${slipPrev !== null ? ' 🧾 Fişteki eski bakiye: ₺' + formatMoney(slipPrev) + ' (aşağıdaki Cari Hesap kutusunda kontrol edin).' : ''}`;
     }
   } catch (err) {
     if (statusMsg) {
