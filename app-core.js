@@ -59,8 +59,6 @@ let currentRole = 'guest';
 let cart = JSON.parse(localStorage.getItem('reyhani_cart') || '[]'); // Sepet kalıcılığı: sayfa/oturum kapansa da sepet kaybolmasın
 let cartPhotoReviewItems = []; // Borç kağıdı/not fotoğrafından AI ile okunan, onay bekleyen kalemler
 let goodsReceiptCart = [];
-let fisUndoStack = []; // Malzeme fişi kalem listesi için geri alma geçmişi
-let fisSlipInfo = null; // Fişten okunan eski bakiye / ara toplam / genel toplam bilgisi
 let fisEditingIndex = null; // null = yeni ekleme modu; sayı ise o index düzenleniyor demektir
 let globalPastReceipts = {};
 let gridCurrentPage = 1;
@@ -2962,46 +2960,131 @@ function printSenet(key) {
       const amountWords = amountToTurkishWordsTL(senetAmount);
 
       const printArea = document.getElementById('print-area');
+      const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const itemList = Array.isArray(d.items) ? d.items.filter(i => i && i.name) : [];
+      const itemsTotal = itemList.reduce((a, i) => a + (Number(i.total) || 0), 0);
+      const thS = `style="background:#E5E7EB; padding:1.6mm 2.5mm; text-align:left; font-size:10px; letter-spacing:0.5px; border-bottom:0.3mm solid #9AA0A6;"`;
+      const itemsRows = itemList.map((i, n) => `
+        <tr>
+          <td style="padding:1.6mm 2.5mm; border-bottom:0.2mm solid #E5E7EB; width:8mm; color:#777;">${n + 1}</td>
+          <td style="padding:1.6mm 2.5mm; border-bottom:0.2mm solid #E5E7EB;">${esc(i.name)}</td>
+          <td style="padding:1.6mm 2.5mm; border-bottom:0.2mm solid #E5E7EB; text-align:right; white-space:nowrap;">${esc(i.qty)} ${esc(i.unit || '')}</td>
+          <td style="padding:1.6mm 2.5mm; border-bottom:0.2mm solid #E5E7EB; text-align:right; white-space:nowrap;">₺${formatMoney(Number(i.price) || 0)}</td>
+          <td style="padding:1.6mm 2.5mm; border-bottom:0.2mm solid #E5E7EB; text-align:right; white-space:nowrap; font-weight:700;">₺${formatMoney(Number(i.total) || 0)}</td>
+        </tr>`).join('');
+      const materialsHtml = itemList.length ? `
+          <div style="margin-top:6mm; page-break-inside:auto;">
+            <div style="background:${'#26282B'}; color:#fff; padding:2mm 4mm; font-size:10px; font-weight:700; letter-spacing:2px;">ALINAN MALZEMELER</div>
+            <table style="width:100%; border-collapse:collapse; font-size:11px; border:0.3mm solid #BFC4C9; border-top:0;">
+              <thead><tr>
+                <th ${thS}>#</th><th ${thS}>Malzeme</th><th style="background:#E5E7EB; padding:1.6mm 2.5mm; text-align:right; font-size:10px; border-bottom:0.3mm solid #9AA0A6;">Miktar</th><th style="background:#E5E7EB; padding:1.6mm 2.5mm; text-align:right; font-size:10px; border-bottom:0.3mm solid #9AA0A6;">Birim Fiyat</th><th style="background:#E5E7EB; padding:1.6mm 2.5mm; text-align:right; font-size:10px; border-bottom:0.3mm solid #9AA0A6;">Tutar</th>
+              </tr></thead>
+              <tbody>${itemsRows}</tbody>
+              <tfoot><tr>
+                <td colspan="4" style="padding:2mm 2.5mm; text-align:right; font-weight:800; background:#F4F5F6;">GENEL TOPLAM</td>
+                <td style="padding:2mm 2.5mm; text-align:right; font-weight:800; background:#F4F5F6; white-space:nowrap;">₺${formatMoney(itemsTotal || senetAmount)}</td>
+              </tr></tfoot>
+            </table>
+          </div>` : (d.description ? `
+          <div style="margin-top:6mm;">
+            <div style="background:#26282B; color:#fff; padding:2mm 4mm; font-size:10px; font-weight:700; letter-spacing:2px;">BORCUN KONUSU / AÇIKLAMA</div>
+            <div style="border:0.3mm solid #BFC4C9; border-top:0; padding:3mm 4mm; font-size:11.5px; line-height:1.6;">${esc(d.description)}</div>
+          </div>` : '');
+      const CH = '#26282B';   // kurumsal koyu antrasit
+      const SV = '#9AA0A6';   // gümüş
       printArea.innerHTML = `
-        <div style="width:100%; max-width:700px; margin:0 auto; padding:10mm; font-family:'Inter',Arial,sans-serif; background:#fff; color:#000; border:2px solid #000;">
-          <div style="text-align:center; border-bottom:2px solid #000; padding-bottom:10px; margin-bottom:16px;">
-            <h2 style="margin:0; font-size:20px; letter-spacing:1px;">BONO / SENET</h2>
-            <p style="margin:4px 0; font-size:11px;">Senet No: <strong>${senetNo}</strong></p>
-          </div>
+        <div style="width:100%; max-width:180mm; margin:0 auto; font-family:'Inter',Arial,sans-serif; color:#1F2937; background:#fff; -webkit-print-color-adjust:exact; print-color-adjust:exact;">
 
-          <table style="width:100%; font-size:13px; border-collapse:collapse; margin-bottom:16px;">
-            <tr><td style="padding:4px 0; width:40%;"><strong>Düzenlenme Tarihi:</strong></td><td>${duzenlemeTarihi}</td></tr>
-            <tr><td style="padding:4px 0;"><strong>Düzenlenme Yeri:</strong></td><td>Arsuz / Hatay</td></tr>
-            <tr><td style="padding:4px 0;"><strong>Vade Tarihi:</strong></td><td>${vadeTarihi}</td></tr>
+          <!-- ÜST BİLGİ: LOGO + FİRMA + BELGE NO -->
+          <table style="width:100%; border-collapse:collapse;">
+            <tr>
+              <td style="width:30mm; vertical-align:middle; padding:0;">
+                <img src="logo-senet.png" alt="Reyhani" style="width:28mm; height:28mm; object-fit:cover; border-radius:3mm; display:block; border:0.4mm solid ${SV};">
+              </td>
+              <td style="vertical-align:middle; padding:0 0 0 5mm;">
+                <div style="font-size:20px; font-weight:800; letter-spacing:1.5px; color:${CH};">REYHANİ CAM HIRDAVAT</div>
+                <div style="font-size:11px; color:#555; margin-top:2mm;">Arsuz / Hatay</div>
+              </td>
+              <td style="vertical-align:middle; text-align:right; padding:0; width:55mm;">
+                <table style="margin-left:auto; border-collapse:collapse; font-size:11px;">
+                  <tr><td style="padding:1mm 3mm; color:#555; text-align:right;">Senet No</td><td style="padding:1mm 0; font-weight:700; text-align:right;">${senetNo}</td></tr>
+                  <tr><td style="padding:1mm 3mm; color:#555; text-align:right;">Düzenleme Tarihi</td><td style="padding:1mm 0; font-weight:700; text-align:right;">${duzenlemeTarihi}</td></tr>
+                  <tr><td style="padding:1mm 3mm; color:#555; text-align:right;">Düzenleme Yeri</td><td style="padding:1mm 0; font-weight:700; text-align:right;">Arsuz / Hatay</td></tr>
+                  ${d.term ? `<tr><td style="padding:1mm 3mm; color:#555; text-align:right;">Vade Süresi</td><td style="padding:1mm 0; font-weight:700; text-align:right;">${esc(d.term)}</td></tr>` : ''}
+                </table>
+              </td>
+            </tr>
           </table>
 
-          <div style="border:1px solid #000; padding:12px; margin-bottom:16px; text-align:center;">
-            <div style="font-size:12px;">İŞBU SENET KARŞILIĞINDA</div>
-            <div style="font-size:22px; font-weight:bold; margin:8px 0;">₺${formatMoney(senetAmount)}</div>
-            <div style="font-size:13px; font-style:italic;">(${amountWords})</div>
+          <!-- BAŞLIK ŞERİDİ -->
+          <div style="margin-top:6mm; background:${CH}; color:#fff; padding:3.5mm 6mm; display:flex; justify-content:space-between; align-items:center; border-bottom:1.2mm solid ${SV};">
+            <div style="font-size:19px; font-weight:800; letter-spacing:3px;">BONO / SENET</div>
+            <div style="font-size:11px; letter-spacing:1px; color:#E5E7EB;">VADE: <strong style="color:#fff; font-size:13px;">${vadeTarihi}</strong></div>
           </div>
 
-          <p style="font-size:13px; line-height:1.7; text-align:justify;">
-            İşbu senet karşılığında yukarıda yazılı bedeli, vade tarihinde <strong>REYHANİ CAM HIRDAVAT</strong>'a veya emrine, kayıtsız şartsız ödeyeceğimi kabul, beyan ve taahhüt ederim.
-          </p>
+          <!-- TUTAR -->
+          <div style="margin-top:5mm; border:0.5mm solid ${CH}; padding:4mm 6mm; text-align:center; background:#F4F5F6;">
+            <div style="font-size:10px; letter-spacing:2px; color:#555;">İŞBU SENET KARŞILIĞINDA ÖDENECEK TUTAR</div>
+            <div style="font-size:30px; font-weight:800; margin:2mm 0; color:${CH};">₺${formatMoney(senetAmount)}</div>
+            <div style="font-size:12px; font-style:italic; color:#333;">( ${esc(amountWords)} )</div>
+          </div>
 
-          <table style="width:100%; font-size:13px; border-collapse:collapse; margin:16px 0;">
-            <tr><td style="padding:4px 0; width:30%;"><strong>Borçlu Adı Soyadı / Ünvanı:</strong></td><td>${d.customer}</td></tr>
-            <tr><td style="padding:4px 0;"><strong>Telefon:</strong></td><td>${d.phone || '-'}</td></tr>
-            <tr><td style="padding:4px 0;"><strong>Adres:</strong></td><td>${address || '-'}</td></tr>
-            <tr><td style="padding:4px 0;"><strong>T.C. Kimlik No / Vergi No:</strong></td><td>${tckn || '-'}</td></tr>
+          <!-- TARAFLAR -->
+          <table style="width:100%; border-collapse:separate; border-spacing:0; margin-top:6mm; font-size:12px;">
+            <tr>
+              <td style="width:50%; vertical-align:top; padding:0 3mm 0 0;">
+                <div style="background:${CH}; color:#fff; padding:2mm 4mm; font-size:10px; font-weight:700; letter-spacing:2px;">ALACAKLI</div>
+                <div style="border:0.3mm solid #BFC4C9; border-top:0; padding:4mm; min-height:20mm; line-height:1.6;">
+                  <div style="font-weight:800; font-size:13px;">REYHANİ CAM HIRDAVAT</div>
+                  <div><span style="color:#555;">Yetkili:</span> <strong>Edihan Reyhani</strong></div>
+                  <div>Arsuz / Hatay</div>
+                </div>
+              </td>
+              <td style="width:50%; vertical-align:top; padding:0 0 0 3mm;">
+                <div style="background:${CH}; color:#fff; padding:2mm 4mm; font-size:10px; font-weight:700; letter-spacing:2px;">BORÇLU</div>
+                <div style="border:0.3mm solid #BFC4C9; border-top:0; padding:4mm; min-height:20mm; line-height:1.6;">
+                  <div style="font-weight:800; font-size:13px;">${esc(d.customer)}</div>
+                  <div><span style="color:#555;">Telefon:</span> ${esc(d.phone || '-')}</div>
+                  <div><span style="color:#555;">T.C. / Vergi No:</span> ${esc(tckn || '-')}</div>
+                  <div><span style="color:#555;">Adres:</span> ${esc(address || '-')}</div>
+                </div>
+              </td>
+            </tr>
           </table>
 
-          <div style="display:flex; justify-content:space-between; margin-top:50px; font-size:13px;">
-            <div style="text-align:center; width:45%;">
-              <div style="border-top:1px solid #000; padding-top:6px;">Borçlu İmza</div>
-            </div>
-            <div style="text-align:center; width:45%;">
-              <div style="border-top:1px solid #000; padding-top:6px;">Alacaklı — Reyhani Cam Hırdavat</div>
-            </div>
+          <!-- ALINAN MALZEMELER -->
+          ${materialsHtml}
+
+          <!-- TAAHHÜT -->
+          <div style="margin-top:6mm; font-size:12px; line-height:1.7; text-align:justify; border-left:1.2mm solid ${SV}; padding-left:5mm;">
+            İşbu senet karşılığında yukarıda yazılı <strong>₺${formatMoney(senetAmount)}</strong> (${esc(amountWords)}) bedeli, <strong>${vadeTarihi}</strong> vade tarihinde <strong>REYHANİ CAM HIRDAVAT</strong>'a (Yetkili: <strong>Edihan Reyhani</strong>) veya emrine, nakden ve defaten, kayıtsız şartsız ödeyeceğimi; vadesinde ödenmemesi halinde yasal yollara (icra takibi dahil) başvurulabileceğini kabul, beyan ve taahhüt ederim.
           </div>
 
-          <p style="font-size:9px; color:#555; margin-top:24px; text-align:center;">
+          <!-- İMZA ALANLARI -->
+          <table style="width:100%; border-collapse:separate; border-spacing:0; margin-top:7mm; font-size:11px; page-break-inside:avoid;">
+            <tr>
+              <td style="width:50%; padding:0 3mm 0 0;">
+                <div style="border:0.3mm solid #BFC4C9; height:27mm; position:relative;">
+                  <div style="padding:2mm 4mm; background:#F4F5F6; font-weight:700; letter-spacing:1px; border-bottom:0.3mm solid #BFC4C9;">BORÇLU — Ad Soyad / İmza</div>
+                  <div style="position:absolute; bottom:2mm; left:4mm; right:4mm; color:#777; font-size:10px;">Tarih: ........ / ........ / ............</div>
+                </div>
+              </td>
+              <td style="width:50%; padding:0 0 0 3mm;">
+                <div style="border:0.3mm solid #BFC4C9; height:27mm; position:relative;">
+                  <div style="padding:2mm 4mm; background:#F4F5F6; font-weight:700; letter-spacing:1px; border-bottom:0.3mm solid #BFC4C9;">ALACAKLI — Reyhani Cam Hırdavat</div>
+                  <div style="padding:2mm 4mm 0 4mm; font-size:11px;">Yetkili: <strong>Edihan Reyhani</strong></div>
+                  <div style="position:absolute; bottom:2mm; left:4mm; right:4mm; color:#777; font-size:10px;">Kaşe / İmza</div>
+                </div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- ALT BİLGİ -->
+          <div style="margin-top:6mm; padding-top:3mm; border-top:0.5mm solid ${SV}; display:flex; justify-content:space-between; font-size:9px; color:#666;">
+            <span>REYHANİ CAM HIRDAVAT · Arsuz / Hatay</span>
+            <span>Senet No: ${senetNo}</span>
+          </div>
+          <p style="font-size:8.5px; color:#777; margin:3mm 0 0 0; text-align:center; line-height:1.5;">
             Bu belge dahili kayıt/tahsilat takibi amaçlı düzenlenmiştir. Kambiyo senedi olarak tam hukuki geçerlilik için Türk Ticaret Kanunu'nun aradığı şekil şartlarına ve ıslak imzaya dikkat ediniz.
           </p>
         </div>
@@ -3025,13 +3108,24 @@ function printSenet(key) {
 
       setSenetPrintPageSize(true);
       document.body.className = 'printing-senet';
-      setTimeout(() => {
-        window.print();
-        document.body.className = '';
-        setSenetPrintPageSize(false);
-        renderCustomerDebts();
-        if (ahLedgerCustomerKey) renderCustomerLedger();
-      }, 400);
+      // Logo yüklenmeden yazdırma penceresi açılırsa kağıtta logo boş çıkar; önce yüklenmesini bekle
+      let printStarted = false;
+      const startPrint = () => {
+        if (printStarted) return;
+        printStarted = true;
+        setTimeout(() => {
+          window.print();
+          document.body.className = '';
+          setSenetPrintPageSize(false);
+          renderCustomerDebts();
+          if (ahLedgerCustomerKey) renderCustomerLedger();
+        }, 250);
+      };
+      const logoPre = new Image();
+      logoPre.onload = startPrint;
+      logoPre.onerror = startPrint;
+      logoPre.src = 'logo-senet.png';
+      setTimeout(startPrint, 2500); // güvenlik: en geç 2,5 sn sonra yine de yazdır
     });
   });
 }
