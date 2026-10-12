@@ -2141,6 +2141,7 @@ function updateFisSlipSummary() {
   } else {
     rows.push(`<div>Bu fişteki mallar: <b>${m(items)}</b> <span style="color:var(--steel);">(toptancı seçilince yeni borç hesaplanır)</span></div>`);
   }
+  
 
   const warn = (t) => rows.push(`<div style="color:#B45309; font-weight:700; font-family:inherit;">⚠️ ${t}</div>`);
   const info = (t) => rows.push(`<div style="color:#1D4ED8; font-family:inherit;">ℹ️ ${t}</div>`);
@@ -2210,6 +2211,38 @@ function markFisItemAsNew(index) {
   renderGoodsReceiptCart();
   showToast('Bu kalem "Yeni Ürün" olarak işaretlendi. Fişi tamamlamadan önce ✏️ Düzenle ile fiyat/kategori bilgisini girin.');
 }
+
+// app-operations.js içindeki mevcut HTML oluşturma kısmı
+wholesalerCard.innerHTML = `
+    <div class="card-info">
+        <h3>${ws.name}</h3>
+        <p>Bakiye: ${ws.balance} ₺</p>
+    </div>
+    <div class="card-actions">
+        <!-- MEVCUT BUTONLAR BURADA YER ALIR -->
+        <button onclick="openWholesalerTransactions('${wsId}')">Ekstre</button>
+        <button onclick="deleteWholesaler('${wsId}')">Sil</button>
+    </div>
+`;
+// Yeni butonun eklenmiş hali
+wholesalerCard.innerHTML = `
+    <div class="card-info">
+        <h3>${ws.name}</h3>
+        <p>Bakiye: ${ws.balance} ₺</p>
+    </div>
+    <div class="card-actions">
+        
+        <!-- İŞTE YENİ EKLENEN FATURALAR BUTONU -->
+        <button type="button" class="action-btn secondary-btn" onclick="openInvoiceModal('${wsId}')">
+            <i class="fa-solid fa-file-invoice"></i> Faturalar
+        </button>
+        <!-- /YENİ BUTON BİTİŞ -->
+
+        <!-- MEVCUT BUTONLAR -->
+        <button onclick="openWholesalerTransactions('${wsId}')">Ekstre</button>
+        <button onclick="deleteWholesaler('${wsId}')">Sil</button>
+    </div>
+`;
 
 function removeFromGoodsReceipt(index) {
   if (goodsReceiptCart[index]) pushFisUndo('Kalem silme (' + goodsReceiptCart[index].name + ')');
