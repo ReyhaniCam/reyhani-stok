@@ -5124,3 +5124,106 @@ function renderKatalogSearchGroup(baseKey, baseLabel, items, kind) {
     </div>
   `;
 }
+
+// --- FATURA İŞLEMLERİ FONKSİYONLARI ---
+let currentInvoiceWholesalerId = null;
+
+function openInvoiceModal(wholesalerId) {
+    currentInvoiceWholesalerId = wholesalerId;
+    const ws = wholesalersData[wholesalerId];
+    document.getElementById('invoiceModalTitle').textContent = `${ws.name} - Faturalar`;
+    document.getElementById('invoiceModal').style.display = 'flex';
+    
+    // Tarihi bugüne ayarla
+    const today = new Date();
+    today.setMinutes(today.getMinutes() - today.getTimezoneOffset());
+    document.getElementById('invDate').value = today.toISOString().slice(0, 10);
+    
+    renderInvoiceTable();
+}
+
+function closeInvoiceModal() {
+    document.getElementById('invoiceModal').style.display = 'none';
+    document.getElementById('invoiceForm').reset();
+    currentInvoiceWholesalerId = null;
+}
+
+function handleInvoiceSubmit(e) {
+    e.preventDefault();
+    if (!currentInvoiceWholesalerId) return;
+
+    const date = document.getElementById('invDate').value;
+    const invoiceNo = document.getElementById('invNo').value;
+    const totalAmount = parseFloat(document.getElementById('invAmount').value);
+    const description = document.getElementById('invDesc').value;
+
+    const newInvoiceRef = dbInvoices.push();
+    const newInvoiceId = newInvoiceRef.key;
+    const timestamp = Date.now();
+
+    const updates = {};
+    // Faturayı kaydet
+    updates[`/invoices/${newInvoiceId}`] = {
+        id: newInvoiceId,
+        wholesalerId: currentInvoiceWholesalerId,
+        date: date,
+        invoiceNo: invoiceNo,
+        totalAmount: totalAmount,
+        description: description,
+        timestamp: timestamp
+    };
+
+    // Toptancı bakiyesine faturayı EKLE (Borcumuz artıyor)
+    const currentBalance = wholesalersData[currentInvoiceWholesalerId]?.balance || 0;
+    updates[`/wholesalers/${currentInvoiceWholesalerId}/balance`] = currentBalance + totalAmount;
+
+    // Toptancı hesap geçmişine işle
+    const transRef = dbWholesalers.child(currentInvoiceWholesalerId).child('transactions').push();
+    updates[`/wholesalers/${currentInvoiceWholesalerId}/transactions/${transRef.key}`] = {
+        type: 'debt',
+        amount: totalAmount,
+        date: date,
+        description: `Fatura: ${invoiceNo} ${description ? '- '+description : ''}`,
+        timestamp: timestamp
+    };
+
+    dbRoot.update(updates)
+        .then(() => {
+            showToast('Fatura işlendi, bakiye güncellendi', 'success');
+            document.getElementById('invoiceForm').reset();
+        })
+        .catch(error => {
+            console.error(error);
+            showToast('Hata oluştu!', 'error');
+        });
+}
+
+function renderInvoiceTable() {
+    const tbody = document.getElementById('invoiceTableBody');
+    tbody.innerHTML = '';
+    let total = 0;
+
+    const wsInvoices = Object.values(invoicesData)
+        .filter(inv => inv.wholesalerId === currentInvoiceWholesalerId)
+        .sort((a, b) => b.timestamp - a.timestamp);
+
+    wsInvoices.forEach(inv => {
+        total += inv.totalAmount;
+        tbody.innerHTML += `
+            <tr>
+                <td>${new Date(inv.date).toLocaleDateString('tr-TR')}</td>
+                <td><strong>${inv.invoiceNo}</strong><br><small>${inv.description || '-'}</small></td>
+                <td style="text-align: right; color: var(--danger-color);">${formatCurrency(inv.totalAmount)}</td>
+                <td>
+                    <button class="action-btn danger-btn" onclick="deleteInvoice('${inv.id}')"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>
+        `;
+    });
+    document.getElementById('invoiceTotalAmount').textContent = formatCurrency(total);
+}
+
+function deleteInvoice(invoiceId) {
+    if (!confirm('Sadece fatura kaydı silinir. Ekstreden ve bakiyeden otomatik düşmez. Emin misiniz?')) return;
+    dbInvoices.child(invoiceId).remove().then(() => showToast('Silindi', 'success'));
+}
