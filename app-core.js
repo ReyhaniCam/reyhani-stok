@@ -1,3 +1,5 @@
+var APP_BUILD_CORE = '20';
+var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // SPLASH SCREEN SÜRESİ
 setTimeout(() => {
   const s = document.getElementById('splash-screen');
