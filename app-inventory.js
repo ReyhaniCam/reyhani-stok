@@ -1,3 +1,5 @@
+var APP_BUILD_INVENTORY = '20';
+var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // ============================================================
 // EXCEL İÇE AKTARIM FONKSİYONLARI
 // ============================================================
@@ -1991,7 +1993,7 @@ async function processReceiptWithAI(event) {
       statusMsg.style.color = '#EF4444';
       statusMsg.innerHTML = '❌ Fiş okunamadı.';
     }
-    alert("Hata: " + err.message);
+    alert("Hata: " + err.message + "\n\n[Sürüm kontrolü: core=" + (typeof APP_BUILD_CORE !== "undefined" ? APP_BUILD_CORE : "ESKİ") + ", operations=" + (typeof APP_BUILD_OPERATIONS !== "undefined" ? APP_BUILD_OPERATIONS : "ESKİ") + ", inventory=" + (typeof APP_BUILD_INVENTORY !== "undefined" ? APP_BUILD_INVENTORY : "ESKİ") + "]");
   } finally {
     event.target.value = '';
   }
