@@ -1,3 +1,5 @@
+// Geri alma geçmişi: bu dosyada tanımlı (app-core.js sürümünden bağımsız çalışsın diye)
+var fisUndoStack = [];
 // ============================================================
 // DİĞER FONKSİYONLAR
 // ============================================================
