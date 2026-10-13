@@ -1867,6 +1867,34 @@ function findBestProductMatch(aiName) {
   return { product: best, score: bestScore };
 }
 
+// Gemini "yoğunluk" (503/429) hatalarında otomatik yeniden dener; olmazsa yedek modele geçer.
+async function geminiFetchRetry(apiUrl, init) {
+  const urls = [apiUrl, apiUrl.replace('gemini-3.5-flash-lite', 'gemini-2.5-flash')];
+  const delays = [2000, 4000, 8000];
+  const statusMsg = document.getElementById('ai-status-msg');
+  let last = null;
+  for (let u = 0; u < urls.length; u++) {
+    if (u > 0 && urls[u] === urls[0]) break;
+    for (let a = 0; a <= delays.length; a++) {
+      const res = await fetch(urls[u], init);
+      if (res.ok) return res;
+      let overloaded = [429, 500, 502, 503, 504].includes(res.status);
+      try {
+        const j = await res.clone().json();
+        const m = ((j && j.error && j.error.message) || '').toLowerCase();
+        if (m.includes('high demand') || m.includes('overloaded') || m.includes('try again later')) overloaded = true;
+      } catch (e) { /* gövde okunamadıysa durum koduna göre karar ver */ }
+      if (!overloaded) return res;   // anahtar hatası vb. gerçek hatalar tekrar denenmez
+      last = res;
+      if (a < delays.length) {
+        if (statusMsg) { statusMsg.style.display = 'block'; statusMsg.style.color = '#F59E0B'; statusMsg.innerHTML = '⏳ Yapay zeka şu an yoğun, tekrar deneniyor (' + (a + 1) + '/' + delays.length + ')...'; }
+        await new Promise(r => setTimeout(r, delays[a]));
+      }
+    }
+  }
+  return last;
+}
+
 async function processReceiptWithAI(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1899,7 +1927,7 @@ async function processReceiptWithAI(event) {
 
     const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
 
-    const response = await fetch(apiUrl, {
+    const response = await geminiFetchRetry(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
