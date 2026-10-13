@@ -1,5 +1,5 @@
-// Geri alma geçmişi: bu dosyada tanımlı (app-core.js sürümünden bağımsız çalışsın diye)
-var fisUndoStack = [];
+var APP_BUILD_OPERATIONS = '20';
+var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // ============================================================
 // DİĞER FONKSİYONLAR
 // ============================================================
