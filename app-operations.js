@@ -1,4 +1,4 @@
-var APP_BUILD_OPERATIONS = '20';
+var APP_BUILD_OPERATIONS = '21';
 var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // ============================================================
 // DİĞER FONKSİYONLAR
@@ -4397,6 +4397,45 @@ async function addAsNewProductFromKatalog() {
 let katalogAiCart = [];
 let katalogAiContext = null; // { brand, brandKey, pdfId }
 
+// ---------- KATALOG: AI İLE ÜRÜN GRUPLAMA (Ana Grup / Malzeme Sınıfı) ----------
+// Karışık içerikli kataloglarda AI her ürünü kendi grubuna (Boru ve Tesisat, Elektrik, Boya ...) ayırır.
+const CATALOG_DEFAULT_GROUPS = [
+  'Boru ve Tesisat', 'Elektrik', 'Boya ve Boya Malzemeleri', 'El Aletleri', 'Elektrikli El Aletleri',
+  'Vida ve Civata', 'Kilit ve Kapı Donanımı', 'Cam ve Aksesuar', 'Silikon ve Yapıştırıcı',
+  'Banyo', 'Mutfak', 'Bahçe', 'İnşaat ve Yapı Malzemeleri', 'İş Güvenliği', 'Diğer'
+];
+
+function catalogKnownGroups() {
+  const out = [];
+  const seen = new Set();
+  // Önce sistemde zaten kullanılan sınıflar (aynı isimle devam edilsin), sonra varsayılan liste
+  [...brandCategorySuggestions(), ...CATALOG_DEFAULT_GROUPS].forEach(g => {
+    const k = normalizeGroupKey(g);
+    if (k && !seen.has(k)) { seen.add(k); out.push(g); }
+  });
+  return out;
+}
+
+// "Vida & Civata" ile "vida ve civata" aynı grup sayılsın
+function normalizeGroupKey(g) {
+  return String(g || '').toLocaleLowerCase('tr-TR').replace(/&/g, ' ve ').replace(/[^a-z0-9çğıöşü]+/g, '');
+}
+
+function resolveCatalogGroup(raw) {
+  const g = String(raw || '').trim();
+  if (!g) return '';
+  const key = normalizeGroupKey(g);
+  const hit = catalogKnownGroups().find(k => normalizeGroupKey(k) === key);
+  if (hit) return hit;
+  // Yeni grup: her kelimenin ilk harfi büyük
+  return g.split(/\s+/).map(w => w.charAt(0).toLocaleUpperCase('tr-TR') + w.slice(1)).join(' ');
+}
+
+function catalogGroupPromptPart() {
+  const groups = catalogKnownGroups().join(', ');
+  return " Her ürün için ayrıca bir ana grup (group) belirle: ürünün hangi malzeme sınıfına ait olduğu. PDF birden çok farklı malzeme türü içerebilir (örneğin boru/tesisat, elektrik, boya, el aletleri); her ürünü kendi türüne göre ayrı grupla. Önce şu mevcut gruplardan uygun olanı AYNEN yazarak seç: [" + groups + "]. Hiçbiri uymuyorsa kısa, genel bir Türkçe grup adı üret (en fazla 3 kelime, örn. \"Isıtma ve Soğutma\"). Aynı türdeki ürünlere HER ZAMAN aynı grup adını ver, her ürün için farklı ad uydurma. Emin olamazsan \"Diğer\" yaz.";
+}
+
 async function readCatalogPdfWithAI(brandKey, pdfId) {
   if (currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
   const pdfMeta = (catalogPdfsData[brandKey] || {})[pdfId];
@@ -4427,13 +4466,13 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
 
     const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
 
-    const response = await fetch(apiUrl, {
+    const response = await geminiFetchRetry(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [
-            { text: "Sen bir hırdavat/nalburiye/cam mağazası için marka fiyat kataloğu (PDF) okuyan bir yapay zekasın. Bu PDF'teki HER ürünü tek tek tespit et: ürün adı (name), varsa ölçüsü/ebadı/boyutu (size — yoksa boş string \"\" yaz, ürün adının içine YAZMA), ve katalog/liste fiyatı (price — KDV hariç görünüyorsa o haliyle, sadece sayı, para birimi simgesi ekleme). Ayrıca PDF'in ait olduğu marka adını da tespit et (brand). SADECE geçerli bir JSON nesnesi döndür, başka hiçbir açıklama veya markdown işareti ekleme. Format tam olarak şu şekilde olmalı: {\"brand\": \"Marka Adı\", \"items\": [{\"name\": \"Ürün Adı\", \"size\": \"60x40 cm\", \"price\": 245.50}]}. Fiyatı hiç görünmeyen veya net okunamayan satırları listeye ekleme." },
+            { text: "Sen bir hırdavat/nalburiye/cam mağazası için marka fiyat kataloğu (PDF) okuyan bir yapay zekasın. Bu PDF'teki HER ürünü tek tek tespit et: ürün adı (name), varsa ölçüsü/ebadı/boyutu (size — yoksa boş string \"\" yaz, ürün adının içine YAZMA), ve katalog/liste fiyatı (price — KDV hariç görünüyorsa o haliyle, sadece sayı, para birimi simgesi ekleme). Ayrıca PDF'in ait olduğu marka adını da tespit et (brand). SADECE geçerli bir JSON nesnesi döndür, başka hiçbir açıklama veya markdown işareti ekleme. Format tam olarak şu şekilde olmalı: {\"brand\": \"Marka Adı\", \"items\": [{\"name\": \"Ürün Adı\", \"size\": \"60x40 cm\", \"price\": 245.50, \"group\": \"Ana Grup\"}]}. Fiyatı hiç görünmeyen veya net okunamayan satırları listeye ekleme." + catalogGroupPromptPart() },
             { inlineData: { mimeType: "application/pdf", data: pureBase64 } }
           ]
         }]
@@ -4470,7 +4509,7 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
     if (gProfit) gProfit.value = settings.profit || 0;
     // Ana Grup için markanın "Malzeme Sınıfı" alanı varsayılan önerilir (örn.
     // "Tesisat Malzemeleri") — admin isterse üzerine yazabilir.
-    if (gGroup) gGroup.value = settings.category || '';
+    if (gGroup) { gGroup.value = ''; gGroup.placeholder = "Boş bırakın: AI'ın ayırdığı gruplar korunur"; }
 
     let newCount = 0, matchedCount = 0, skippedNoPrice = 0;
     items.forEach(item => {
@@ -4501,7 +4540,7 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
         // Alt Grup = ölçüsüz ürün adı (örn. "Dirsek") — aynı katalogdaki 10-12
         // farklı ölçü otomatik olarak bu ortak başlık altında toplanır. Ana Grup
         // (örn. "Tesisat Malzemeleri") ise yukarıdaki tek kutudan tüm satırlara uygulanır.
-        mainGroup: settings.category || '', subGroup: aiName,
+        mainGroup: resolveCatalogGroup(item.group) || settings.category || 'Diğer', subGroup: aiName,
         price: Math.round(salePrice * 100) / 100,
         matched: isMatch, matchedCode: isMatch ? matchedProduct.code : null,
         matchedQty,
@@ -4509,11 +4548,16 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
       });
     });
 
+    // Aynı gruptaki ürünler yan yana dursun
+    katalogAiCart.sort((a, b) => (a.mainGroup || '').localeCompare(b.mainGroup || '', 'tr-TR') || (a.name || '').localeCompare(b.name || '', 'tr-TR'));
     renderKatalogAiCart();
+    const groupCounts = {};
+    katalogAiCart.forEach(it => { groupCounts[it.mainGroup] = (groupCounts[it.mainGroup] || 0) + 1; });
+    const groupSummary = Object.entries(groupCounts).map(([g, n]) => `${g} (${n})`).join(' · ');
 
     if (statusMsg) {
       statusMsg.style.color = '#10B981';
-      statusMsg.innerHTML = `✅ "${pdfMeta.name}" okundu → <b>${brandName}</b> markası altında ${katalogAiCart.length} ürün listelendi (🆕 ${newCount} yeni, ⚠️ ${matchedCount} sistemde zaten kayıtlı — bunların stok adedi 0 da olabilir, listede satır satır görebilirsiniz` + (skippedNoPrice > 0 ? `, ${skippedNoPrice} tanesi fiyat okunamadığı için atlandı` : '') + `). Fiyatlar "${brandName}" markasının kayıtlı iskonto/KDV/kâr oranına göre otomatik hesaplandı — sisteme işlemeden önce listeyi kontrol edin!`;
+      statusMsg.innerHTML = `✅ "${pdfMeta.name}" okundu → <b>${brandName}</b> markası altında ${katalogAiCart.length} ürün listelendi (🆕 ${newCount} yeni, ⚠️ ${matchedCount} sistemde zaten kayıtlı — bunların stok adedi 0 da olabilir, listede satır satır görebilirsiniz` + (skippedNoPrice > 0 ? `, ${skippedNoPrice} tanesi fiyat okunamadığı için atlandı` : '') + `). Fiyatlar "${brandName}" markasının kayıtlı iskonto/KDV/kâr oranına göre otomatik hesaplandı — sisteme işlemeden önce listeyi kontrol edin!<br>📁 <b>Gruplar:</b> ${groupSummary}`;
     }
   } catch (err) {
     if (statusMsg) {
@@ -4544,11 +4588,21 @@ function renderKatalogAiCart() {
   if (!tbody) return;
   if (katalogAiCart.length === 0) { tbody.innerHTML = ''; return; }
 
-  tbody.innerHTML = katalogAiCart.map((item, i) => `
+  const groupTotals = {};
+  katalogAiCart.forEach(it => { const g = it.mainGroup || 'Grupsuz'; groupTotals[g] = (groupTotals[g] || 0) + 1; });
+  let prevGroup = null;
+  tbody.innerHTML = katalogAiCart.map((item, i) => {
+    const g = item.mainGroup || 'Grupsuz';
+    let header = '';
+    if (g !== prevGroup) {
+      prevGroup = g;
+      header = `<tr><td colspan="10" style="background:#EEF2F7; padding:8px 6px; font-weight:800; color:var(--charcoal);">📁 ${g.replace(/</g, '&lt;')} <span style="font-weight:600; color:var(--steel);">— ${groupTotals[g]} ürün</span> <button type="button" class="btn btn-dark btn-sm" style="width:auto; margin-left:8px; padding:2px 8px; font-size:11px;" onclick="renameKatalogAiGroup(${i})">✏️ Grubu yeniden adlandır</button></td></tr>`;
+    }
+    return header + `
     <tr style="border-bottom:1px dashed var(--steel-line); ${item.matched ? 'opacity:0.65;' : ''}">
       <td style="padding:6px 4px; text-align:center;"><input type="checkbox" ${item.include ? 'checked' : ''} onchange="katalogAiCart[${i}].include=this.checked"></td>
       <td style="padding:6px 4px;"><input type="text" value="${(item.name || '').replace(/"/g, '&quot;')}" style="min-width:170px;" oninput="katalogAiCart[${i}].name=this.value"></td>
-      <td style="padding:6px 4px;"><input type="text" list="brand-category-suggestions" value="${(item.mainGroup || '').replace(/"/g, '&quot;')}" style="min-width:120px;" oninput="katalogAiCart[${i}].mainGroup=this.value" placeholder="Ana Grup"></td>
+      <td style="padding:6px 4px;"><input type="text" list="brand-category-suggestions" value="${(item.mainGroup || '').replace(/"/g, '&quot;')}" style="min-width:120px;" oninput="katalogAiCart[${i}].mainGroup=this.value" onchange="katalogAiCart[${i}].mainGroup=resolveCatalogGroup(this.value)||'Diğer'; renderKatalogAiCart()" placeholder="Ana Grup"></td>
       <td style="padding:6px 4px;"><input type="text" value="${(item.subGroup || '').replace(/"/g, '&quot;')}" style="min-width:100px;" oninput="katalogAiCart[${i}].subGroup=this.value" placeholder="Alt Grup"></td>
       <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.cost}" style="width:80px;" oninput="katalogAiCart[${i}].cost=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
       <td style="padding:6px 4px;"><input type="number" step="0.01" value="${item.discount}" style="width:60px;" oninput="katalogAiCart[${i}].discount=parseFloat(this.value)||0; recalcKatalogAiRow(${i})"></td>
@@ -4557,7 +4611,21 @@ function renderKatalogAiCart() {
       <td style="padding:6px 4px; font-weight:bold; color:var(--success);" id="katalog-ai-price-${i}">₺${item.price.toFixed(2)}</td>
       <td style="padding:6px 4px; font-size:11px; white-space:nowrap;">${item.matched ? (item.matchedQty > 0 ? `⚠️ Stokta var (${item.matchedQty} adet)<br><small style="color:var(--steel);">${item.matchedCode}</small>` : `ℹ️ Kaydı var, stok 0<br><small style="color:var(--steel);">${item.matchedCode}</small>`) : '🆕 Yeni ürün'}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
+}
+
+// Bir grubun adını tek seferde değiştirir (AI yanlış/yakın isim verdiyse tüm gruba uygulanır)
+function renameKatalogAiGroup(i) {
+  const item = katalogAiCart[i];
+  if (!item) return;
+  const oldName = item.mainGroup || '';
+  const input = prompt(`"${oldName || 'Grupsuz'}" grubunun yeni adı:`, oldName);
+  if (input === null) return;
+  const newName = resolveCatalogGroup(input) || 'Diğer';
+  katalogAiCart.forEach(it => { if ((it.mainGroup || '') === oldName) it.mainGroup = newName; });
+  katalogAiCart.sort((a, b) => (a.mainGroup || '').localeCompare(b.mainGroup || '', 'tr-TR') || (a.name || '').localeCompare(b.name || '', 'tr-TR'));
+  renderKatalogAiCart();
 }
 
 function recalcKatalogAiRow(i) {
@@ -4585,7 +4653,7 @@ function applyGlobalKatalogAiSettings() {
   renderKatalogAiCart();
 
   if (katalogAiContext && katalogAiContext.brand) {
-    dbBrandSettings.child(katalogAiContext.brand).update({ discount, vat, profit, category: mainGroup || null }, (err) => {
+    dbBrandSettings.child(katalogAiContext.brand).update(Object.assign({ discount, vat, profit }, mainGroup ? { category: mainGroup } : {}), (err) => {
       if (!err) showToast(`"${katalogAiContext.brand}" markasının varsayılan iskonto/KDV/kâr oranı ve malzeme sınıfı da güncellendi.`);
     });
   }
