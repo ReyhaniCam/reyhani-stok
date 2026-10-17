@@ -1,4 +1,4 @@
-var APP_BUILD_INVENTORY = '20';
+var APP_BUILD_INVENTORY = '22';
 var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // ============================================================
 // EXCEL İÇE AKTARIM FONKSİYONLARI
@@ -1527,75 +1527,337 @@ function updateBalance(key, mult) {
 let activeWholesalerKey = null;
 
 function openHistory(key, name) {
+  // Önceki/Sonraki ile firma değişirken eski firmanın dinleyicisini kapat
+  if (activeWholesalerKey && activeWholesalerKey !== key) dbWholesalers.child(activeWholesalerKey).child('transactions').off('value');
   activeWholesalerKey = key;
-  document.getElementById('history-title').textContent = name + " - Hesap Hareketleri";
+  document.getElementById('history-title').textContent = "Cari Hesap Ekstresi";
+  const box = document.querySelector('#history-modal .modal-content');
+  if (box) box.style.maxWidth = '1000px';
   document.getElementById('history-modal').style.display = 'flex';
   loadHistory(key);
 }
 
 function closeHistory() {
   document.getElementById('history-modal').style.display = 'none';
+  const box = document.querySelector('#history-modal .modal-content');
+  if (box) box.style.maxWidth = '';
   if (activeWholesalerKey) dbWholesalers.child(activeWholesalerKey).child('transactions').off('value');
   activeWholesalerKey = null;
 }
 
-function loadHistory(key) {
+// ============================================================
+// TOPTANCI CARİ HESAP EKSTRESİ (Veresiye programı görünümü)
+// Tarih | Tür | Açıklama | Borç | Alacak — altta T. Borç, T. Alacak, Bakiye
+// ============================================================
+let ledgerState = { selectedId: null, filterText: '', filterType: '', formMode: null, editId: null, data: {} };
+
+function ledgerEsc(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function parseTrDateTime(s) {
+  const m = String(s || '').match(/(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[\s,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return NaN;
+  return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0)).getTime();
+}
+function ledgerDateOnly(s) {
+  const m = String(s || '').match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  return m ? `${m[1].padStart(2, '0')}.${m[2].padStart(2, '0')}.${m[3]}` : (s || '-');
+}
+function ledgerIsoFromTr(s) {
+  const m = String(s || '').match(/(\d{1,2})\.(\d{1,2})\.(\d{4})/);
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+}
+function ledgerTrFromIso(iso, timePart) {
+  const [y, m, d] = iso.split('-');
+  return `${d}.${m}.${y} ${timePart || new Date().toLocaleTimeString('tr-TR')}`;
+}
+function ledgerMoney(n) { return formatMoney(n) + ' TL'; }
+
+function injectLedgerStyle() {
+  if (document.getElementById('ledger-style')) return;
+  const st = document.createElement('style');
+  st.id = 'ledger-style';
+  st.textContent = `
+    .ledger-top{display:flex; align-items:stretch; gap:8px; margin-bottom:8px;}
+    .ledger-firm{flex:1; text-align:center; font-family:'Oswald',sans-serif; font-size:24px; font-weight:700; letter-spacing:1px; padding:8px; border:1px solid var(--steel-line); background:var(--bg); border-radius:6px; display:flex; align-items:center; justify-content:center;}
+    .ledger-tools{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;}
+    .ledger-tools input{flex:1; min-width:160px;} .ledger-tools select{width:auto;}
+    .ledger-scroll{overflow:auto; max-height:46vh; border:1px solid var(--steel-line); border-radius:4px; background:#fff;}
+    .ledger-table{width:100%; border-collapse:collapse; font-size:13px; min-width:620px; color:#111;}
+    .ledger-table th{position:sticky; top:0; background:#E6E9EE; border-bottom:1px solid #9AA0A6; padding:6px 8px; text-align:left; font-weight:700; z-index:1;}
+    .ledger-table td{padding:5px 8px; border-bottom:1px solid #EEF0F3; white-space:nowrap;}
+    .ledger-table td.desc{white-space:normal; min-width:220px;}
+    .ledger-table td.num, .ledger-table th.num{text-align:right; font-family:'IBM Plex Mono',monospace;}
+    .ledger-table tbody tr{cursor:pointer;} .ledger-table tbody tr:hover{background:#F3F6FA;}
+    .ledger-table tbody tr.ledger-sel{background:#1F4E8C !important; color:#fff;}
+    .ledger-table tbody tr.ledger-virtual{background:#FFF8E1; color:#6B5B00; cursor:default;}
+    .ledger-footer{display:flex; flex-wrap:wrap; gap:6px 18px; margin:10px 0; font-size:13px; align-items:center; justify-content:space-between; background:var(--bg); padding:8px 10px; border-radius:6px;}
+    .ledger-footer b{font-family:'IBM Plex Mono',monospace;}
+    .ledger-actions{display:grid; grid-template-columns:repeat(4,1fr); gap:8px;}
+    .ledger-form{margin-top:12px; background:var(--bg); padding:12px; border-radius:6px; border:1px solid var(--steel-line);}
+  `;
+  document.head.appendChild(st);
+}
+
+function getLedgerSorted() {
+  const data = ledgerState.data || {};
+  const rows = Object.keys(data).map(id => {
+    const t = data[id] || {};
+    return { id, t, ts: parseTrDateTime(t.date), amount: Number(t.amount) || 0, type: t.type === 'borc' ? 'borc' : 'odeme' };
+  });
+  rows.sort((a, b) => ((isNaN(a.ts) ? 0 : a.ts) - (isNaN(b.ts) ? 0 : b.ts)) || (a.id < b.id ? -1 : 1));
+  return rows;
+}
+
+function buildLedgerShell(key) {
+  injectLedgerStyle();
+  const w = wholesalersData[key] || {};
+  const isAdmin = currentRole === 'admin';
   const list = document.getElementById('history-list');
-  list.innerHTML = '<p style="font-size:12px; color:var(--steel);">Yükleniyor...</p>';
-  dbWholesalers.child(key).child('transactions').on('value', snap => {
-    const data = snap.val() || {};
-    const w = wholesalersData[key] || {};
-    const isAdmin = currentRole === 'admin';
-
-    let html = isAdmin ? `
-      <div style="margin-bottom:15px; background:var(--bg); padding:10px; border-radius:6px;">
-         <label>İşlem Açıklaması</label>
-         <input type="text" id="h-desc" placeholder="Örn: Mal Alımı / Yapılan Ödeme" style="margin-bottom:8px;">
-         <div class="form-row" style="margin-bottom:8px;">
-           <div><label>Tutar (₺)</label><input type="number" id="h-amount" step="0.01" placeholder="0.00"></div>
-           <div><label>İşlem Türü</label>
-             <select id="h-type">
-               <option value="borc">Borçlandır (+)</option>
-               <option value="odeme">Ödeme Yapıldı (-)</option>
-             </select>
-           </div>
-         </div>
-         <button class="btn btn-primary btn-sm" onclick="addTransaction()">İşlemi Kaydet</button>
-      </div>
-    ` : '';
-
-    const balance = w.balance || 0;
-
-    const manualBalanceBlock = isAdmin ? `
-      <div style="margin-bottom:15px; background:#FFF7ED; border:1px dashed var(--warning, #F59E0B); padding:10px; border-radius:6px;">
-        <label style="font-size:12px; font-weight:600;">⚙️ Bakiyeyi Manuel Düzelt (yanlış girilen tutarı elle düzeltmek için)</label>
-        <div class="form-row" style="margin-top:6px; align-items:flex-end;">
-          <div style="flex:1;"><input type="number" id="h-manual-balance" step="0.01" value="${balance}" placeholder="0.00"></div>
+  list.innerHTML = `
+    <div class="ledger-top">
+      <button class="btn btn-dark btn-sm" style="width:auto;" onclick="ledgerNav(-1)">◀ Önceki</button>
+      <div class="ledger-firm" id="ledger-firm">${ledgerEsc(w.name || '')}</div>
+      <button class="btn btn-dark btn-sm" style="width:auto;" onclick="ledgerNav(1)">Sonraki ▶</button>
+    </div>
+    <div class="ledger-tools">
+      <input type="text" id="ledger-q" placeholder="🔍 Sorgula: açıklama, tutar veya tarih yazın..." oninput="ledgerSetFilter()">
+      <select id="ledger-t" onchange="ledgerSetFilter()">
+        <option value="">Tümü</option><option value="borc">Borç Dekontu</option><option value="odeme">Ödeme</option>
+      </select>
+      <button class="btn btn-dark btn-sm" style="width:auto;" onclick="printLedger()">🖨️ Yazdır</button>
+    </div>
+    <div class="ledger-scroll" id="ledger-scroll">
+      <table class="ledger-table">
+        <thead><tr><th style="width:92px;">Tarih</th><th style="width:110px;">Tür</th><th>Açıklama</th><th class="num" style="width:120px;">Borç</th><th class="num" style="width:120px;">Alacak</th></tr></thead>
+        <tbody id="ledger-body"></tbody>
+      </table>
+    </div>
+    <div class="ledger-footer" id="ledger-footer"></div>
+    <div class="ledger-actions">
+      ${isAdmin ? `
+        <button class="btn btn-success btn-sm" onclick="ledgerOpenForm('add')">➕ Ekle</button>
+        <button class="btn btn-primary btn-sm" onclick="ledgerOpenForm('edit')">✏️ Değiştir</button>
+        <button class="btn btn-danger btn-sm" onclick="ledgerDeleteSelected()">❌ Sil</button>
+      ` : '<span></span><span></span><span></span>'}
+      <button class="btn btn-dark btn-sm" onclick="closeHistory()">⬅ Geri</button>
+    </div>
+    <div id="ledger-form-box"></div>
+    ${isAdmin ? `
+    <details style="margin-top:12px;">
+      <summary style="cursor:pointer; font-size:12px; color:var(--steel);">⚙️ Bakiyeyi manuel düzelt</summary>
+      <div style="margin-top:8px; background:#FFF7ED; border:1px dashed var(--warning, #F59E0B); padding:10px; border-radius:6px;">
+        <div class="form-row" style="align-items:flex-end;">
+          <div style="flex:1;"><input type="number" id="h-manual-balance" step="0.01" value="${w.balance || 0}" placeholder="0.00"></div>
           <button class="btn btn-sm" style="width:auto; background:var(--warning, #F59E0B); color:#fff; white-space:nowrap; padding:8px 12px;" onclick="setWholesalerBalanceManually()">Bakiyeyi Ayarla</button>
         </div>
-        <div style="font-size:11px; color:var(--steel); margin-top:4px;">Bu, artış/azalış eklemez; bakiyeyi doğrudan yazdığınız tutara eşitler. Negatif değer = borç, pozitif değer = alacak.</div>
+        <div style="font-size:11px; color:var(--steel); margin-top:4px;">Bakiyeyi doğrudan yazdığınız tutara eşitler. Negatif değer = borç, pozitif değer = alacak.</div>
       </div>
-    ` : '';
-    const rows = Object.keys(data).sort().reverse().map(tId => {
-      const t = data[tId];
-      return `
-        <div class="recent-update-row">
-          <div>
-            <div>${t.desc}</div>
-            <div class="ru-time">${t.date}</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:8px;">
-            <div style="font-family:'IBM Plex Mono'; font-weight:bold; color:${t.type === 'borc' ? 'var(--rust)' : 'var(--success)'}">
-              ${t.type === 'borc' ? '+' : '-'}₺${formatMoney(t.amount)}
-            </div>
-            ${isAdmin ? `<button class="btn btn-danger btn-sm" style="width:auto; padding:3px 8px; font-size:11px;" title="Bu hareketi sil ve bakiyeyi düzelt (örn. mükerrer fiş kaydından oluşan borç)" onclick="deleteWholesalerTransaction('${tId}')">🗑</button>` : ''}
-          </div>
-        </div>
-      `;
-    }).join('') || '<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hareket kaydı yok.</p>';
+    </details>` : ''}
+  `;
+}
 
-    list.innerHTML = html + manualBalanceBlock + `<div class="balance-box ${balance < 0 ? 'balance-negative' : 'balance-positive'}">Güncel Bakiye: ₺${formatMoney(balance)}</div>` + rows;
+function ledgerSetFilter() {
+  ledgerState.filterText = (document.getElementById('ledger-q').value || '').trim().toLocaleLowerCase('tr-TR');
+  ledgerState.filterType = document.getElementById('ledger-t').value;
+  renderLedger(false);
+}
+
+function renderLedger(scrollToEnd) {
+  const body = document.getElementById('ledger-body');
+  if (!body || !activeWholesalerKey) return;
+  const w = wholesalersData[activeWholesalerKey] || {};
+  const all = getLedgerSorted();
+
+  let sumB = 0, sumO = 0;
+  all.forEach(r => { if (r.type === 'borc') sumB += r.amount; else sumO += r.amount; });
+  const balanceDebt = -(Number(w.balance) || 0);        // + = bizim borcumuz
+  const opening = Math.round((balanceDebt - (sumB - sumO)) * 100) / 100; // hareket kaydı olmayan devir
+  let totB = sumB + (opening > 0 ? opening : 0);
+  let totO = sumO + (opening < 0 ? -opening : 0);
+
+  const q = ledgerState.filterText, ft = ledgerState.filterType;
+  const shown = all.filter(r => {
+    if (ft && r.type !== ft) return false;
+    if (!q) return true;
+    const hay = `${r.t.desc || ''} ${r.t.date || ''} ${formatMoney(r.amount)} ${r.amount}`.toLocaleLowerCase('tr-TR');
+    return hay.includes(q);
   });
+
+  let html = '';
+  if (Math.abs(opening) > 0.005 && !q && !ft) {
+    html += `<tr class="ledger-virtual" title="Hareket kaydı bulunmayan önceki bakiye (devir)">
+      <td>-</td><td>Devir</td><td class="desc">Devreden / önceki bakiye (hareket kaydı olmayan kısım)</td>
+      <td class="num">${opening > 0 ? formatMoney(opening) + ' TL' : ''}</td><td class="num">${opening < 0 ? formatMoney(-opening) + ' TL' : ''}</td></tr>`;
+  }
+  shown.forEach(r => {
+    const sel = r.id === ledgerState.selectedId ? ' ledger-sel' : '';
+    html += `<tr class="ledger-row${sel}" data-id="${r.id}" onclick="ledgerSelect('${r.id}')" ondblclick="ledgerSelect('${r.id}'); ledgerOpenForm('edit')">
+      <td>${ledgerEsc(ledgerDateOnly(r.t.date))}</td>
+      <td>${r.type === 'borc' ? 'Borç Dekontu' : 'Ödeme'}</td>
+      <td class="desc">${ledgerEsc(r.t.desc)}</td>
+      <td class="num">${r.type === 'borc' ? ledgerMoney(r.amount) : ''}</td>
+      <td class="num">${r.type === 'odeme' ? ledgerMoney(r.amount) : ''}</td></tr>`;
+  });
+  if (!html) html = '<tr><td colspan="5" style="text-align:center; padding:18px; color:#777;">Kayıt bulunamadı.</td></tr>';
+  body.innerHTML = html;
+
+  const footer = document.getElementById('ledger-footer');
+  const bal = balanceDebt;
+  footer.innerHTML = `
+    <span>T. Borç = <b>${ledgerMoney(totB)}</b></span>
+    <span>T. Alacak = <b>${ledgerMoney(totO)}</b></span>
+    <span>Bakiye = <b style="color:${bal > 0 ? 'var(--rust)' : 'var(--success)'}; font-size:15px;">${ledgerMoney(Math.abs(bal))} ${bal > 0 ? '(Borçlusunuz)' : (bal < 0 ? '(Alacaklısınız)' : '')}</b></span>
+    <span>Bulunan Kayıt = <b>${shown.length}</b></span>`;
+
+  const nameEl = document.getElementById('ledger-firm');
+  if (nameEl) nameEl.textContent = w.name || '';
+  const manual = document.getElementById('h-manual-balance');
+  if (manual && document.activeElement !== manual) manual.value = w.balance || 0;
+
+  if (scrollToEnd) {
+    const sc = document.getElementById('ledger-scroll');
+    if (sc) sc.scrollTop = sc.scrollHeight;
+  }
+}
+
+function ledgerSelect(id) {
+  ledgerState.selectedId = id;
+  document.querySelectorAll('#ledger-body tr.ledger-row').forEach(tr => tr.classList.toggle('ledger-sel', tr.getAttribute('data-id') === id));
+}
+
+function ledgerNav(dir) {
+  const keys = Object.keys(wholesalersData).sort((a, b) => (wholesalersData[a].name || '').localeCompare(wholesalersData[b].name || '', 'tr-TR'));
+  if (keys.length < 2) return;
+  const idx = keys.indexOf(activeWholesalerKey);
+  const nextKey = keys[(idx + dir + keys.length) % keys.length];
+  openHistory(nextKey, wholesalersData[nextKey].name);
+}
+
+function loadHistory(key) {
+  ledgerState = { selectedId: null, filterText: '', filterType: '', formMode: null, editId: null, data: {} };
+  buildLedgerShell(key);
+  let first = true;
+  dbWholesalers.child(key).child('transactions').on('value', snap => {
+    if (key !== activeWholesalerKey) return;
+    ledgerState.data = snap.val() || {};
+    renderLedger(first);
+    first = false;
+  });
+}
+
+function ledgerOpenForm(mode) {
+  if (currentRole !== 'admin' || !activeWholesalerKey) return;
+  let t = null;
+  if (mode === 'edit') {
+    const id = ledgerState.selectedId;
+    t = id ? ledgerState.data[id] : null;
+    if (!t) { alert('Değiştirmek için önce listeden bir satır seçin.'); return; }
+    ledgerState.editId = id;
+  }
+  ledgerState.formMode = mode;
+  const iso = t ? (ledgerIsoFromTr(t.date) || new Date().toISOString().slice(0, 10)) : new Date().toISOString().slice(0, 10);
+  const box = document.getElementById('ledger-form-box');
+  box.innerHTML = `
+    <div class="ledger-form">
+      <div style="font-weight:800; margin-bottom:8px;">${mode === 'add' ? '➕ Yeni Hareket Ekle' : '✏️ Seçili Hareketi Değiştir'}</div>
+      <div class="form-row">
+        <div><label>Tarih</label><input type="date" id="lf-date" value="${iso}"></div>
+        <div><label>Tür</label>
+          <select id="lf-type">
+            <option value="borc" ${(!t || t.type === 'borc') ? 'selected' : ''}>Borç Dekontu (borçlan)</option>
+            <option value="odeme" ${(t && t.type !== 'borc') ? 'selected' : ''}>Ödeme (yaptığımız ödeme)</option>
+          </select></div>
+      </div>
+      <div class="form-row">
+        <div style="flex:2;"><label>Açıklama</label><input type="text" id="lf-desc" value="${ledgerEsc(t ? t.desc : '')}" placeholder="Örn: Mal alımı / Havale / Nakit ödeme"></div>
+        <div><label>Tutar (₺)</label><input type="number" id="lf-amount" step="0.01" value="${t ? (Number(t.amount) || 0) : ''}" placeholder="0.00"></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn btn-success btn-sm" onclick="ledgerSaveForm()">💾 Kaydet</button>
+        <button class="btn btn-dark btn-sm" onclick="ledgerCloseForm()">Vazgeç</button>
+      </div>
+    </div>`;
+  document.getElementById('lf-desc').focus();
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function ledgerCloseForm() {
+  ledgerState.formMode = null; ledgerState.editId = null;
+  const box = document.getElementById('ledger-form-box');
+  if (box) box.innerHTML = '';
+}
+
+async function ledgerSaveForm() {
+  if (currentRole !== 'admin' || !activeWholesalerKey) return;
+  const key = activeWholesalerKey;
+  const iso = document.getElementById('lf-date').value;
+  const type = document.getElementById('lf-type').value;
+  const desc = document.getElementById('lf-desc').value.trim();
+  const amount = parseFloat(document.getElementById('lf-amount').value);
+  if (!iso || !desc || isNaN(amount) || amount <= 0) { alert('Lütfen tarih, açıklama ve geçerli bir tutar girin.'); return; }
+  const effect = (tp, amt) => (tp === 'borc' ? -amt : amt);   // bakiye: borç = eksi, ödeme = artı
+  const round2 = (n) => Math.round(n * 100) / 100;
+  try {
+    if (ledgerState.formMode === 'add') {
+      await dbWholesalers.child(key).child('balance').transaction(cur => round2((cur || 0) + effect(type, amount)));
+      await dbWholesalers.child(key).child('transactions').push({ desc, amount, type, date: ledgerTrFromIso(iso) });
+      showToast('Hareket eklendi.');
+    } else {
+      const id = ledgerState.editId;
+      const old = ledgerState.data[id];
+      if (!old) { alert('Hareket bulunamadı (silinmiş olabilir).'); return; }
+      const delta = effect(type, amount) - effect(old.type === 'borc' ? 'borc' : 'odeme', Number(old.amount) || 0);
+      const oldTime = (String(old.date || '').match(/\d{1,2}:\d{2}(?::\d{2})?/) || [null])[0];
+      const date = ledgerIsoFromTr(old.date) === iso ? old.date : ledgerTrFromIso(iso, oldTime || '00:00:00');
+      if (Math.abs(delta) > 0.0001) {
+        await dbWholesalers.child(key).child('balance').transaction(cur => round2((cur || 0) + delta));
+      }
+      await dbWholesalers.child(key).child('transactions').child(id).update({ desc, amount, type, date, editedAt: new Date().toLocaleString('tr-TR') });
+      showToast('Hareket güncellendi ve bakiye düzeltildi.');
+    }
+    ledgerCloseForm();
+  } catch (e) {
+    alert('Kaydedilemedi: ' + (e && e.message ? e.message : e));
+  }
+}
+
+function ledgerDeleteSelected() {
+  if (currentRole !== 'admin') return;
+  const id = ledgerState.selectedId;
+  if (!id || !ledgerState.data[id]) { alert('Silmek için önce listeden bir satır seçin.'); return; }
+  deleteWholesalerTransaction(id);
+}
+
+function printLedger() {
+  const key = activeWholesalerKey;
+  if (!key) return;
+  const w = wholesalersData[key] || {};
+  const all = getLedgerSorted();
+  let sumB = 0, sumO = 0;
+  all.forEach(r => { if (r.type === 'borc') sumB += r.amount; else sumO += r.amount; });
+  const balanceDebt = -(Number(w.balance) || 0);
+  const opening = Math.round((balanceDebt - (sumB - sumO)) * 100) / 100;
+  const totB = sumB + (opening > 0 ? opening : 0), totO = sumO + (opening < 0 ? -opening : 0);
+  const rows = (Math.abs(opening) > 0.005 ? `<tr><td>-</td><td>Devir</td><td>Devreden / önceki bakiye</td><td class="n">${opening > 0 ? ledgerMoney(opening) : ''}</td><td class="n">${opening < 0 ? ledgerMoney(-opening) : ''}</td></tr>` : '') +
+    all.map(r => `<tr><td>${ledgerEsc(ledgerDateOnly(r.t.date))}</td><td>${r.type === 'borc' ? 'Borç Dekontu' : 'Ödeme'}</td><td>${ledgerEsc(r.t.desc)}</td><td class="n">${r.type === 'borc' ? ledgerMoney(r.amount) : ''}</td><td class="n">${r.type === 'odeme' ? ledgerMoney(r.amount) : ''}</td></tr>`).join('');
+  const logo = (typeof SENET_LOGO_SRC !== 'undefined') ? `<img src="${SENET_LOGO_SRC}" style="width:22mm;height:22mm;object-fit:cover;border-radius:2mm;">` : '';
+  const win = window.open('', '_blank');
+  if (!win) { alert('Yazdırma penceresi engellendi. Tarayıcıdan bu site için açılır pencerelere izin verin.'); return; }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${ledgerEsc(w.name)} - Cari Ekstre</title>
+    <style>@page{size:A4;margin:12mm} body{font-family:Arial,sans-serif;color:#111;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .h{display:flex;align-items:center;gap:6mm;border-bottom:2px solid #26282B;padding-bottom:4mm;margin-bottom:4mm}
+    h1{margin:0;font-size:18px;letter-spacing:1px} .sub{color:#555;font-size:11px;margin-top:1mm}
+    table{width:100%;border-collapse:collapse} th{background:#26282B;color:#fff;text-align:left;padding:5px 6px;font-size:11px} td{padding:4px 6px;border-bottom:1px solid #ddd}
+    .n{text-align:right;white-space:nowrap} tr{page-break-inside:avoid} .t{margin-top:5mm;display:flex;justify-content:flex-end;gap:10mm;font-size:13px}</style></head><body>
+    <div class="h">${logo}<div><h1>${ledgerEsc(w.name)}</h1><div class="sub">Cari Hesap Ekstresi — REYHANİ CAM HIRDAVAT — ${new Date().toLocaleDateString('tr-TR')}</div></div></div>
+    <table><thead><tr><th style="width:80px">Tarih</th><th style="width:90px">Tür</th><th>Açıklama</th><th class="n" style="width:100px">Borç</th><th class="n" style="width:100px">Alacak</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="t"><span>T. Borç: <b>${ledgerMoney(totB)}</b></span><span>T. Alacak: <b>${ledgerMoney(totO)}</b></span><span>Bakiye: <b>${ledgerMoney(Math.abs(balanceDebt))} ${balanceDebt > 0 ? '(Borç)' : (balanceDebt < 0 ? '(Alacak)' : '')}</b></span></div>
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
 }
 
 // Mükerrer/hatalı bir hareketi (örn. aynı fiş 4 kere kaydedilince oluşan 3 fazladan
