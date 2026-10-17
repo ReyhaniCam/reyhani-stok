@@ -1392,6 +1392,14 @@
       Aynı ürün yanlışlıkla birden fazla kez farklı barkotlarla kaydedildiyse (örn. aynı fiş birden fazla kez işlendiyse), burada seçip tek bir kayıtta birleştirebilirsiniz. Seçtiğiniz ürünlerin miktarları toplanır, geçmiş fiş kayıtlarındaki ürün kodları ana ürüne güncellenir ve diğer kayıtlar silinir. <strong>Bu işlem geri alınamaz.</strong>
     </p>
 
+    <div id="bulk-merge-section" style="border:2px solid #F5C542; border-radius:8px; padding:10px; margin-bottom:14px; background:#FFFBEB;">
+      <div style="font-weight:800; font-size:14px;">⚡ Toplu Birleştirme</div>
+      <div style="font-size:12px; color:var(--steel); margin:2px 0 6px 0;">Aynı isimli tüm ürün gruplarını tek seferde birleştirin. Her grupta stoğu en çok olan kayıt ana ürün seçilir; listeden değiştirebilir veya hatalı gördüğünüz grubun işaretini kaldırabilirsiniz.</div>
+      <label style="display:flex; align-items:center; gap:6px; font-size:12px; text-transform:none; cursor:pointer;"><input type="checkbox" id="bulk-merge-loose" checked style="width:auto;" onchange="renderBulkMerge()"> Yazım farklarını da yok say (büyük/küçük harf, boşluk, Türkçe karakter, noktalama)</label>
+      <div id="bulk-merge-box"></div>
+      <button type="button" class="btn btn-danger" style="width:100%; margin-top:10px;" id="bulk-merge-exec-btn" onclick="executeBulkMerge()" disabled>⚡ Toplu Birleştir</button>
+    </div>
+
     <div id="merge-suggestions-box" style="margin-bottom:14px;"></div>
 
     <input type="text" id="merge-search" placeholder="Birleştirilecek ürünleri aramak için yazın..." oninput="renderMergeProductList()" style="margin-bottom:8px;">
@@ -1876,7 +1884,7 @@
 </div>
 
 <script src="app-core.js?v=20"></script>
-<script src="app-operations.js?v=21"></script>
-<script src="app-inventory.js?v=20"></script>
+<script src="app-operations.js?v=23"></script>
+<script src="app-inventory.js?v=22"></script>
 </body>
 </html>
