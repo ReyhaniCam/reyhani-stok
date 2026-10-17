@@ -603,3 +603,70 @@
     .form-row{grid-template-columns:1fr!important;}
     .action-grid{grid-template-columns:1fr 1fr!important;}
   }
+
+
+/* ============================================================
+   POS PANEL DÜZENİ — tam genişlik + solda dikey menü
+   (Mevcut butonlar ve sekmeler aynen korunur, sadece yerleşim/görünüm değişir)
+   ============================================================ */
+:root{
+  --pos-wine:#5A1A3B; --pos-wine-2:#7B2252; --pos-wine-3:#962E66;
+  --pos-side:#1B2236; --pos-side-hover:#262F49; --pos-side-active:#2F3A5C;
+  --pos-side-w:220px; --pos-hdr-h:62px; --pos-bg:#F1F2F6; --pos-accent:#F0527F;
+}
+body::before{display:none!important;}
+html,body{background:var(--pos-bg)!important;}
+
+/* Sayfanın tamamını kullan: 960px sınırı kalktı */
+.app{max-width:none!important;width:100%!important;margin:0!important;padding:0!important;box-shadow:none!important;background:var(--pos-bg)!important;min-height:100vh!important;}
+main{padding:16px 22px 40px!important;min-width:0;}
+.dashboard-container{max-width:none!important;}
+
+/* Üst şerit */
+header{background:linear-gradient(90deg,#4A1330 0%,#651C43 55%,#7B2252 100%)!important;border-bottom:none!important;box-shadow:0 2px 10px rgba(0,0,0,.28)!important;padding:10px 20px!important;}
+.brand{display:flex;align-items:center;gap:12px;}
+.brand::before{content:"";flex:0 0 auto;width:42px;height:42px;border-radius:9px;background:#26282B url('logo.png') 49% 33%/290% no-repeat;border:1px solid rgba(255,255,255,.4);}
+.brand h1{font-size:19px!important;}
+.brand span{font-size:11px!important;color:#E8CCD9!important;}
+
+/* Butonlar: bordo tema */
+.btn-primary{background:var(--pos-wine-2)!important;color:#fff!important;border-color:var(--pos-wine-2)!important;}
+.btn-primary:hover{background:var(--pos-wine-3)!important;}
+.btn-dark{background:var(--pos-wine)!important;color:#fff!important;}
+.btn-dark:hover{background:var(--pos-wine-2)!important;}
+.tab-content table thead th, .modal-content table thead th{background:var(--pos-wine-2)!important;color:#fff!important;}
+
+/* Tam genişlikte kartlar/ızgaralar daha çok sütuna yayılsın */
+.grid{grid-template-columns:repeat(auto-fill,minmax(330px,1fr))!important;}
+.summary{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))!important;}
+.form-row{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))!important;}
+
+/* Menü simgesi/yazısı (JS ile ayrıştırılır) */
+.nav-ico{display:inline-block;font-size:19px;min-width:26px;text-align:center;margin-right:10px;}
+
+/* ---- Masaüstü / geniş ekran: solda dikey menü ---- */
+@media (min-width:900px){
+  .app{display:grid!important;grid-template-columns:var(--pos-side-w) minmax(0,1fr);grid-template-rows:auto auto 1fr;align-items:start;}
+  header{grid-column:1 / -1;grid-row:1;position:sticky;top:0;z-index:60;min-height:var(--pos-hdr-h);}
+  #issue-alert-banner{grid-column:1 / -1;grid-row:2;}
+  .nav-tabs{grid-column:1;grid-row:3;position:sticky!important;top:var(--pos-hdr-h)!important;height:calc(100vh - var(--pos-hdr-h));overflow-y:auto!important;overflow-x:hidden!important;flex-direction:column!important;align-self:start;background:var(--pos-side)!important;border:none!important;box-shadow:none!important;padding:8px 0!important;}
+  main{grid-column:2;grid-row:3;}
+  .tab-btn{flex:0 0 auto!important;width:100%;justify-content:flex-start!important;text-align:left!important;padding:12px 16px!important;min-height:46px!important;border-radius:0!important;border:none!important;border-left:4px solid transparent!important;color:#C8CFE3!important;background:transparent!important;font-family:'Inter',sans-serif!important;font-size:14px!important;font-weight:600!important;text-transform:none!important;letter-spacing:0;}
+  .tab-btn:hover{background:var(--pos-side-hover)!important;color:#fff!important;}
+  .tab-btn.active{background:var(--pos-side-active)!important;color:#fff!important;border-left-color:var(--pos-accent)!important;box-shadow:none!important;}
+}
+
+/* ---- Telefon/tablet: üstte yatay menü (tam genişlik) ---- */
+@media (max-width:899px){
+  .nav-tabs{background:var(--pos-side)!important;border-bottom:none!important;}
+  .tab-btn{color:#C8CFE3!important;background:transparent!important;border-bottom:4px solid transparent!important;}
+  .tab-btn.active{color:#fff!important;background:var(--pos-side-active)!important;border-bottom-color:var(--pos-accent)!important;}
+  .nav-ico{margin-right:6px;}
+}
+
+/* Ana sayfa karşılama kutusu bordo temaya uyumlu */
+.dashboard-container{background:linear-gradient(135deg,#3A1030 0%,#5A1A3B 55%,#7B2252 100%)!important;border-radius:12px;}
+@media (max-width:640px){
+  .brand span{display:none!important;}
+  .brand h1{font-size:16px!important;}
+}
