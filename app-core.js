@@ -1,4 +1,4 @@
-var APP_BUILD_CORE = '20';
+var APP_BUILD_CORE = '21';
 var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // SPLASH SCREEN SÜRESİ
 setTimeout(() => {
@@ -3135,3 +3135,16 @@ function printSenet(key) {
     });
   });
 }
+
+
+// Sol menüdeki sekme butonlarını "simge + yazı" olarak ayır (yerleşim için); butonların işlevi değişmez.
+function decoratePosNav() {
+  document.querySelectorAll('.nav-tabs .tab-btn').forEach(btn => {
+    if (btn.querySelector('.nav-ico')) return;
+    const t = btn.textContent.trim();
+    const m = t.match(/^(\S+)\s+([\s\S]+)$/);
+    if (!m) return;
+    btn.innerHTML = '<span class="nav-ico">' + m[1] + '</span> <span class="nav-txt">' + m[2] + '</span>';
+  });
+}
+decoratePosNav();
