@@ -1,4 +1,4 @@
-var APP_BUILD_OPERATIONS = '21';
+var APP_BUILD_OPERATIONS = '23';
 var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // ============================================================
 // DİĞER FONKSİYONLAR
@@ -2581,6 +2581,7 @@ function openMergeProductsModal() {
   mergeSelectedCodes = new Set();
   mergeCanonicalCode = null;
   document.getElementById('merge-search').value = '';
+  renderBulkMerge();
   renderMergeSuggestions();
   renderMergeProductList();
   renderMergeSummary();
@@ -2781,6 +2782,173 @@ async function executeMergeProducts() {
   } finally {
     if(execBtn) { execBtn.disabled = false; execBtn.textContent = '🔗 Seçilenleri Birleştir'; }
   }
+}
+
+// ============================================================
+// TOPLU MÜKERRER ÜRÜN BİRLEŞTİRME
+// Aynı (veya yazım farkıyla aynı) isimli tüm grupları tek seferde, her grubun
+// ana ürününü seçerek birleştirir. Tek tek birleştirmeye gerek kalmaz.
+// ============================================================
+let bulkMergeGroups = [];
+
+// "AKFİX Silikon 280 ml" ile "Akfix silikon 280ml" aynı anahtar: büyük/küçük harf, Türkçe karakter,
+// boşluk ve noktalama farkları yok sayılır (benzer isimleri tahmin etmez, sadece yazım farkı).
+function looseNameKey(name) {
+  return String(name || '')
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ı/g, 'i').replace(/i̇/g, 'i')
+    .replace(/ö/g, 'o').replace(/ş/g, 's').replace(/ü/g, 'u')
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function buildBulkMergeGroups() {
+  const loose = !!(document.getElementById('bulk-merge-loose') && document.getElementById('bulk-merge-loose').checked);
+  const buckets = {};
+  Object.values(productsData).forEach(p => {
+    if (!p || !p.code) return;
+    const key = loose ? looseNameKey(p.name) : normalizeProductNameForMerge(p.name);
+    if (!key) return;
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push(p);
+  });
+  bulkMergeGroups = Object.keys(buckets)
+    .filter(k => buckets[k].length > 1)
+    .map((k, i) => {
+      const g = buckets[k];
+      // Ana ürün: stok adedi en çok olan (eşitse ilk kayıt)
+      const best = g.reduce((a, b) => ((Number(b.qty) || 0) > (Number(a.qty) || 0) ? b : a));
+      const units = new Set(g.map(p => String(p.unit || 'Adet').toLocaleLowerCase('tr-TR')));
+      const prices = g.map(p => Number(p.price) || 0).filter(x => x > 0);
+      const spread = prices.length > 1 ? Math.max.apply(null, prices) / Math.min.apply(null, prices) : 1;
+      const warn = units.size > 1 || spread > 1.25;   // birim ya da fiyat çok farklıysa farklı ürün olabilir
+      return { id: i, name: best.name, codes: g.map(p => p.code), canonical: best.code, checked: !warn, warn: warn ? (units.size > 1 ? 'birimler farklı' : 'fiyatlar çok farklı') : '' };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'tr-TR'));
+}
+
+function renderBulkMerge(keepState) {
+  const box = document.getElementById('bulk-merge-box');
+  if (!box) return;
+  if (keepState !== true) buildBulkMergeGroups();
+  if (!bulkMergeGroups.length) {
+    box.innerHTML = '<p style="font-size:12px; color:var(--steel); margin:8px 0 0 0;">Mükerrer ürün grubu bulunamadı. 🎉</p>';
+    updateBulkMergeButton();
+    return;
+  }
+  box.innerHTML = `
+    <div style="display:flex; gap:8px; margin:8px 0; flex-wrap:wrap;">
+      <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="bulkMergeSelectAll(true)">Tümünü Seç</button>
+      <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="bulkMergeSelectAll(false)">Seçimi Kaldır</button>
+      <span style="font-size:12px; color:var(--steel); align-self:center;">${bulkMergeGroups.length} grup bulundu</span>
+    </div>
+    <div style="max-height:260px; overflow-y:auto; border:1px solid var(--steel-line); border-radius:6px; background:#fff;">
+      ${bulkMergeGroups.map(g => {
+        const members = g.codes.map(c => productsData[c]).filter(Boolean);
+        const totalQty = members.reduce((s, p) => s + (Number(p.qty) || 0), 0);
+        return `
+        <div style="display:flex; gap:8px; align-items:flex-start; padding:8px; border-bottom:1px solid #EEF0F3; ${g.warn ? 'background:#FFF4F4;' : ''}">
+          <input type="checkbox" style="width:auto; margin-top:3px;" ${g.checked ? 'checked' : ''} onchange="bulkMergeToggle(${g.id})">
+          <div style="flex:1; min-width:0;">
+            <div style="font-size:13px; font-weight:700;">${String(g.name).replace(/&/g,'&amp;').replace(/</g,'&lt;')} <span style="font-weight:500; color:var(--steel);">— ${members.length} kayıt → toplam ${totalQty}</span></div>
+            ${g.warn ? `<div style="font-size:11px; color:var(--rust);">⚠️ ${g.warn}: farklı ürünler olabilir, kontrol edip işaretleyin.</div>` : ''}
+            <div style="font-size:11px; color:var(--steel); margin-top:3px;">Ana ürün (kalacak):
+              <select style="width:auto; max-width:100%; padding:2px 4px; font-size:11px;" onchange="bulkMergeSetCanonical(${g.id}, this.value)">
+                ${members.map(p => `<option value="${p.code}" ${p.code === g.canonical ? 'selected' : ''}>${p.code} · ${p.qty || 0} ${p.unit || 'Adet'} · ₺${formatMoney(p.price || 0)}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>`;
+  updateBulkMergeButton();
+}
+
+function bulkMergeToggle(id) { const g = bulkMergeGroups.find(x => x.id === id); if (g) { g.checked = !g.checked; updateBulkMergeButton(); } }
+function bulkMergeSelectAll(v) { bulkMergeGroups.forEach(g => g.checked = v); renderBulkMerge(true); }
+function bulkMergeSetCanonical(id, code) { const g = bulkMergeGroups.find(x => x.id === id); if (g) g.canonical = code; }
+function updateBulkMergeButton() {
+  const btn = document.getElementById('bulk-merge-exec-btn');
+  if (!btn) return;
+  const sel = bulkMergeGroups.filter(g => g.checked);
+  const dupCount = sel.reduce((s, g) => s + g.codes.length - 1, 0);
+  btn.disabled = sel.length === 0;
+  btn.textContent = sel.length ? `⚡ ${sel.length} Grubu Toplu Birleştir (${dupCount} kayıt silinecek)` : '⚡ Toplu Birleştir';
+}
+
+async function executeBulkMerge() {
+  if (currentRole !== 'admin') { alert('Yetkiniz yok!'); return; }
+  const sel = bulkMergeGroups.filter(g => g.checked && g.codes.length > 1 && g.codes.every(c => productsData[c]));
+  if (!sel.length) { alert('Birleştirilecek grup seçin.'); return; }
+  const dupTotal = sel.reduce((s, g) => s + g.codes.length - 1, 0);
+  if (!confirm(`${sel.length} grup birleştirilecek.\n\n• ${dupTotal} mükerrer kayıt silinecek\n• Her grupta seçtiğiniz ana ürün kalacak, stok adetleri ana ürüne toplanacak\n• Geçmiş fişlerdeki ürün kodları ana ürüne güncellenecek\n\nBu işlem geri alınamaz. Devam edilsin mi?`)) return;
+
+  const btn = document.getElementById('bulk-merge-exec-btn');
+  const setProgress = (t) => { if (btn) { btn.disabled = true; btn.textContent = t; } };
+  const failed = [];
+  let receiptCount = 0, mergedGroups = 0, deleted = 0;
+
+  try {
+    // Silinecek kod -> ana ürün eşlemesi
+    const map = {};
+    sel.forEach(g => {
+      const canon = productsData[g.canonical];
+      g.codes.filter(c => c !== g.canonical).forEach(c => { map[c] = { code: g.canonical, name: canon.name }; });
+    });
+
+    // 1) Geçmiş fişleri TEK geçişte güncelle (her fiş en fazla bir kez yazılır)
+    setProgress('⏳ Geçmiş fişler güncelleniyor...');
+    const receiptUpdates = [];
+    Object.entries(globalPastReceipts).forEach(([receiptId, entry]) => {
+      const rec = entry.receiptData;
+      if (!rec || !Array.isArray(rec.items)) return;
+      let changed = false;
+      const newItems = rec.items.map(it => {
+        if (it.code && map[it.code]) { changed = true; return Object.assign({}, it, { code: map[it.code].code, name: map[it.code].name }); }
+        return it;
+      });
+      if (changed) {
+        receiptUpdates.push(dbGoodsReceipts.child(entry.date).child(receiptId).update({
+          items: newItems, lastEditedAt: new Date().toISOString(), lastEditedBy: getActorLabel() + ' (Toplu Ürün Birleştirme)'
+        }));
+      }
+    });
+    await Promise.all(receiptUpdates);
+    receiptCount = receiptUpdates.length;
+
+    // 2) Her grup: miktarları ana ürüne topla, mükerrerleri sil
+    for (let i = 0; i < sel.length; i++) {
+      const g = sel[i];
+      setProgress(`⏳ Birleştiriliyor ${i + 1}/${sel.length}...`);
+      try {
+        const canonical = productsData[g.canonical];
+        const dupCodes = g.codes.filter(c => c !== g.canonical && productsData[c]);
+        const addedQty = dupCodes.reduce((s, c) => s + (Number(productsData[c].qty) || 0), 0);
+        const newTotal = (Number(canonical.qty) || 0) + addedQty;
+        await db.child(g.canonical).update({ qty: newTotal, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: getActorLabel() + ' (Toplu Ürün Birleştirme)' });
+        productsData[g.canonical].qty = newTotal;
+        await Promise.all(dupCodes.map(async c => {
+          await db.child(c).remove();
+          await dbProductImages.child(c).remove();
+          await dbBarcodeCache.child(c).remove();
+          delete productsData[c];
+        }));
+        deleted += dupCodes.length;
+        mergedGroups++;
+        if (addedQty !== 0) logMovement(g.canonical, canonical.name, addedQty, 'TOPLU ÜRÜN BİRLEŞTİRME: ' + dupCodes.join(', ') + ' kodlarından taşındı');
+      } catch (e) {
+        failed.push(g.name + ' (' + (e.message || e) + ')');
+      }
+    }
+  } catch (err) {
+    alert('Toplu birleştirme sırasında hata: ' + (err.message || err) + '\n\nBazı adımlar uygulanmış olabilir, stok listesini kontrol edin.');
+  }
+
+  showToast(`✅ Toplu birleştirme: ${mergedGroups} grup birleşti, ${deleted} mükerrer kayıt silindi, ${receiptCount} geçmiş fiş güncellendi.` + (failed.length ? ` ⚠️ ${failed.length} grup hata verdi.` : ''));
+  if (failed.length) alert('Şu gruplar birleştirilemedi:\n\n' + failed.join('\n'));
+  renderBulkMerge();
+  renderMergeSuggestions();
+  renderMergeProductList();
+  if (typeof renderGrid === 'function') renderGrid();
 }
 
 // ============================================================
