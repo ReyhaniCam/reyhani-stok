@@ -31,7 +31,7 @@ const dbCatalogMeta = dbRoot.child('catalog_meta');
 const dbPipeTypes = dbRoot.child('pipe_types');
 const dbCatalogAiHistory = dbRoot.child('catalog_ai_history'); // AI ile yapılan her katalog okuma/kaydetme işleminin geçmişi — toplu geri alma için
 
-const DEFAULT_BRANDS = ["BMS", "Kale", "Ege", "Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon"];
+const DEFAULT_BRANDS = ["BMS", "Kale", "Ege Yıldız", "İzeltaş", "RTRMAX", "Bosch", "Lider", "Bahco", "Filli Boya", "Avon", "Filli Boya", "Marshall", "Kalde"];
 let brandSeedChecked = false;
 
 let productsData = {};
