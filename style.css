@@ -670,3 +670,19 @@ header{background:linear-gradient(90deg,#4A1330 0%,#651C43 55%,#7B2252 100%)!imp
   .brand span{display:none!important;}
   .brand h1{font-size:16px!important;}
 }
+
+/* ===== Toptancı gün sekmeleri ===== */
+.w-day-bar{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 10px;margin-bottom:6px;-webkit-overflow-scrolling:touch;}
+.w-day-btn{position:relative;flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:84px;padding:9px 12px 8px;background:#fff;border:1.5px solid var(--steel-line);border-radius:10px;cursor:pointer;font-family:'Inter',sans-serif;color:var(--charcoal);transition:all .15s;}
+.w-day-btn:hover{border-color:var(--info);transform:translateY(-1px);}
+.w-day-name{font-size:13px;font-weight:700;}
+.w-day-count{font-size:12px;font-weight:700;min-width:22px;padding:1px 8px;border-radius:999px;background:var(--bg);color:var(--steel);}
+.w-day-btn.active{background:#22354A;border-color:#22354A;color:#fff;box-shadow:0 4px 12px rgba(34,53,74,.25);}
+.w-day-btn.active .w-day-count{background:rgba(255,255,255,.18);color:#fff;}
+.w-day-btn.is-empty:not(.active){opacity:.55;}
+.w-day-btn.is-today:not(.active){border-color:#F59E0B;}
+.w-day-today{position:absolute;top:-8px;right:-4px;font-size:9px;font-weight:800;letter-spacing:.5px;padding:2px 6px;border-radius:999px;background:#F59E0B;color:#fff;}
+.w-day-summary{font-size:13px;color:var(--steel);margin:0 2px 12px;}
+.w-day-summary:empty{display:none;}
+.w-fis-btn{width:100%;margin-top:6px;background:#EAF4F9;color:#17334A;border:1.5px solid #70BBD7;font-weight:700;}
+.w-fis-btn:hover{background:#D6EAF2;}
