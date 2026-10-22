@@ -2685,7 +2685,8 @@ async function completeBulkStockUpload() {
 // ============================================================
 // AI SOHBET ASİSTANI (Komut verebileceğiniz Gemini destekli sohbet)
 // ============================================================
-let aiPendingImage = null; // { dataUrl, mimeType } // {role:'user'|'model', text:'...'}
+let aiPendingImage = null; // { dataUrl, mimeType }
+let aiChatHistory = [];    // {role:'user'|'model', text:'...'}
 let aiChatBusy = false;
 
 function toggleAIChat() {
@@ -2843,7 +2844,7 @@ ${inventoryContext}`;
 
   try {
     const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
-    const response = await fetch(apiUrl, {
+    const response = await geminiFetchRetry(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents })
