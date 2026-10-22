@@ -787,6 +787,7 @@ function switchTab(tabName) {
   if(tabName === 'okut') startScanner(); else stopScanner();
   if(tabName === 'acikhesap' && typeof renderCustomerAccounts === 'function') renderCustomerAccounts();
   if(tabName === 'katalog' && typeof initKatalogTab === 'function') initKatalogTab();
+  if(tabName === 'toptanci' && typeof initWholesalerDayView === 'function') initWholesalerDayView();
 }
 
 function showToast(msg) {
