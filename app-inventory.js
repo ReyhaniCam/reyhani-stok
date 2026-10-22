@@ -1513,12 +1513,9 @@ function getTodayWholesalerDay() {
   return map[new Date().getDay()];
 }
 
-// Toptancılar sekmesi ilk açıldığında bugünün gününü otomatik seçer
+// Toptancılar sekmesi her açıldığında tüm toptancılar listelenir (gün filtresi: Tümü)
 function initWholesalerDayView() {
-  if (wholesalerDayAutoSet) return;
-  wholesalerDayAutoSet = true;
-  const today = getTodayWholesalerDay();
-  if (today) wholesalerDayFilter = today;
+  wholesalerDayFilter = 'Tümü';
   renderWholesalers();
 }
 
@@ -1550,16 +1547,11 @@ function renderWholesalerDayBar(statusFilter, categoryFilter) {
     if ((w.balance || 0) < 0) debts[d] += -(w.balance || 0);
   });
 
-  bar.innerHTML = ['Tümü'].concat(WHOLESALER_DAYS).map(d => {
-    const active = wholesalerDayFilter === d ? ' active' : '';
-    const isToday = d === today ? ' is-today' : '';
-    const empty = counts[d] === 0 ? ' is-empty' : '';
-    return `<button type="button" class="w-day-btn${active}${isToday}${empty}" onclick="setWholesalerDayFilter('${d}')">
-      <span class="w-day-name">${d}</span>
-      <span class="w-day-count">${counts[d]}</span>
-      ${d === today ? '<span class="w-day-today">BUGÜN</span>' : ''}
-    </button>`;
+  const opts = ['Tümü'].concat(WHOLESALER_DAYS).map(d => {
+    const label = d === 'Tümü' ? 'Tüm Günler' : (d === 'Belirsiz' ? 'Belirsiz / Her Zaman' : d);
+    return `<option value="${d}"${wholesalerDayFilter === d ? ' selected' : ''}>${label} (${counts[d]})${d === today ? ' - BUGÜN' : ''}</option>`;
   }).join('');
+  bar.innerHTML = `<div class="form-row" style="margin-bottom:10px;"><div><label>📅 Güne Göre Toptancılar</label><select onchange="setWholesalerDayFilter(this.value)">${opts}</select></div></div>`;
 
   if (!summary) return;
   if (wholesalerDayFilter === 'Tümü') { summary.innerHTML = ''; return; }
