@@ -1499,9 +1499,8 @@ function renderWholesalers() {
 // ------------------------------------------------------------
 // GÜNE GÖRE TOPTANCI LİSTESİ
 // ------------------------------------------------------------
-const WHOLESALER_DAYS = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Belirsiz'];
-let wholesalerDayFilter = 'Tümü';
-let wholesalerDayAutoSet = false;
+var WHOLESALER_DAYS = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Belirsiz'];
+var wholesalerDayFilter = 'Tümü';
 
 function normalizeWholesalerDay(d) {
   return WHOLESALER_DAYS.indexOf(d) >= 0 ? d : 'Belirsiz';
