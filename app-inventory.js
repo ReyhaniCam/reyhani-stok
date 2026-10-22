@@ -1453,6 +1453,7 @@ function renderWholesalers() {
     if (statusFilter === 'aktif' && status !== 'aktif') return;
     if (statusFilter === 'pasif' && status !== 'pasif') return;
     if (categoryFilter && (w.category || 'Genel') !== categoryFilter) return;
+    if (wholesalerDayFilter !== 'Tümü' && normalizeWholesalerDay(w.day) !== wholesalerDayFilter) return;
 
     const isNegative = w.balance < 0;
     const isPassive = status === 'pasif';
@@ -1485,12 +1486,96 @@ function renderWholesalers() {
           <button class="btn btn-success btn-sm" onclick="updateBalance('${key}', 1)">+ Ödeme Yap</button>
           <button class="btn btn-danger btn-sm" onclick="updateBalance('${key}', -1)">- Borç Ekle</button>
         </div>
+        <button class="btn btn-sm w-fis-btn" onclick="goToFisForWholesaler('${key}')">📥 Bu Toptancıdan Mal Girişi Yap</button>
         <button class="btn btn-dark btn-sm" style="width:100%; margin-top:6px;" onclick="openHistory('${key}', '${w.name.replace(/'/g, "\\'")}')">📄 Ekstre / Hesap Geçmişi</button>
       </div>
     `);
   });
 
   grid.innerHTML = __wholesalerParts.length ? __wholesalerParts.join('') : '<p style="color:var(--steel); font-size:13px;">Bu filtreye uyan toptancı yok.</p>';
+  renderWholesalerDayBar(statusFilter, categoryFilter);
+}
+
+// ------------------------------------------------------------
+// GÜNE GÖRE TOPTANCI LİSTESİ
+// ------------------------------------------------------------
+const WHOLESALER_DAYS = ['Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi','Belirsiz'];
+let wholesalerDayFilter = 'Tümü';
+let wholesalerDayAutoSet = false;
+
+function normalizeWholesalerDay(d) {
+  return WHOLESALER_DAYS.indexOf(d) >= 0 ? d : 'Belirsiz';
+}
+
+function getTodayWholesalerDay() {
+  // JS: 0=Pazar, 1=Pazartesi ... 6=Cumartesi. Pazar için toptancı günü tanımlı değil.
+  const map = [null,'Pazartesi','Salı','Çarşamba','Perşembe','Cuma','Cumartesi'];
+  return map[new Date().getDay()];
+}
+
+// Toptancılar sekmesi ilk açıldığında bugünün gününü otomatik seçer
+function initWholesalerDayView() {
+  if (wholesalerDayAutoSet) return;
+  wholesalerDayAutoSet = true;
+  const today = getTodayWholesalerDay();
+  if (today) wholesalerDayFilter = today;
+  renderWholesalers();
+}
+
+function setWholesalerDayFilter(day) {
+  wholesalerDayFilter = day;
+  renderWholesalers();
+}
+
+function renderWholesalerDayBar(statusFilter, categoryFilter) {
+  const bar = document.getElementById('w-day-bar');
+  const summary = document.getElementById('w-day-summary');
+  if (!bar) return;
+
+  const today = getTodayWholesalerDay();
+  const counts = { 'Tümü': 0 };
+  WHOLESALER_DAYS.forEach(d => counts[d] = 0);
+  const debts = {};
+  WHOLESALER_DAYS.forEach(d => debts[d] = 0);
+
+  Object.keys(wholesalersData).forEach(key => {
+    const w = wholesalersData[key];
+    const status = w.status || 'aktif';
+    if (statusFilter === 'aktif' && status !== 'aktif') return;
+    if (statusFilter === 'pasif' && status !== 'pasif') return;
+    if (categoryFilter && (w.category || 'Genel') !== categoryFilter) return;
+    const d = normalizeWholesalerDay(w.day);
+    counts['Tümü']++;
+    counts[d]++;
+    if ((w.balance || 0) < 0) debts[d] += -(w.balance || 0);
+  });
+
+  bar.innerHTML = ['Tümü'].concat(WHOLESALER_DAYS).map(d => {
+    const active = wholesalerDayFilter === d ? ' active' : '';
+    const isToday = d === today ? ' is-today' : '';
+    const empty = counts[d] === 0 ? ' is-empty' : '';
+    return `<button type="button" class="w-day-btn${active}${isToday}${empty}" onclick="setWholesalerDayFilter('${d}')">
+      <span class="w-day-name">${d}</span>
+      <span class="w-day-count">${counts[d]}</span>
+      ${d === today ? '<span class="w-day-today">BUGÜN</span>' : ''}
+    </button>`;
+  }).join('');
+
+  if (!summary) return;
+  if (wholesalerDayFilter === 'Tümü') { summary.innerHTML = ''; return; }
+  const title = wholesalerDayFilter === 'Belirsiz' ? 'Günü belirsiz olan toptancılar' : `${wholesalerDayFilter} günü gelen toptancılar`;
+  summary.innerHTML = `<b>${title}:</b> ${counts[wholesalerDayFilter]} firma &nbsp;|&nbsp; <b>Toplam borç:</b> ₺${formatMoney(debts[wholesalerDayFilter])}`;
+}
+
+// Kartın içinden doğrudan Malzeme Fişi sekmesine, ilgili toptancı seçili olarak geçer
+function goToFisForWholesaler(key) {
+  switchTab('fis');
+  const sel = document.getElementById('fis-wholesaler');
+  if (sel) {
+    sel.value = key;
+    if (typeof updateFisSlipSummary === 'function') updateFisSlipSummary();
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function deleteWholesaler(key) {
