@@ -702,7 +702,8 @@ async function getGeminiCandidateModels(apiKey) {
     // Önce lite olmayanlar, sürümü büyük olan önce; sonra lite'lar
     const rank = (n) => ver(n) * 10 - (n.includes('lite') ? 5 : 0);
     names.sort((a, b) => rank(b) - rank(a));
-    const picked = names.slice(0, 3);
+    const picked = names.slice(0, 5);
+    if (!picked.includes('gemini-3.5-flash-lite')) picked.push('gemini-3.5-flash-lite');   // sitenin diğer özelliklerinde çalışan model
     if (picked.length) { _geminiModelCache = picked; return picked; }
   } catch (e) { console.warn('Gemini model listesi alınamadı:', e); }
   return fallback;
@@ -723,11 +724,17 @@ Uydurma, tahmin etme. JSON dışında hiçbir şey yazma.`;
   for (const model of models) {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(apiKey.trim());
     try {
-      const resp = await geminiFetchRetry(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] })
-      });
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30000);
+      let resp;
+      try {
+        resp = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] }),
+          signal: ctrl.signal
+        });
+      } finally { clearTimeout(timer); }
       const data = resp ? await resp.json().catch(() => null) : null;
       if (!resp || !resp.ok || !data || data.error) {
         lastError += (lastError ? ' | ' : '') + model + ': ' + (((data && data.error && data.error.message) || ('HTTP ' + (resp ? resp.status : 'yanıt yok'))).slice(0, 140));
@@ -752,6 +759,9 @@ Uydurma, tahmin etme. JSON dışında hiçbir şey yazma.`;
     }
   }
   _geminiModelCache = null;
+  if (/quota|exceeded|resource_exhausted|429/i.test(lastError)) {
+    return { error: 'Google, internette arama (Search) için kullanım kotanızı dolu gösteriyor. Ücretsiz anahtarlarda bu özelliğin günlük hakkı çok düşük. Yarın tekrar deneyin ya da aistudio.google.com üzerinden projenizde faturalandırmayı açın (ücretsiz kotayı aşmadıkça ücret çıkmaz). Ürün adını elle girip kaydederseniz bu barkod hafızaya alınır. [Teknik: ' + lastError.slice(0, 200) + ']' };
+  }
   return { error: 'Yapay zeka araması çalışmadı: ' + lastError };
 }
 
