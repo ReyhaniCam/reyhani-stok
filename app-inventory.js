@@ -667,19 +667,49 @@ function isLikelyGtin(code) {
 // Open Food Facts veritabanı — UPCItemDB'nin bulamadığı/400 döndürdüğü barkodlar için
 // ikinci bir kaynak olarak deniyoruz.
 async function fetchOpenFoodFacts(code) {
-  try {
-    const resp = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(code)}.json`);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (data && data.status === 1 && data.product) {
-      const title = data.product.product_name || data.product.product_name_tr || data.product.generic_name || null;
-      if (!title) return null;
-      return { title, brand: data.product.brands || null };
-    }
-    return null;
-  } catch (e) {
-    return null;
+  // Aynı ailenin üç ücretsiz veritabanı: gıda, genel ürünler, kozmetik
+  const hosts = ['world.openfoodfacts.org', 'world.openproductsfacts.org', 'world.openbeautyfacts.org'];
+  for (const host of hosts) {
+    try {
+      const resp = await fetch(`https://${host}/api/v2/product/${encodeURIComponent(code)}.json`);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      if (data && data.status === 1 && data.product) {
+        const title = data.product.product_name_tr || data.product.product_name || data.product.generic_name || null;
+        if (title) return { title, brand: data.product.brands || null };
+      }
+    } catch (e) { /* bu kaynak yanıt vermediyse sıradakine geç */ }
   }
+  return null;
+}
+
+// Hiçbir veritabanında yoksa: Gemini'ye internette (Trendyol, Hepsiburada, üretici siteleri vb.) aratır.
+async function fetchBarcodeNameViaGemini(code) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return null;
+  const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
+  const prompt = `Türkiye'de satılan bir ürünün barkod numarası: ${code}
+İnternette ara (Trendyol, Hepsiburada, n11, üretici ve satıcı siteleri) ve bu BARKODA ait ürünü bul.
+Sadece barkodla eşleştiğinden emin olduğun bir ürün bulursan şu JSON'u döndür:
+{"found":true,"name":"Marka + ürün adı + ölçü/model (kısa, Türkçe, satış etiketi gibi)","brand":"marka"}
+Emin değilsen veya bulamadıysan: {"found":false}
+Tahmin etme, uydurma. JSON dışında hiçbir şey yazma.`;
+  try {
+    const resp = await geminiFetchRetry(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] })
+    });
+    if (!resp || !resp.ok) return null;
+    const data = await resp.json();
+    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+    const text = parts.map(p => p.text || '').join('');
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const j = JSON.parse(m[0]);
+    if (j && j.found && j.name) return { title: String(j.name).trim(), brand: j.brand || null };
+  } catch (e) { console.warn('Gemini barkod araması başarısız:', e); }
+  return null;
 }
 
 async function fetchUpcItemDb(code) {
@@ -812,78 +842,94 @@ async function lookupFisBarcode() {
   }
 }
 
-async function lookupBarcode() {
-  const code = document.getElementById('f-barcode-lookup').value.trim();
+let _barcodeLookupSeq = 0;
+async function lookupBarcode(opts) {
+  opts = opts || {};
+  const lookupEl = document.getElementById('f-barcode-lookup');
+  const nameEl = document.getElementById('f-name');
   const statusEl = document.getElementById('f-barcode-lookup-status');
+  const code = (opts.code || lookupEl.value || '').trim();
   if (!code) { statusEl.innerHTML = '<span style="color:var(--rust);">Önce bir barkod numarası girin ya da okutun.</span>'; return; }
 
-  statusEl.textContent = "Aranıyor...";
+  const mySeq = ++_barcodeLookupSeq;            // eski/geç gelen cevaplar yenisini ezmesin
+  const stale = () => mySeq !== _barcodeLookupSeq;
+  lookupEl.value = code;
   document.getElementById('f-code').value = code;
+  statusEl.textContent = "Aranıyor...";
 
-  try {
-    const cacheSnap = await dbBarcodeCache.child(code).once('value');
-    const cached = cacheSnap.val();
-    if (cached && cached.name) {
-      document.getElementById('f-name').value = cached.name;
-      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Kendi hafızamızdan bulundu: "${cached.name}"</span> (dış sorgu hakkı harcanmadı). Kontrol edip diğer alanları doldurun.`;
-      return;
-    }
-  } catch (e) { /* hafıza okunamadıysa sessizce dış API'ye geç */ }
+  const setName = (n) => {
+    if (opts.onlyIfEmpty && nameEl.value.trim()) return;   // elle yazılmış ismi ezme
+    nameEl.value = n;
+    if (typeof checkNameDuplicate === 'function') checkNameDuplicate();
+  };
+  const ok = (html) => { statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">${html}`; };
 
-  const numericCode = sanitizeBarcodeForLookup(code);
-
-  // Open Food Facts, dünya genelinde (Türkiye dahil) daha geniş barkod kapsaması
-  // sunuyor ve format konusunda UPCItemDB kadar katı değil — önce onu deniyoruz.
-  if (numericCode) {
-    const off = await fetchOpenFoodFacts(numericCode);
-    if (off && off.title) {
-      document.getElementById('f-name').value = off.title;
-      dbBarcodeCache.child(code).set({ name: off.title, source: 'openfoodfacts', savedAt: new Date().toISOString() });
-      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${off.title}"${off.brand ? ' — ' + off.brand : ''}.</span> Kontrol edip fiyat/miktar/kategori girin. (Bu barkod artık kendi hafızamıza da kaydedildi.)`;
-      return;
-    }
-  }
-
-  // UPCItemDB'nin trial endpoint'i sadece standart 8/12/13/14 haneli GTIN kabul
-  // ediyor; format uymuyorsa (harf, eksik/fazla hane, boşluk vb.) HTTP 400 döndürüyor.
-  // Böyle bir barkodu göndermek zaten başarısız olacağından, boşuna denemiyoruz.
-  if (!isLikelyGtin(numericCode)) {
-    statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod ("${code}") standart bir ürün barkodu (8/12/13/14 haneli) formatında görünmüyor, dış veritabanlarında aranamadı. Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
+  // 0) Bu barkod sistemde zaten kayıtlı mı?
+  const existing = productsData[code] || productsData[code.toUpperCase()] ||
+    Object.values(productsData).find(p => p && p.barcode && String(p.barcode) === code);
+  if (existing) {
+    statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ Bu barkod sistemde zaten kayıtlı: "${existing.name}" (stok: ${existing.qty ?? 0} ${existing.unit || ''}).</span> Yeni ürün olarak eklenemez — stok eklemek için <b>Malzeme Fişi</b> veya <b>Stok</b> bölümünü kullanın.`;
     return;
   }
 
+  // 1) Kendi hafızamız (daha önce kaydedilen / bulunan barkodlar)
   try {
-    const resp = await fetchUpcItemDb(numericCode);
-
-    if (resp.status === 429) {
-      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⏳ Bugünkü ücretsiz dış sorgu hakkın (100) dolmuş.</span> Barkod numarası dolduruldu — ürün adını elle girip kaydet, <b>kendi hafızamıza kaydedilecek ve bir dahaki sefere hiç sorgu harcamadan tanınacak.</b> Dış sorgu hakkı ertesi gün yeniden açılıyor.`;
+    const cached = (await dbBarcodeCache.child(code).once('value')).val();
+    if (stale()) return;
+    if (cached && cached.name) {
+      setName(cached.name);
+      ok(`✅ Kendi hafızamızdan bulundu: "${cached.name}"</span> Kontrol edip diğer alanları doldurun.`);
       return;
     }
+  } catch (e) { /* sessizce devam */ }
 
-    if (!resp.ok) {
-      const rawText = await resp.text().catch(() => '(okunamadı)');
-      const reason = resp.status === 400
-        ? 'Dış veritabanı bu barkodu geçersiz/tanınmayan formatta buldu (muhtemelen yerel/özel bir barkod).'
-        : `Dış servis hata döndürdü (HTTP ${resp.status}).`;
-      statusEl.innerHTML = `<span style="color:var(--rust); font-weight:600;">⚠️ ${reason}</span> Barkod numarası dolduruldu, ürün adını elle girin.
-        <details style="margin-top:6px; font-size:10px; color:var(--steel);"><summary style="cursor:pointer;">Teknik detay (ekran görüntüsü alıp gönderebilirsin)</summary>${String(rawText).slice(0,300)}</details>`;
+  const numericCode = sanitizeBarcodeForLookup(code);
+
+  // 2) Open Food / Products / Beauty Facts
+  if (numericCode) {
+    statusEl.textContent = "Aranıyor... (ürün veritabanları)";
+    const off = await fetchOpenFoodFacts(numericCode);
+    if (stale()) return;
+    if (off && off.title) {
+      setName(off.title);
+      dbBarcodeCache.child(code).set({ name: off.title, source: 'openfacts', savedAt: new Date().toISOString() });
+      ok(`✅ Bulundu: "${off.title}"${off.brand ? ' — ' + off.brand : ''}.</span> Kontrol edip fiyat/miktar/kategori girin.`);
       return;
     }
-
-    const data = await resp.json();
-    if (data && data.items && data.items.length > 0) {
-      const item = data.items[0];
-      if (item.title) {
-        document.getElementById('f-name').value = item.title;
-        dbBarcodeCache.child(code).set({ name: item.title, source: 'upcitemdb', savedAt: new Date().toISOString() });
-      }
-      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${item.title || '-'}"${item.brand ? ' — ' + item.brand : ''}.</span> Kontrol edip fiyat/miktar/kategori girin. (Bu barkod artık kendi hafızamıza da kaydedildi.)`;
-    } else {
-      statusEl.innerHTML = `<span style="color:var(--steel);">Ne kendi hafızamızda ne dış veritabanında bulunamadı (kod: ${data && data.code ? data.code : 'bilinmiyor'}). Barkod numarası dolduruldu — <b>ürün adını elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
-    }
-  } catch (err) {
-    statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Barkod numarası dolduruldu, ürün adını elle girip kaydedin — bir dahaki sefere otomatik tanınacak.</span>`;
   }
+
+  // 3) UPCItemDB (sadece standart 8/12/13/14 haneli barkodlar)
+  if (isLikelyGtin(numericCode)) {
+    statusEl.textContent = "Aranıyor... (UPC veritabanı)";
+    try {
+      const resp = await fetchUpcItemDb(numericCode);
+      if (stale()) return;
+      if (resp.ok) {
+        const data = await resp.json();
+        const item = data && data.items && data.items[0];
+        if (item && item.title) {
+          setName(item.title);
+          dbBarcodeCache.child(code).set({ name: item.title, source: 'upcitemdb', savedAt: new Date().toISOString() });
+          ok(`✅ Bulundu: "${item.title}"${item.brand ? ' — ' + item.brand : ''}.</span> Kontrol edip fiyat/miktar/kategori girin.`);
+          return;
+        }
+      }
+    } catch (e) { /* internet/servis sorunu: AI aramasına geç */ }
+  }
+
+  // 4) Son çare: Gemini internette aratır (Türkiye'deki yerel ürünler için en etkili yol)
+  if (getGeminiApiKey()) {
+    statusEl.textContent = "Aranıyor... (yapay zeka internette arıyor, birkaç saniye sürebilir)";
+    const ai = await fetchBarcodeNameViaGemini(numericCode || code);
+    if (stale()) return;
+    if (ai && ai.title) {
+      setName(ai.title);
+      ok(`🤖 İnternet aramasıyla bulundu: "${ai.title}"${ai.brand ? ' — ' + ai.brand : ''}.</span> <b>Lütfen adı kontrol edin</b>, kaydettiğinizde bu barkod hafızaya alınır.`);
+      return;
+    }
+  }
+
+  statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod (${code}) hiçbir kaynakta bulunamadı. Barkod numarası dolduruldu — <b>ürün adını bir kez elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
 }
 
 // OTOMATİK BARKOD ARAMA
@@ -921,6 +967,11 @@ function setupAutoBarcodeLookup(inputId, lookupFn) {
 }
 
 setupAutoBarcodeLookup('f-barcode-lookup', lookupBarcode);
+// "Ürün Kodu / Barkod" alanına doğrudan barkod okutulunca da isim otomatik gelsin (sadece 8-14 haneli sayısal barkodlar)
+setupAutoBarcodeLookup('f-code', () => {
+  const v = document.getElementById('f-code').value.trim();
+  if (/^\d{8,14}$/.test(v)) lookupBarcode({ code: v, onlyIfEmpty: true });
+});
 setupAutoBarcodeLookup('fis-barcode-lookup', lookupFisBarcode);
 
 // ============================================================
