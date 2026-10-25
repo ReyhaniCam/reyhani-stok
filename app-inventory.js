@@ -2206,15 +2206,32 @@ function findBestProductMatch(aiName) {
 }
 
 // Gemini "yoğunluk" (503/429) hatalarında otomatik yeniden dener; olmazsa yedek modele geçer.
-async function geminiFetchRetry(apiUrl, init) {
+async function geminiFetchRetry(apiUrl, init, onStatus) {
   const urls = [apiUrl, apiUrl.replace('gemini-3.5-flash-lite', 'gemini-2.5-flash')];
   const delays = [2000, 4000, 8000];
   const statusMsg = document.getElementById('ai-status-msg');
+  const notify = (text) => {
+    if (onStatus) onStatus(text);
+    if (statusMsg) { statusMsg.style.display = 'block'; statusMsg.style.color = '#F59E0B'; statusMsg.innerHTML = text; }
+  };
+  // Yanıt hiç gelmezse sonsuza kadar beklemesin: her denemeye 40 sn süre sınırı
+  const fetchWithTimeout = async (url) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 40000);
+    try { return await fetch(url, Object.assign({}, init, { signal: ctrl.signal })); }
+    finally { clearTimeout(timer); }
+  };
   let last = null;
   for (let u = 0; u < urls.length; u++) {
     if (u > 0 && urls[u] === urls[0]) break;
     for (let a = 0; a <= delays.length; a++) {
-      const res = await fetch(urls[u], init);
+      let res;
+      try {
+        res = await fetchWithTimeout(urls[u]);
+      } catch (e) {
+        if (u < urls.length - 1) { notify('⏳ Yapay zeka yanıt vermedi, yedek model deneniyor...'); break; }
+        throw new Error('Yapay zeka 40 saniyede yanıt vermedi. İnternet bağlantınızı kontrol edip tekrar deneyin.');
+      }
       if (res.ok) return res;
       let overloaded = [429, 500, 502, 503, 504].includes(res.status);
       try {
@@ -2225,7 +2242,7 @@ async function geminiFetchRetry(apiUrl, init) {
       if (!overloaded) return res;   // anahtar hatası vb. gerçek hatalar tekrar denenmez
       last = res;
       if (a < delays.length) {
-        if (statusMsg) { statusMsg.style.display = 'block'; statusMsg.style.color = '#F59E0B'; statusMsg.innerHTML = '⏳ Yapay zeka şu an yoğun, tekrar deneniyor (' + (a + 1) + '/' + delays.length + ')...'; }
+        notify('⏳ Yapay zeka şu an yoğun, tekrar deneniyor (' + (a + 1) + '/' + delays.length + ')...');
         await new Promise(r => setTimeout(r, delays[a]));
       }
     }
@@ -2848,7 +2865,7 @@ ${inventoryContext}`;
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents })
-    });
+    }, (t) => { thinkingBubble.textContent = t.replace(/<[^>]*>/g,''); });
 
     const data = await response.json();
     if (data.error) throw new Error(data.error.message);
