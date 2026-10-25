@@ -684,6 +684,30 @@ async function fetchOpenFoodFacts(code) {
 }
 
 // Hiçbir veritabanında yoksa: Gemini'ye internette (Trendyol, Hepsiburada, üretici siteleri vb.) aratır.
+// Google'dan, bu API anahtarının kullanabildiği güncel Gemini "flash" modellerini öğrenir (en yeni önce).
+// Model adlarını koda sabitlemek, Google eski modelleri kapatınca aramanın bozulmasına yol açıyordu.
+let _geminiModelCache = null;
+async function getGeminiCandidateModels(apiKey) {
+  if (_geminiModelCache && _geminiModelCache.length) return _geminiModelCache;
+  const fallback = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];   // liste alınamazsa: sitenin zaten kullandığı model dahil
+  try {
+    const r = await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=' + encodeURIComponent(apiKey.trim()));
+    if (!r.ok) return fallback;
+    const j = await r.json();
+    const ver = (n) => { const m = n.match(/gemini-(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; };
+    const names = (j.models || [])
+      .filter(m => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map(m => String(m.name || '').replace(/^models\//, ''))
+      .filter(n => /^gemini-\d/.test(n) && n.includes('flash') && !/(image|tts|live|audio|embed|robotics|computer|vision|exp|preview|latest|thinking)/.test(n));
+    // Önce lite olmayanlar, sürümü büyük olan önce; sonra lite'lar
+    const rank = (n) => ver(n) * 10 - (n.includes('lite') ? 5 : 0);
+    names.sort((a, b) => rank(b) - rank(a));
+    const picked = names.slice(0, 3);
+    if (picked.length) { _geminiModelCache = picked; return picked; }
+  } catch (e) { console.warn('Gemini model listesi alınamadı:', e); }
+  return fallback;
+}
+
 async function fetchBarcodeNameViaGemini(code) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) return { error: 'Google API anahtarı girilmemiş (sağ üstteki 🔑 API Key butonu).' };
@@ -694,7 +718,7 @@ Bulursan SADECE şu JSON'u döndür:
 {"found":true,"name":"Marka + ürün adı + model/ölçü (kısa, Türkçe, satış etiketi gibi)","brand":"marka"}
 Bulamazsan: {"found":false}
 Uydurma, tahmin etme. JSON dışında hiçbir şey yazma.`;
-  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  const models = await getGeminiCandidateModels(apiKey);
   let lastError = '';
   for (const model of models) {
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(apiKey.trim());
@@ -706,7 +730,7 @@ Uydurma, tahmin etme. JSON dışında hiçbir şey yazma.`;
       });
       const data = resp ? await resp.json().catch(() => null) : null;
       if (!resp || !resp.ok || !data || data.error) {
-        lastError = (data && data.error && data.error.message) || ('HTTP ' + (resp ? resp.status : 'yanıt yok'));
+        lastError += (lastError ? ' | ' : '') + model + ': ' + (((data && data.error && data.error.message) || ('HTTP ' + (resp ? resp.status : 'yanıt yok'))).slice(0, 140));
         console.warn('Gemini barkod araması (' + model + '):', lastError);
         continue;   // sıradaki modeli dene
       }
@@ -723,10 +747,11 @@ Uydurma, tahmin etme. JSON dışında hiçbir şey yazma.`;
       console.warn('Gemini barkod cevabı anlaşılamadı:', text);
       return { error: 'Yapay zekanın cevabı anlaşılamadı: ' + (text || '(boş cevap)').slice(0, 160) };
     } catch (e) {
-      lastError = (e && e.message) || String(e);
+      lastError += (lastError ? ' | ' : '') + model + ': ' + (((e && e.message) || String(e)).slice(0, 140));
       console.warn('Gemini barkod araması hatası (' + model + '):', e);
     }
   }
+  _geminiModelCache = null;
   return { error: 'Yapay zeka araması çalışmadı: ' + lastError };
 }
 
@@ -2297,7 +2322,7 @@ function findBestProductMatch(aiName) {
 
 // Gemini "yoğunluk" (503/429) hatalarında otomatik yeniden dener; olmazsa yedek modele geçer.
 async function geminiFetchRetry(apiUrl, init, onStatus) {
-  const urls = [apiUrl, apiUrl.replace('gemini-3.5-flash-lite', 'gemini-2.5-flash')];
+  const urls = [apiUrl, apiUrl.replace('gemini-3.5-flash-lite', 'gemini-3.5-flash')];
   const delays = [2000, 4000, 8000];
   const statusMsg = document.getElementById('ai-status-msg');
   const notify = (text) => {
