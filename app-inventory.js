@@ -745,6 +745,21 @@ async function fetchUpcItemDb(code) {
   throw lastErr || new Error('Tüm bağlantı yolları başarısız oldu.');
 }
 
+// Malzeme Fişi barkod aramasında diğer kaynaklar sonuç vermezse (401/400/bulunamadı vb.) yapay zeka internette arar
+async function tryFisGeminiFallback(code, statusEl) {
+  if (!getGeminiApiKey()) return false;
+  statusEl.textContent = "Aranıyor... (yapay zeka internette arıyor, birkaç saniye sürebilir)";
+  const ai = await fetchBarcodeNameViaGemini(sanitizeBarcodeForLookup(code) || code);
+  if (ai && ai.title) {
+    setFisPendingBarcode(code);
+    document.getElementById('fis-product').value = ai.title;
+    checkFisProductMatch();
+    statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">🤖 İnternet aramasıyla bulundu: "${ai.title}"${ai.brand ? ' — ' + ai.brand : ''}.</span> <b>Lütfen adı kontrol edin</b>, YENİ ÜRÜN bilgilerini doldurup fişe ekleyin. Barkod (${code}) ürün kodu olarak kullanılacak.`;
+    return true;
+  }
+  return false;
+}
+
 async function lookupFisBarcode() {
   const code = document.getElementById('fis-barcode-lookup').value.trim();
   const statusEl = document.getElementById('fis-barcode-lookup-status');
@@ -793,6 +808,7 @@ async function lookupFisBarcode() {
   // ediyor; format uymuyorsa (harf, eksik/fazla hane, boşluk vb.) HTTP 400 döndürüyor.
   // Böyle bir barkodu göndermek zaten başarısız olacağından, boşuna denemiyoruz.
   if (!isLikelyGtin(numericCode)) {
+    if (await tryFisGeminiFallback(code, statusEl)) return;
     setFisPendingBarcode(code);
     checkFisProductMatch();
     statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod ("${code}") standart bir ürün barkodu (8/12/13/14 haneli) formatında görünmüyor, dış veritabanlarında aranamadı. Malzeme adını elle girip fişe ekleyin — barkod yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
@@ -809,6 +825,7 @@ async function lookupFisBarcode() {
       return;
     }
     if (!resp.ok) {
+      if (await tryFisGeminiFallback(code, statusEl)) return;
       setFisPendingBarcode(code);
       checkFisProductMatch();
       const reason = resp.status === 400
@@ -831,11 +848,13 @@ async function lookupFisBarcode() {
       }
       statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Dış veritabanında bulundu: "${item.title || '-'}"${item.brand ? ' — ' + item.brand : ''}.</span> YENİ ÜRÜN bilgilerini kontrol edip fişe ekleyin. Barkod (${code}) ürün kodu olarak kullanılacak.`;
     } else {
+      if (await tryFisGeminiFallback(code, statusEl)) return;
       setFisPendingBarcode(code);
       checkFisProductMatch();
       statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod hiçbir yerde bulunamadı. Malzeme adını elle girip fişe ekleyin — barkod (${code}) yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
     }
   } catch (err) {
+    if (await tryFisGeminiFallback(code, statusEl)) return;
     setFisPendingBarcode(code);
     checkFisProductMatch();
     statusEl.innerHTML = `<span style="color:var(--rust);">Dış arama yapılamadı: <b>${err.message || err}</b> (internet bağlantınızı kontrol edin — 5 farklı bağlantı yolu da denendi). Malzeme adını elle girip devam edebilirsiniz, barkod (${code}) yine de kaydedilecek.</span>`;
