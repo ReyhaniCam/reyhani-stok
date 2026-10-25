@@ -686,30 +686,48 @@ async function fetchOpenFoodFacts(code) {
 // Hiçbir veritabanında yoksa: Gemini'ye internette (Trendyol, Hepsiburada, üretici siteleri vb.) aratır.
 async function fetchBarcodeNameViaGemini(code) {
   const apiKey = getGeminiApiKey();
-  if (!apiKey) return null;
-  const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey.trim());
+  if (!apiKey) return { error: 'Google API anahtarı girilmemiş (sağ üstteki 🔑 API Key butonu).' };
   const prompt = `Türkiye'de satılan bir ürünün barkod numarası: ${code}
-İnternette ara (Trendyol, Hepsiburada, n11, üretici ve satıcı siteleri) ve bu BARKODA ait ürünü bul.
-Sadece barkodla eşleştiğinden emin olduğun bir ürün bulursan şu JSON'u döndür:
-{"found":true,"name":"Marka + ürün adı + ölçü/model (kısa, Türkçe, satış etiketi gibi)","brand":"marka"}
-Emin değilsen veya bulamadıysan: {"found":false}
-Tahmin etme, uydurma. JSON dışında hiçbir şey yazma.`;
-  try {
-    const resp = await geminiFetchRetry(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] })
-    });
-    if (!resp || !resp.ok) return null;
-    const data = await resp.json();
-    const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
-    const text = parts.map(p => p.text || '').join('');
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    const j = JSON.parse(m[0]);
-    if (j && j.found && j.name) return { title: String(j.name).trim(), brand: j.brand || null };
-  } catch (e) { console.warn('Gemini barkod araması başarısız:', e); }
-  return null;
+İnternette "${code}" barkod numarasını ara (Trendyol, Hepsiburada, n11, üretici ve satıcı/toptancı siteleri dahil) ve bu BARKODA ait ürünü bul.
+Barkod numarasının geçtiği bir sayfada ürün adı yazıyorsa o ürünü kullan.
+Bulursan SADECE şu JSON'u döndür:
+{"found":true,"name":"Marka + ürün adı + model/ölçü (kısa, Türkçe, satış etiketi gibi)","brand":"marka"}
+Bulamazsan: {"found":false}
+Uydurma, tahmin etme. JSON dışında hiçbir şey yazma.`;
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  let lastError = '';
+  for (const model of models) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(apiKey.trim());
+    try {
+      const resp = await geminiFetchRetry(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }], tools: [{ google_search: {} }] })
+      });
+      const data = resp ? await resp.json().catch(() => null) : null;
+      if (!resp || !resp.ok || !data || data.error) {
+        lastError = (data && data.error && data.error.message) || ('HTTP ' + (resp ? resp.status : 'yanıt yok'));
+        console.warn('Gemini barkod araması (' + model + '):', lastError);
+        continue;   // sıradaki modeli dene
+      }
+      const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+      const text = parts.map(p => p.text || '').join('').trim();
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) {
+        try {
+          const j = JSON.parse(m[0]);
+          if (j && j.found && j.name) return { title: String(j.name).trim(), brand: j.brand || null };
+          return { error: 'Yapay zeka internette bu barkodla eşleşen bir ürün bulamadı.' };
+        } catch (e) { /* JSON bozuksa aşağıda ham cevabı göster */ }
+      }
+      console.warn('Gemini barkod cevabı anlaşılamadı:', text);
+      return { error: 'Yapay zekanın cevabı anlaşılamadı: ' + (text || '(boş cevap)').slice(0, 160) };
+    } catch (e) {
+      lastError = (e && e.message) || String(e);
+      console.warn('Gemini barkod araması hatası (' + model + '):', e);
+    }
+  }
+  return { error: 'Yapay zeka araması çalışmadı: ' + lastError };
 }
 
 async function fetchUpcItemDb(code) {
@@ -936,11 +954,13 @@ async function lookupBarcode(opts) {
     } catch (e) { /* internet/servis sorunu: AI aramasına geç */ }
   }
 
+  let aiNote = getGeminiApiKey() ? '' : 'Google API anahtarı girilmediği için yapay zeka araması yapılamadı (sağ üstteki 🔑 API Key butonu).';
   // 4) Son çare: Gemini internette aratır (Türkiye'deki yerel ürünler için en etkili yol)
   if (getGeminiApiKey()) {
     statusEl.textContent = "Aranıyor... (yapay zeka internette arıyor, birkaç saniye sürebilir)";
-    const ai = await fetchBarcodeNameViaGemini(numericCode || code);
+    var ai = await fetchBarcodeNameViaGemini(numericCode || code);
     if (stale()) return;
+    if (ai && ai.error) aiNote = ai.error;
     if (ai && ai.title) {
       setName(ai.title);
       ok(`🤖 İnternet aramasıyla bulundu: "${ai.title}"${ai.brand ? ' — ' + ai.brand : ''}.</span> <b>Lütfen adı kontrol edin</b>, kaydettiğinizde bu barkod hafızaya alınır.`);
@@ -948,7 +968,7 @@ async function lookupBarcode(opts) {
     }
   }
 
-  statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod (${code}) hiçbir kaynakta bulunamadı. Barkod numarası dolduruldu — <b>ürün adını bir kez elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
+  statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod (${code}) hiçbir kaynakta bulunamadı.</span>${aiNote ? `<br><span style="color:var(--rust);">🤖 ${aiNote}</span>` : ''}<br><span style="color:var(--steel);">Barkod numarası dolduruldu — <b>ürün adını bir kez elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
 }
 
 // OTOMATİK BARKOD ARAMA
