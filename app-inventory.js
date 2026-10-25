@@ -2778,6 +2778,72 @@ function buildInventoryContextForAI(queryText) {
   return JSON.stringify(trimmed) + note;
 }
 
+// ------------------------------------------------------------
+// ASİSTAN İÇİN MALZEME FİŞİ VE STOK HAREKETİ BAĞLAMI
+// ------------------------------------------------------------
+function aiNormText(s) {
+  return (s || '').toString().toLowerCase()
+    .replace(/İ/g, 'i').replace(/I/g, 'ı')
+    .replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c').replace(/ı/g, 'i');
+}
+
+function aiQueryWords(queryText) {
+  const stop = ['fisi','fis','fisleri','malzeme','stok','gecmisi','hareket','hareketi','hareketleri','toptanci','toptancidan','geldi','gelen','nedir','kac','kadar','son','bana','goster','var','mi','mu','ne','ile','icin','olan','bugun','dun','hangi'];
+  return aiNormText(queryText).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !stop.includes(w));
+}
+
+// Son 60 günün malzeme fişleri (ekranda yüklenen globalPastReceipts verisinden)
+function buildReceiptsContextForAI(queryText) {
+  const list = Object.keys(globalPastReceipts || {}).map(id => {
+    const e = globalPastReceipts[id] || {}; const r = e.receiptData || {};
+    return { id, date: e.date || r.date || '', time: r.time || '', r };
+  });
+  if (!list.length) return 'Malzeme fişi verisi bulunamadı (son 60 günde kayıtlı fiş yok ya da henüz yüklenmedi).';
+  list.sort((a, b) => (b.date + ' ' + b.time).localeCompare(a.date + ' ' + a.time));
+
+  const words = aiQueryWords(queryText);
+  const hay = (x) => aiNormText((x.r.wholesalerName || '') + ' ' + (x.r.fisNo || '') + ' ' + (x.r.note || '') + ' ' + (x.r.items || []).map(i => i.name + ' ' + (i.code || '')).join(' '));
+  const matches = words.length ? list.filter(x => { const h = hay(x); return words.some(w => h.includes(w)); }) : [];
+  const ids = new Set();
+  const picked = [];
+  matches.slice(0, 40).concat(list.slice(0, 40)).forEach(x => { if (!ids.has(x.id) && picked.length < 70) { ids.add(x.id); picked.push(x); } });
+  picked.sort((a, b) => (b.date + ' ' + b.time).localeCompare(a.date + ' ' + a.time));
+
+  const out = picked.map(x => ({
+    tarih: x.date, saat: x.time, toptanci: x.r.wholesalerName || '-', fisNo: x.r.fisNo || null,
+    toplam: x.r.total, not: x.r.note || null, giren: x.r.processedBy || null,
+    kalemler: (x.r.items || []).slice(0, 40).map(i => `${i.name} x${i.qty} ${i.unit || 'Adet'}` + (i.cost ? ` (alış ${i.cost})` : ''))
+  }));
+  let txt = JSON.stringify(out);
+  if (txt.length > 30000) txt = txt.slice(0, 30000) + '...(kısaltıldı)';
+  return txt + `\n(Not: Toplam ${list.length} fiş var, en yeni/eşleşen ${picked.length} tanesi gösterildi.)`;
+}
+
+// Son 30 günün stok hareketleri (giriş/çıkış geçmişi)
+function buildMovementsContextForAI(queryText) {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const all = [];
+  Object.keys(movementsData || {}).forEach(date => {
+    if (date < cutoffStr) return;
+    const day = movementsData[date] || {};
+    Object.keys(day).forEach(id => { const m = day[id] || {}; all.push({ date, m }); });
+  });
+  if (!all.length) return 'Son 30 günde stok hareketi bulunamadı.';
+  all.sort((a, b) => (b.date + ' ' + (b.m.time || '')).localeCompare(a.date + ' ' + (a.m.time || '')));
+
+  const words = aiQueryWords(queryText);
+  const matches = words.length ? all.filter(x => { const h = aiNormText((x.m.name || '') + ' ' + (x.m.code || '') + ' ' + (x.m.type || '')); return words.some(w => h.includes(w)); }) : [];
+  const picked = []; const seen = new Set();
+  matches.slice(0, 120).concat(all.slice(0, 80)).forEach(x => { if (!seen.has(x) && picked.length < 180) { seen.add(x); picked.push(x); } });
+  picked.sort((a, b) => (b.date + ' ' + (b.m.time || '')).localeCompare(a.date + ' ' + (a.m.time || '')));
+
+  const lines = picked.map(x => `${x.date} ${x.m.time || ''} | ${x.m.code || ''} | ${x.m.name || ''} | ${x.m.change > 0 ? '+' : ''}${x.m.change} | ${x.m.type || ''} | ${x.m.by || ''}`);
+  let txt = lines.join('\n');
+  if (txt.length > 24000) txt = txt.slice(0, 24000) + '\n...(kısaltıldı)';
+  return txt + `\n(Not: Son 30 günde toplam ${all.length} hareket var, en yeni/eşleşen ${picked.length} tanesi gösterildi. Sütunlar: tarih saat | kod | ürün | değişim | işlem tipi | işlemi yapan)`;
+}
+
 async function sendAIChatMessage() {
   if (aiChatBusy) return;
   const input = document.getElementById('ai-chat-input');
@@ -2808,10 +2874,17 @@ async function sendAIChatMessage() {
   else roleInfo = 'Ziyaretçi yetkisine sahipsin. Sadece stok sorgulama yapabilirsin, işlem yapamazsın.';
 
   const inventoryContext = buildInventoryContextForAI(userMessage);
+  let extraContext = '';
+  if (currentRole === 'admin' || currentRole === 'staff') {
+    try {
+      extraContext = '\n\nSon 60 günün malzeme fişleri (JSON):\n' + buildReceiptsContextForAI(userMessage) +
+                     '\n\nSon 30 günün stok hareketleri:\n' + buildMovementsContextForAI(userMessage);
+    } catch (e) { console.error('Asistan fiş/hareket bağlamı hazırlanamadı:', e); }
+  }
   const systemPrompt = `Sen Reyhani Cam Hırdavat deposunun akıllı asistanısın. Kullanıcıya yardım et.
 Kullanıcının rolü: ${roleInfo}
 ${aiPendingImage ? 'Kullanıcı bir fotoğraf yükledi. Lütfen fotoğrafı analiz et ve hangi modülle ilgili olduğunu tahmin et. Ardından kullanıcıya hangi modülde işlem yapmak istediğini sor. Modül seçenekleri: borç, toptancılar, satış sepeti, malzeme fişi, stok, raporlar, yerleşim, görevler, yeni ürün ekle (rafta/depoda olup sisteme hiç girilmemiş ürünleri toplu AI ile eklemek için). Fotoğraf bir mal giriş fişi ise "malzeme fişi", fotoğraf raf/ürün listesi gibi görünüyor ama fiş değilse "yeni ürün ekle" modülünü öner. Yetkisi yoksa bu modülleri önerme.' : ''}
-Sana güncel ürün listesi (JSON) verilecek. Sadece bu listeye ve kullanıcının söylediklerine dayanarak cevap ver, uydurma bilgi verme.
+Sana güncel ürün listesi (JSON) ile (yetkisi varsa) son 60 günün malzeme fişleri ve son 30 günün stok hareketleri verilecek. Fiş ve stok geçmişi sorularında bu verilere bakarak cevap ver; "okuma yetkim yok" deme. Sadece verilen verilere ve kullanıcının söylediklerine dayanarak cevap ver, uydurma bilgi verme. Veride olmayan (örn. 60 günden eski) kayıt sorulursa bunu açıkça söyle.
 
 Cevabını HER ZAMAN şu JSON formatında, başka hiçbir metin eklemeden ver:
 {"action": "none", "reply": "kullanıcıya gösterilecek doğal, kısa ve Türkçe cevap"}
@@ -2830,7 +2903,7 @@ Kurallar:
 - Asla JSON dışında metin yazma, kod bloğu kullanma.
 
 Güncel ürün listesi (JSON):
-${inventoryContext}`;
+${inventoryContext}${extraContext}`;
 
   // Contents oluştur
   const contents = [
