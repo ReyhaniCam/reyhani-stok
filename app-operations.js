@@ -4070,11 +4070,24 @@ function groupProductsForDisplay(products) {
 
 // Tek bir ürün kartının HTML'ini üretir (hem tekil ürünler hem de bir grubun
 // içindeki her ölçü için AYNI fonksiyon kullanılır — kod tekrarını önler).
+// Sayıya güvenli çevirme: "12,5" / boş / bozuk değer → sayı ya da 0 (tek bir bozuk kayıt tüm toplamı NaN yapmasın)
+function safeNum(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  if (v === null || v === undefined || v === '') return 0;
+  const n = parseTrNumber(v);
+  return (n !== null && isFinite(n)) ? n : 0;
+}
+// Envanter maliyeti: geliş fiyatı varsa o, yoksa (boş/0) satış fiyatı — kart ve toplam aynı kuralı kullanır
+function getEffectiveCost(p) {
+  const c = safeNum(p.costPrice);
+  return c > 0 ? c : safeNum(p.price);
+}
+
 function renderProductCard(p, canEdit, isAdmin) {
   const isLow = p.qty <= 5;
-  const hasCostPrice = p.costPrice != null && parseFloat(p.costPrice) > 0;
-  const effectiveCost = hasCostPrice ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
-  const itemInventoryValue = parseFloat(p.qty || 0) * effectiveCost;
+  const hasCostPrice = safeNum(p.costPrice) > 0;
+  const effectiveCost = getEffectiveCost(p);
+  const itemInventoryValue = safeNum(p.qty) * effectiveCost;
 
   let editActions = '';
   if (canEdit) {
@@ -4172,6 +4185,7 @@ function renderGrid() {
   }
 
   let count = 0, units = 0, value = 0;
+  const badRecords = [];
   const canEdit = (currentRole === 'admin' || currentRole === 'staff');
   const isAdmin = (currentRole === 'admin');
 
@@ -4187,9 +4201,11 @@ function renderGrid() {
     if (groupFilter && p.category !== groupFilter) return;
     if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
       count++;
-      units += parseFloat(p.qty || 0);
-      const itemCost = p.costPrice != null ? parseFloat(p.costPrice) : parseFloat(p.price || 0);
-      value += parseFloat(p.qty || 0) * itemCost;
+      units += safeNum(p.qty);
+      value += safeNum(p.qty) * getEffectiveCost(p);
+      // Sayı olarak okunamayan miktar/fiyat alanı olan kayıtları tespit et (toplamlara 0 olarak katılır)
+      const unreadable = (v) => v !== null && v !== undefined && v !== '' && !(typeof v === 'number' ? isFinite(v) : parseTrNumber(v) !== null);
+      if (unreadable(p.qty) || unreadable(p.costPrice) || unreadable(p.price)) badRecords.push(p);
       matchedProducts.push(p);
     }
   });
@@ -4202,11 +4218,7 @@ function renderGrid() {
     case 'price-desc': matchedProducts.sort((a,b) => (b.price || 0) - (a.price || 0)); break;
     case 'qty-asc': matchedProducts.sort((a,b) => (a.qty || 0) - (b.qty || 0)); break;
     case 'qty-desc': matchedProducts.sort((a,b) => (b.qty || 0) - (a.qty || 0)); break;
-    case 'value-desc': matchedProducts.sort((a,b) => {
-      const aCost = a.costPrice != null ? parseFloat(a.costPrice) : parseFloat(a.price || 0);
-      const bCost = b.costPrice != null ? parseFloat(b.costPrice) : parseFloat(b.price || 0);
-      return ((b.qty || 0) * bCost) - ((a.qty || 0) * aCost);
-    }); break;
+    case 'value-desc': matchedProducts.sort((a,b) => (safeNum(b.qty) * getEffectiveCost(b)) - (safeNum(a.qty) * getEffectiveCost(a))); break;
     case 'category-asc': matchedProducts.sort((a,b) => (a.category || '').localeCompare(b.category || '', 'tr')); break;
     default: break;
   }
@@ -4250,6 +4262,18 @@ function renderGrid() {
   document.getElementById('sum-count').textContent = count;
   document.getElementById('sum-units').textContent = units.toFixed(1);
   document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
+
+  const warnEl = document.getElementById('sum-warn');
+  if (warnEl) {
+    if (isAdmin && badRecords.length) {
+      const names = badRecords.slice(0, 5).map(p => `${p.name || '?'} (${p.code})`).join(', ');
+      warnEl.textContent = `⚠️ ${badRecords.length} üründe miktar/fiyat sayı olarak okunamıyor, toplamlara 0 olarak katıldı: ${names}${badRecords.length > 5 ? ' ...' : ''}. Bu ürünleri ✏️ Düzenle ile düzeltin.`;
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.textContent = '';
+      warnEl.style.display = 'none';
+    }
+  }
 }
 
 
