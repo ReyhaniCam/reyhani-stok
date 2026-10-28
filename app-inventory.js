@@ -1689,7 +1689,8 @@ function goToFisForWholesaler(key) {
   const sel = document.getElementById('fis-wholesaler');
   if (sel) {
     sel.value = key;
-    if (typeof updateFisSlipSummary === 'function') updateFisSlipSummary();
+    if (typeof onFisWholesalerChange === 'function') onFisWholesalerChange();
+    else if (typeof updateFisSlipSummary === 'function') updateFisSlipSummary();
   }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -2490,7 +2491,9 @@ async function processReceiptWithAI(event) {
       }
     });
 
-    if (typeof renderGoodsReceiptCart === 'function') renderGoodsReceiptCart();
+    // Toptancı seçiliyse KDV/İskonto/Kâr oranları okunan kalemlere de uygulanır (kendi içinde listeyi çizer)
+    if (typeof applyFisWholesalerPricing === 'function') applyFisWholesalerPricing();
+    else if (typeof renderGoodsReceiptCart === 'function') renderGoodsReceiptCart();
     
     if (statusMsg) {
       statusMsg.style.color = '#10B981';
