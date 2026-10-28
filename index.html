@@ -567,9 +567,37 @@
         <div class="form-row">
           <div>
             <label>Toptancı / Firma</label>
-            <select id="fis-wholesaler" onchange="updateFisSlipSummary()"><option value="">-- Toptancı Seçin --</option></select>
+            <select id="fis-wholesaler" onchange="onFisWholesalerChange()"><option value="">-- Toptancı Seçin --</option></select>
           </div>
           <div><label>İrsaliye / Fiş No (Opsiyonel)</label><input type="text" id="fis-no" placeholder="Örn: İRS-00123"></div>
+        </div>
+        <!-- TOPTANCI FİYAT AYARI: KDV / İSKONTO / KÂR (toptancı seçilince açılır) -->
+        <div id="fis-ws-pricing-box" style="display:none; background:#FFF7E0; border:1px solid #F59E0B; border-radius:8px; padding:12px; margin-bottom:14px;">
+          <div style="font-weight:800; font-size:13px; color:#0F172A;">💰 <span id="fis-ws-name"></span> — Fiyat Ayarı (KDV / İskonto / Kâr)</div>
+          <div style="font-size:11px; color:#475569; margin-top:3px; line-height:1.5;">
+            Fişteki fiyat bu toptancının <b>liste fiyatı</b> sayılır. Girdiğiniz oranlar fişteki <b>tüm kalemlere</b> (şimdi okunanlara ve sonradan ekleyeceklerinize) uygulanır:<br>
+            <b>Geliş fiyatı</b> = fiş fiyatı − iskonto &nbsp;→&nbsp; <b>Satış fiyatı</b> = geliş × (1 + KDV) × (1 + kâr)<br>
+            Satış fiyatı, <b>Kâr</b> girildiğinde hesaplanır. Alanları boşaltırsanız fiyatlar fişteki ilk haline döner.
+          </div>
+          <div class="form-row" style="grid-template-columns:1fr 1fr 1fr; margin:10px 0 0 0;">
+            <div>
+              <label style="margin-bottom:4px;">KDV (%)</label>
+              <input type="number" id="fis-ws-vat" step="0.01" min="0" placeholder="Örn: 20" oninput="applyFisWholesalerPricing()">
+            </div>
+            <div>
+              <label style="margin-bottom:4px;">İskonto (%)</label>
+              <input type="number" id="fis-ws-discount" step="0.01" min="0" max="100" placeholder="Örn: 10" oninput="applyFisWholesalerPricing()">
+            </div>
+            <div>
+              <label style="margin-bottom:4px;">Kâr (%)</label>
+              <input type="number" id="fis-ws-profit" step="0.01" min="0" placeholder="Örn: 25" oninput="applyFisWholesalerPricing()">
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; margin-top:10px;">
+            <input type="checkbox" id="fis-ws-remember" checked style="width:auto;">
+            <label style="margin:0; text-transform:none; font-size:12px;">Fişi onaylayınca bu oranları bu toptancı için hatırla (sonraki fişte otomatik gelsin)</label>
+          </div>
+          <div id="fis-ws-status" style="font-size:11px; margin-top:8px; color:#475569; line-height:1.5;"></div>
         </div>
         <div class="form-row" style="grid-template-columns: 2fr 1fr 1fr;">
           <div>
@@ -664,31 +692,6 @@
       </div>
       <div id="fis-container" class="form-card" style="display:none; padding:12px;">
         <h3 style="margin-top:0; border-bottom:1px solid var(--steel-line); padding-bottom:10px; font-family:'Oswald';">Fiş Kalemleri</h3>
-
-        <!-- TOPLU KÂR / KDV UYGULAMA -->
-        <div id="fis-bulk-price-box" style="background:#FFF7E0; border:1px solid #F59E0B; border-radius:8px; padding:12px; margin:0 0 14px 0;">
-          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-            <div>
-              <div style="font-weight:800; font-size:13px; color:#0F172A;">💰 Tüm ürünlere toplu fiyat uygula</div>
-              <div style="font-size:11px; color:#475569; margin-top:3px;">AI fişinden gelen ürünlerin geliş fiyatı üzerinden mevcut fiyat hesaplama mantığı kullanılır: geliş + KDV + hedef kâr.</div>
-            </div>
-            <label style="display:flex; align-items:center; gap:7px; margin:0; text-transform:none; font-size:12px; font-weight:800; color:#0F172A; cursor:pointer;">
-              <input type="checkbox" id="fis-bulk-price-apply" onchange="applyBulkFisPricing()" style="width:20px; height:20px; cursor:pointer;">
-              ✅ Uygula
-            </label>
-          </div>
-          <div class="form-row" style="grid-template-columns:1fr 1fr; margin:10px 0 0 0;">
-            <div>
-              <label style="margin-bottom:4px;">Tüm ürünlere Kâr (%)</label>
-              <input type="number" id="fis-bulk-profit" step="0.01" min="0" placeholder="Örn: 25" oninput="if(document.getElementById('fis-bulk-price-apply')?.checked) applyBulkFisPricing();">
-            </div>
-            <div>
-              <label style="margin-bottom:4px;">Tüm ürünlere KDV (%)</label>
-              <input type="number" id="fis-bulk-vat" step="0.01" min="0" placeholder="Örn: 20" oninput="if(document.getElementById('fis-bulk-price-apply')?.checked) applyBulkFisPricing();">
-            </div>
-          </div>
-          <div id="fis-bulk-price-status" style="font-size:11px; margin-top:8px; color:#475569;"></div>
-        </div>
 
         <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; text-align:left; font-size:13px; min-width:400px;" id="fis-table">
@@ -1886,7 +1889,7 @@
 </div>
 
 <script src="app-core.js?v=21"></script>
-<script src="app-operations.js?v=24"></script>
-<script src="app-inventory.js?v=31"></script>
+<script src="app-operations.js?v=25"></script>
+<script src="app-inventory.js?v=32"></script>
 </body>
 </html>
