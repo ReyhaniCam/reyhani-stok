@@ -1940,6 +1940,9 @@ async function addToGoodsReceiptCore() {
   }
   item.discount = Math.max(0, parseFloat(document.getElementById('fis-discount').value) || 0);
   item.total = Math.max(0, item.qty * item.cost - item.discount);
+  // Toptancı fiyat paneli doluysa (KDV/İskonto/Kâr) girilen fiyat liste fiyatı sayılıp oranlar uygulanır
+  const __wsCfg = readFisWsPricing();
+  if (__wsCfg) applyFisWsPricingToItem(item, __wsCfg);
 
   const wasEditing = fisEditingIndex !== null;
   pushFisUndo(wasEditing ? 'Kalem düzenleme (' + item.name + ')' : 'Kalem ekleme (' + item.name + ')');
@@ -1984,70 +1987,152 @@ async function addToGoodsReceiptCore() {
   showToast(wasEditing ? "Malzeme kalemi güncellendi." : (item.isNew ? "Sistemde bulunmayan yeni malzeme fişe eklendi." : "Malzeme fişe eklendi."));
 }
 
-function applyBulkFisPricing() {
-  const checkbox = document.getElementById('fis-bulk-price-apply');
-  const profitEl = document.getElementById('fis-bulk-profit');
-  const vatEl = document.getElementById('fis-bulk-vat');
-  const statusEl = document.getElementById('fis-bulk-price-status');
+// ============================================================
+// TOPTANCI FİYAT AYARI (KDV / İSKONTO / KÂR)
+// Toptancı seçilince açılan panelden girilen oranlar fişteki TÜM kalemleri günceller.
+//   Geliş fiyatı  = fişteki fiyat × (1 − iskonto)
+//   Satış fiyatı  = geliş × (1 + KDV) × (1 + kâr)        (sistemdeki mevcut formül)
+// Fişteki orijinal fiyat item.wsBase içinde saklanır; böylece oranları defalarca
+// değiştirmek fiyatı üst üste indirmez ve alanlar boşaltılınca eski hale dönülür.
+// Fiş okunmadan ÖNCE de, SONRA da toptancı seçilebilir; sonradan eklenen kalemlere de uygulanır.
+// ============================================================
+function fisRound(n, d) {
+  const f = Math.pow(10, d);
+  return Math.round((Number(n) + Number.EPSILON) * f) / f;
+}
 
-  if (!checkbox || !profitEl || !vatEl) return;
+// Panelde en az bir oran girilmiş ve toptancı seçilmişse {vat, discount, profit} döner (boş alan = null), yoksa null.
+function readFisWsPricing() {
+  const wKey = document.getElementById('fis-wholesaler')?.value;
+  if (!wKey || !wholesalersData[wKey]) return null;
+  const rd = (id) => {
+    const raw = String(document.getElementById(id)?.value ?? '').trim();
+    if (raw === '') return null;
+    const n = parseFloat(raw.replace(',', '.'));
+    return isNaN(n) ? null : Math.max(0, n);
+  };
+  const vat = rd('fis-ws-vat');
+  let discount = rd('fis-ws-discount');
+  const profit = rd('fis-ws-profit');
+  if (discount !== null) discount = Math.min(100, discount);
+  if (vat === null && discount === null && profit === null) return null;
+  return { vat, discount, profit };
+}
 
-  if (!checkbox.checked) {
-    if (statusEl) statusEl.textContent = '';
-    return;
+// Tek kalemi günceller. Dönüş: 'priced' | 'costOnly' | 'noCost' | 'restored'
+function applyFisWsPricingToItem(item, cfg) {
+  const BASE_KEYS = ['price', 'newPrice', 'updatePrices', 'vat', 'targetProfit'];
+
+  if (!cfg) {
+    if (!item.wsBase) return 'restored';
+    // Oranlar boşaltıldı: kalemi fişteki ilk haline döndür
+    item.cost = item.wsBase.cost;
+    BASE_KEYS.forEach(k => { if (item.wsBase[k] !== undefined) item[k] = item.wsBase[k]; else delete item[k]; });
+    delete item.listCost; delete item.wsDiscount; delete item.wsPriced; delete item.wsBase;
+    item.total = fisRound(Math.max(0, item.qty * item.cost - (item.discount || 0)), 2);
+    return 'restored';
   }
 
-  if (!goodsReceiptCart || goodsReceiptCart.length === 0) {
-    checkbox.checked = false;
-    if (statusEl) statusEl.textContent = 'Önce AI ile fişi okutun veya fişe ürün ekleyin.';
-    return;
+  if (!item.wsBase) {
+    item.wsBase = { cost: Number(item.cost) || 0 };
+    BASE_KEYS.forEach(k => { if (item[k] !== undefined && item[k] !== null) item.wsBase[k] = item[k]; });
+  }
+  const product = item.code ? productsData[item.code] : null;
+  const listCost = item.wsBase.cost;
+  const disc = cfg.discount || 0;
+  const vat = cfg.vat || 0;
+  let result = 'noCost';
+
+  if (listCost > 0) {
+    item.listCost = listCost;
+    item.wsDiscount = disc;
+    item.cost = fisRound(listCost * (1 - disc / 100), 4);
+    result = 'costOnly';
   }
 
-  const profitRaw = profitEl.value.trim();
-  const vatRaw = vatEl.value.trim();
-  if (profitRaw === '' || vatRaw === '') {
-    if (statusEl) statusEl.textContent = 'Lütfen Kâr ve KDV yüzdelerini girin.';
-    return;
+  if (cfg.vat !== null) {
+    item.vat = vat;
+    if (!item.isNew) item.updatePrices = true;
   }
 
-  const profit = Math.max(0, parseFloat(profitRaw) || 0);
-  const vat = Math.max(0, parseFloat(vatRaw) || 0);
-  pushFisUndo('Toplu fiyat uygulama');
-  let calculated = 0;
-  let waitingCost = 0;
+  if (cfg.profit !== null) {
+    // Fişte fiyat yoksa mevcut ürünün kayıtlı geliş fiyatı kullanılır
+    const costForPrice = listCost > 0 ? item.cost : Number(product?.costPrice || 0);
+    if (costForPrice > 0) {
+      const sale = fisRound(costForPrice * (1 + vat / 100) * (1 + cfg.profit / 100), 2);
+      item.price = sale;
+      item.targetProfit = cfg.profit;
+      item.vat = vat;
+      if (!item.isNew) { item.newPrice = sale; item.updatePrices = true; } // justCreated (stoğa hemen açılmış) ürünler de dahil
+      item.wsPriced = true;
+      result = 'priced';
+    } else if (result !== 'costOnly') {
+      result = 'noCost';
+    }
+  }
+
+  item.total = fisRound(Math.max(0, item.qty * item.cost - (item.discount || 0)), 2);
+  return result;
+}
+
+// Paneldeki değerleri fişteki tüm kalemlere uygular ve listeyi yeniden çizer.
+function applyFisWholesalerPricing() {
+  const cfg = readFisWsPricing();
+  const statusEl = document.getElementById('fis-ws-status');
+  const counts = { priced: 0, costOnly: 0, noCost: 0, restored: 0 };
+  let discountSum = 0;
 
   goodsReceiptCart.forEach(item => {
-    const product = item.code ? productsData[item.code] : null;
-    const cost = Number(item.cost) > 0 ? Number(item.cost) : Number(product?.costPrice || 0);
-
-    item.vat = vat;
-    item.targetProfit = profit;
-    item.bulkPriceApplied = true;
-
-    if (cost > 0) {
-      // Mevcut sistemdeki fiyat formülü aynen korunuyor:
-      // geliş × (1 + KDV) × (1 + kâr)
-      const salePrice = Number((cost * (1 + vat / 100) * (1 + profit / 100)).toFixed(2));
-      item.price = salePrice;
-      if (!item.isNew && !item.justCreated) {
-        item.newPrice = salePrice;
-        item.updatePrices = true;
-      }
-      if (!(Number(item.cost) > 0) && product?.costPrice) item.cost = Number(product.costPrice);
-      calculated++;
-    } else {
-      if (!item.isNew && !item.justCreated) item.updatePrices = true;
-      waitingCost++;
-    }
+    const r = applyFisWsPricingToItem(item, cfg);
+    counts[r] = (counts[r] || 0) + 1;
+    if (cfg && item.listCost) discountSum += item.qty * (item.listCost - item.cost);
   });
 
   renderGoodsReceiptCart();
 
-  if (statusEl) {
-    statusEl.style.color = waitingCost ? '#B45309' : '#047857';
-    statusEl.textContent = `✅ ${calculated} ürünün satış fiyatı hesaplandı ve kayda hazırlandı.` +
-      (waitingCost ? ` ${waitingCost} üründe geliş fiyatı olmadığı için satış fiyatı hesaplanamadı.` : '');
+  if (!statusEl) return;
+  if (!cfg) {
+    statusEl.style.color = '#475569';
+    statusEl.textContent = goodsReceiptCart.length
+      ? 'Oran girilmedi — fiyatlar fişteki haliyle duruyor.'
+      : 'Oranları girin; fişe eklenen tüm kalemlere otomatik uygulanır.';
+    return;
   }
+  if (goodsReceiptCart.length === 0) {
+    statusEl.style.color = '#047857';
+    statusEl.textContent = '✅ Oranlar hazır. Fiş okutulunca / malzeme eklenince otomatik uygulanacak.';
+    return;
+  }
+  const parts = [];
+  if (cfg.discount) parts.push(`geliş fiyatından %${cfg.discount} iskonto (toplam −₺${formatMoney(discountSum)})`);
+  if (cfg.profit !== null) parts.push(`satış = geliş + KDV %${cfg.vat || 0} + kâr %${cfg.profit}`);
+  else if (cfg.vat !== null) parts.push(`KDV %${cfg.vat} kaydedilecek (satış fiyatı için Kâr % girin)`);
+  const updated = counts.priced + counts.costOnly;
+  let msg = `✅ ${updated} kalem güncellendi` + (parts.length ? ': ' + parts.join('; ') + '.' : '.');
+  if (counts.noCost) msg += ` ⚠️ ${counts.noCost} kalemde fiyat olmadığı için hesaplanamadı (✏️ Düzenle ile geliş fiyatı girin).`;
+  statusEl.style.color = counts.noCost ? '#B45309' : '#047857';
+  statusEl.textContent = msg;
+}
+
+// Toptancı seçilince: panel açılır, o toptancı için kayıtlı oranlar varsa otomatik dolar, fişe uygulanır.
+function onFisWholesalerChange() {
+  const sel = document.getElementById('fis-wholesaler');
+  const key = sel ? sel.value : '';
+  const w = key ? wholesalersData[key] : null;
+  const panel = document.getElementById('fis-ws-pricing-box');
+  if (panel) panel.style.display = w ? 'block' : 'none';
+  const nameEl = document.getElementById('fis-ws-name');
+  if (nameEl) nameEl.textContent = w ? w.name : '';
+
+  const saved = (w && w.fisPricing) || {};
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v === undefined || v === null) ? '' : v; };
+  setVal('fis-ws-vat', saved.vat);
+  setVal('fis-ws-discount', saved.discount);
+  setVal('fis-ws-profit', saved.profit);
+  const rem = document.getElementById('fis-ws-remember'); if (rem) rem.checked = true;
+
+  applyFisWholesalerPricing();
+  updateFisSlipSummary();
 }
 
 function renderGoodsReceiptCart() {
@@ -2083,7 +2168,7 @@ function renderGoodsReceiptCart() {
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
           ${(item.price || item.newPrice) ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price || item.newPrice)}${item.vat !== undefined ? ' (KDV %' + item.vat + ')' : ''}${item.targetProfit !== undefined && item.targetProfit !== null ? ' · Kâr %' + item.targetProfit : ''}</small>` : ''}
         </td>
-        <td>₺${formatMoney(item.cost)}</td>
+        <td>₺${formatMoney(item.cost)}${(item.listCost && Math.abs(item.listCost - item.cost) > 0.00001) ? `<br><small style="color:var(--steel); text-decoration:line-through;">₺${formatMoney(item.listCost)}</small> <small style="color:var(--success); font-weight:700;">-%${item.wsDiscount}</small>` : ''}</td>
         <td style="font-weight:bold;">${item.qty} ${item.unit}</td>
         <td style="font-weight:bold; color:var(--rust);">₺${formatMoney(item.total)}${item.discount ? `<br><small style="color:var(--success); font-weight:normal;">-₺${formatMoney(item.discount)} iskonto</small>` : ''}</td>
         <td style="display:flex; gap:4px; flex-wrap:wrap;">
@@ -2123,6 +2208,9 @@ function updateFisSlipSummary() {
   const box = document.getElementById('fis-slip-summary');
   if (!box) return;
   const items = goodsReceiptCart.reduce((a, i) => a + (Number(i.total) || 0), 0);
+  // Fişteki (iskontosuz) liste tutarı: kâğıttaki rakamlarla kıyaslamak için
+  const itemsListed = goodsReceiptCart.reduce((a, i) => a + (i.listCost ? Math.max(0, i.qty * i.listCost - (i.discount || 0)) : (Number(i.total) || 0)), 0);
+  const wsDiscountAmt = Math.max(0, itemsListed - items);
   const prev = parseTrNumber(document.getElementById('fis-prev-balance')?.value);
   const slipGrand = parseTrNumber(document.getElementById('fis-slip-grand')?.value);
   const sync = !!document.getElementById('fis-sync-balance')?.checked;
@@ -2148,11 +2236,14 @@ function updateFisSlipSummary() {
   const warn = (t) => rows.push(`<div style="color:#B45309; font-weight:700; font-family:inherit;">⚠️ ${t}</div>`);
   const info = (t) => rows.push(`<div style="color:#1D4ED8; font-family:inherit;">ℹ️ ${t}</div>`);
 
-  if (fisSlipInfo && fisSlipInfo.subtotal !== null && Math.abs(fisSlipInfo.subtotal - items) > 0.5) {
-    warn(`Fişteki mal ara toplamı ${m(fisSlipInfo.subtotal)}, kalemlerin toplamı ${m(items)}. Okuma hatası olabilir; miktar/fiyatları kontrol edin.`);
+  if (wsDiscountAmt > 0.005) {
+    info(`Toptancı iskontosu uygulandı: fiş tutarı ${m(itemsListed)} − iskonto ${m(wsDiscountAmt)} = ${m(items)} (borca bu net tutar işlenir).`);
+  }
+  if (fisSlipInfo && fisSlipInfo.subtotal !== null && Math.abs(fisSlipInfo.subtotal - itemsListed) > 0.5) {
+    warn(`Fişteki mal ara toplamı ${m(fisSlipInfo.subtotal)}, kalemlerin fiş tutarı ${m(itemsListed)}. Okuma hatası olabilir; miktar/fiyatları kontrol edin.`);
   }
   if (slipGrand !== null && prev !== null) {
-    if (Math.abs(slipGrand - (prev + items)) > 0.5) warn(`Fişteki genel toplam ${m(slipGrand)}, hesaplanan ${m(prev + items)}. Rakamlardan biri yanlış okunmuş olabilir.`);
+    if (Math.abs(slipGrand - (prev + itemsListed)) > 0.5) warn(`Fişteki genel toplam ${m(slipGrand)}, hesaplanan ${m(prev + itemsListed)}. Rakamlardan biri yanlış okunmuş olabilir.`);
     else rows.push(`<div style="color:#15803D; font-family:inherit;">✅ Fişteki genel toplamla (${m(slipGrand)}) uyuşuyor.</div>`);
   }
   if (w && prev !== null && Math.abs(sysDebt - prev) > 0.5) {
@@ -2168,8 +2259,6 @@ function updateFisSlipSummary() {
 function pushFisUndo(label) {
   const now = Date.now();
   const top = fisUndoStack[fisUndoStack.length - 1];
-  // Toplu fiyat kutusuna yazarken her tuşta ayrı kayıt oluşmasın
-  if (label === 'Toplu fiyat uygulama' && top && top.label === label && now - top.t < 8000) return;
   fisUndoStack.push({ label, t: now, cart: JSON.parse(JSON.stringify(goodsReceiptCart)) });
   if (fisUndoStack.length > 30) fisUndoStack.shift();
   updateFisUndoBar();
@@ -2191,12 +2280,8 @@ function fisUndo() {
   const keep = new Set(snap.cart.map(i => i.code).filter(Boolean));
   const orphans = goodsReceiptCart.filter(i => i.justCreated && i.code && !keep.has(i.code)).length;
   goodsReceiptCart = snap.cart;
-  const bulkChk = document.getElementById('fis-bulk-price-apply');
-  if (bulkChk && snap.label === 'Toplu fiyat uygulama') {
-    bulkChk.checked = false;
-    const st = document.getElementById('fis-bulk-price-status'); if (st) st.textContent = '';
-  }
   cancelFisEdit(); // düzenleme modunu kapatır, formu temizler ve listeyi yeniden çizer
+  applyFisWholesalerPricing(); // geri alınan kalemleri paneldeki güncel oranlarla eşitle
   updateFisUndoBar();
   showToast('↩️ Geri alındı: ' + snap.label + (orphans ? ` (Not: ${orphans} ürün stokta 0 adetlik kayıt olarak kaldı)` : ''));
 }
@@ -2241,18 +2326,19 @@ function editFisItem(index) {
 
   document.getElementById('fis-product').value = item.isNew ? item.name : `${item.code} - ${item.name}`;
   document.getElementById('fis-qty').value = item.qty;
-  document.getElementById('fis-cost').value = item.cost;
+  document.getElementById('fis-cost').value = item.wsBase ? item.wsBase.cost : item.cost; // fişteki liste fiyatı
   document.getElementById('fis-discount').value = item.discount || '';
 
   checkFisProductMatch();
 
   if (item.isNew) {
-    document.getElementById('fis-price').value = item.price || '';
+    const __b = item.wsBase || {};
+    document.getElementById('fis-price').value = (item.wsBase ? __b.price : item.price) || '';
     document.getElementById('fis-unit').value = item.unit || 'Adet';
     document.getElementById('fis-category').value = item.category || 'Diğer';
     document.getElementById('fis-brand').value = item.brand || '';
-    document.getElementById('fis-vat').value = item.vat || '';
-    document.getElementById('fis-profit').value = item.targetProfit || '';
+    document.getElementById('fis-vat').value = (item.wsBase ? __b.vat : item.vat) || '';
+    document.getElementById('fis-profit').value = (item.wsBase ? __b.targetProfit : item.targetProfit) || '';
     updateFisProfit();
     updateCostCalc('fis', 'fis-cost');
     setFisPendingBarcode(item.code || '');
@@ -2340,6 +2426,8 @@ async function completeGoodsReceiptCore() {
     }
   }
 
+  const wsCfgForSave = readFisWsPricing();
+  const wsRemember = !!document.getElementById('fis-ws-remember')?.checked;
   const dateStr = new Date().toISOString().slice(0, 10);
   const timeStr = new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
   const receiptId = "FIS-" + new Date().getTime();
@@ -2403,7 +2491,7 @@ async function completeGoodsReceiptCore() {
     // Sadece zaten stokta kayıtlı olan (bu fişte yeni oluşturulmamış) ürünler için,
     // ve admin/çalışan bunu açıkça onayladıysa (fis-update-existing-price kutucuğu),
     // yeni KDV/kâr oranını ve hesaplanan satış fiyatını da stoğa işle.
-    if(!item.isNew && !item.justCreated && item.updatePrices) {
+    if((!item.isNew && !item.justCreated && item.updatePrices) || (item.justCreated && (item.wsPriced || item.updatePrices))) {
       const priceUpdates = {
         lastPriceUpdate: new Date().toISOString(),
         lastUpdatedBy: (getActorLabel()) + ' (Malzeme Fişi: ' + wholesaler.name + ')'
@@ -2426,8 +2514,9 @@ async function completeGoodsReceiptCore() {
     note: note || null,
     date: dateStr,
     time: timeStr,
-    items: finalItems,
+    items: finalItems.map(it => { const c = JSON.parse(JSON.stringify(it)); delete c.wsBase; return c; }),
     total: grandTotal,
+    pricing: wsCfgForSave ? { vat: wsCfgForSave.vat, discount: wsCfgForSave.discount, profit: wsCfgForSave.profit } : null,
     addedToDebt: addDebt,
     previousBalanceOnSlip: slipPrev !== null ? slipPrev : null,
     slipGrandTotal: slipGrandVal !== null ? slipGrandVal : null,
@@ -2436,6 +2525,12 @@ async function completeGoodsReceiptCore() {
 
   dbGoodsReceipts.child(dateStr).child(receiptId).set(receiptData, (err) => {
     if(!err) {
+      if (wsCfgForSave && wsRemember) {
+        dbWholesalers.child(wKey).child('fisPricing').set({
+          vat: wsCfgForSave.vat, discount: wsCfgForSave.discount, profit: wsCfgForSave.profit,
+          updatedAt: new Date().toISOString()
+        });
+      }
       if(addDebt && (grandTotal > 0 || syncBalance)) {
         let seenCur = 0, syncDiff = 0;
         dbWholesalers.child(wKey).child('balance').transaction(cur => {
@@ -2481,20 +2576,13 @@ async function completeGoodsReceiptCore() {
       if (fisAddBtn) fisAddBtn.textContent = '+ Fişe Malzeme Ekle';
       renderGoodsReceiptCart();
       document.getElementById('fis-wholesaler').value = '';
+      onFisWholesalerChange(); // paneli kapat ve oranları temizle
       document.getElementById('fis-no').value = '';
       document.getElementById('fis-note').value = '';
       fisSlipInfo = null;
       const prevBalEl = document.getElementById('fis-prev-balance'); if (prevBalEl) prevBalEl.value = '';
       const slipGrandEl = document.getElementById('fis-slip-grand'); if (slipGrandEl) slipGrandEl.value = '';
       const syncEl = document.getElementById('fis-sync-balance'); if (syncEl) syncEl.checked = true;
-      const bulkApplyEl = document.getElementById('fis-bulk-price-apply');
-      const bulkProfitEl = document.getElementById('fis-bulk-profit');
-      const bulkVatEl = document.getElementById('fis-bulk-vat');
-      const bulkStatusEl = document.getElementById('fis-bulk-price-status');
-      if (bulkApplyEl) bulkApplyEl.checked = false;
-      if (bulkProfitEl) bulkProfitEl.value = '';
-      if (bulkVatEl) bulkVatEl.value = '';
-      if (bulkStatusEl) bulkStatusEl.textContent = '';
       showToast("Malzeme fişi başarıyla işlendi, stok güncellendi!");
     } else {
       alert("Fiş kaydedilemedi: " + err.message);
