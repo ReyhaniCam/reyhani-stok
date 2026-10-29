@@ -606,6 +606,14 @@ function renderBrandSettings() {
 
   html += `
     <div style="margin-top:16px; padding-top:10px; border-top:2px solid var(--charcoal);">
+      <h4 style="margin:0 0 4px; font-family:'Oswald';">🔗 Markasız Ürünleri Markaya Ata</h4>
+      <p style="font-size:11px; color:var(--steel); margin:0 0 6px;">Ürün adında marka ismi geçen (ör. "Kale ...") ama markası boş olan ürünleri bulur; onayınızla ilgili markaya bağlar.</p>
+      <button class="btn btn-primary btn-sm" style="width:auto;" onclick="openBrandAssignModal()">🔍 Markasız Ürünleri Tara</button>
+      <div id="brand-assign-history" style="margin-top:8px;"></div>
+    </div>`;
+
+  html += `
+    <div style="margin-top:16px; padding-top:10px; border-top:2px solid var(--charcoal);">
       <h4 style="margin:0 0 4px; font-family:'Oswald';">🕒 Fiyat Güncelleme Geçmişi / Geri Al</h4>
       <p style="font-size:11px; color:var(--steel); margin:0 0 6px;">Marka oranları kaydedilirken yapılan toplu fiyat güncellemeleri burada listelenir. Hata olursa "Geri Al" ile eski fiyatlara dönebilirsiniz.</p>
       <div id="brand-price-history"></div>
@@ -613,6 +621,7 @@ function renderBrandSettings() {
 
   box.innerHTML = html;
   renderBrandPriceHistory();
+  renderBrandAssignHistory();
 }
 
 // Marka için "Malzeme Sınıfı" alanında öneri olarak, hem daha önce başka
@@ -855,6 +864,187 @@ async function undoBrandPriceUpdate(id) {
   try {
     await dbRoot.update(updates);
     showToast(`↩️ ${restorable.length} ürünün fiyatı geri alındı${skipped.length ? `, ${skipped.length} ürün atlandı` : ''}.`);
+  } catch (err) {
+    alert("Geri alma başarısız oldu (hiçbir değişiklik yapılmadı): " + (err.message || err));
+  }
+}
+
+
+// ============================================================================
+// MARKASIZ ÜRÜNLERİ MARKAYA ATAMA
+// Ürün adında marka ismi geçen (ör. "Kale Kilit ...") ama marka alanı boş olan
+// ürünleri bulur, önizleme gösterir, onaylananları o markaya bağlar.
+// Her işlem geri alınabilir (brand_assign_history).
+// ============================================================================
+let brandAssignRows = [];
+let brandAssignHistoryData = {};
+
+dbBrandAssignHistory.limitToLast(20).on('value', (snap) => {
+  brandAssignHistoryData = snap.val() || {};
+  renderBrandAssignHistory();
+});
+
+// Türkçe karakterleri sadeleştirip küçük harfe çevirir (KALE = Kale = kale, İzeltaş = IZELTAS)
+function foldTr(s) {
+  return String(s || '').toLocaleLowerCase('tr')
+    .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function detectBrandForName(name, brandsFolded) {
+  const n = ' ' + foldTr(name) + ' ';
+  let best = null;
+  brandsFolded.forEach(b => {
+    if (!b.f) return;
+    if (n.includes(' ' + b.f + ' ') && (!best || b.f.length > best.f.length)) best = b;
+  });
+  return best ? best.name : null;
+}
+
+function openBrandAssignModal() {
+  if (currentRole !== 'admin') return;
+  const brands = currentBrandList();
+  if (!brands.length) { alert("Önce en az bir marka ekleyin."); return; }
+  const brandsFolded = brands.map(b => ({ name: b, f: foldTr(b) }));
+  brandAssignRows = [];
+  Object.values(productsData).forEach(p => {
+    if (!p || !p.code || p.brand) return;
+    const b = detectBrandForName(p.name, brandsFolded);
+    if (b) brandAssignRows.push({ code: p.code, name: p.name || p.code, brand: b, checked: true });
+  });
+  brandAssignRows.sort((a, b) => a.brand.localeCompare(b.brand, 'tr') || String(a.name).localeCompare(String(b.name), 'tr'));
+
+  let ov = document.getElementById('brand-assign-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.id = 'brand-assign-modal';
+    ov.style.zIndex = '2100';
+    ov.onclick = (e) => { if (e.target === ov) closeBrandAssignModal(); };
+    document.body.appendChild(ov);
+  }
+  renderBrandAssignModal();
+  ov.style.display = 'flex';
+}
+
+function closeBrandAssignModal() {
+  const ov = document.getElementById('brand-assign-modal');
+  if (ov) ov.style.display = 'none';
+  brandAssignRows = [];
+}
+
+function renderBrandAssignModal() {
+  const ov = document.getElementById('brand-assign-modal');
+  if (!ov) return;
+  const brands = currentBrandList();
+  const checkedCount = brandAssignRows.filter(r => r.checked).length;
+  const rows = brandAssignRows.map((r, i) => `
+    <tr style="border-top:1px solid var(--steel-line);">
+      <td style="padding:4px 6px;"><input type="checkbox" ${r.checked ? 'checked' : ''} onchange="brandAssignRows[${i}].checked=this.checked; updateBrandAssignCount()" style="width:auto;"></td>
+      <td style="padding:4px 6px; font-size:12px;">${r.name}<br><small style="color:var(--steel);">${r.code}</small></td>
+      <td style="padding:4px 6px;"><select onchange="brandAssignRows[${i}].brand=this.value" style="min-width:100px;">${brands.map(b => `<option value="${b}" ${b === r.brand ? 'selected' : ''}>${b}</option>`).join('')}</select></td>
+    </tr>`).join('');
+  ov.innerHTML = `
+    <div class="modal-content" style="max-width:640px;">
+      <button class="modal-close" onclick="closeBrandAssignModal()">X</button>
+      <h3 style="margin-top:0; font-family:'Oswald';">🔗 Markasız Ürünleri Markaya Ata</h3>
+      ${brandAssignRows.length ? `
+        <p style="font-size:12px; margin-top:-6px;">Ürün adında marka ismi geçen <b>${brandAssignRows.length}</b> markasız ürün bulundu. Yanlış eşleşenlerin işaretini kaldırın veya markayı listeden değiştirin.</p>
+        <div style="display:flex; gap:8px; margin-bottom:6px;">
+          <button class="btn btn-sm" style="width:auto;" onclick="brandAssignRows.forEach(r=>r.checked=true); renderBrandAssignModal()">Hepsini seç</button>
+          <button class="btn btn-sm" style="width:auto;" onclick="brandAssignRows.forEach(r=>r.checked=false); renderBrandAssignModal()">Hiçbirini seçme</button>
+        </div>
+        <div style="max-height:45vh; overflow-y:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead><tr><th></th><th style="text-align:left; padding:4px 6px; font-size:12px;">Ürün</th><th style="text-align:left; padding:4px 6px; font-size:12px;">Marka</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+          <button class="btn btn-dark btn-sm" style="width:auto;" onclick="closeBrandAssignModal()">İptal</button>
+          <button class="btn btn-primary btn-sm" id="brand-assign-apply" style="width:auto;" onclick="applyBrandAssign()">✅ Seçilenleri Markaya Ata (${checkedCount})</button>
+        </div>
+        <p style="font-size:11px; color:var(--steel); margin-bottom:0;">Atama sonrası fiyatları marka oranlarına göre güncellemek isterseniz, ilgili markanın "Kaydet" butonuna basın. Atamayı "Geri Al" ile geri alabilirsiniz.</p>
+      ` : `<p style="font-size:13px;">Adında marka ismi geçen markasız ürün bulunamadı.</p>
+        <button class="btn btn-dark btn-sm" style="width:auto;" onclick="closeBrandAssignModal()">Kapat</button>`}
+    </div>`;
+}
+
+function updateBrandAssignCount() {
+  const btn = document.getElementById('brand-assign-apply');
+  if (btn) btn.textContent = `✅ Seçilenleri Markaya Ata (${brandAssignRows.filter(r => r.checked).length})`;
+}
+
+async function applyBrandAssign() {
+  if (currentRole !== 'admin') return;
+  const sel = brandAssignRows.filter(r => r.checked && r.brand);
+  if (!sel.length) { alert("Hiç ürün seçilmedi."); return; }
+  const now = new Date().toISOString();
+  const actor = getActorLabel();
+  const histKey = dbBrandAssignHistory.push().key;
+  const items = {};
+  const updates = {};
+  const counts = {};
+  sel.forEach(r => {
+    const cur = productsData[r.code];
+    if (!cur || cur.brand) return; // bu arada marka atanmışsa dokunma
+    items[r.code] = { n: r.name, b: r.brand };
+    updates[`products/${r.code}/brand`] = r.brand;
+    updates[`products/${r.code}/lastUpdatedBy`] = actor + ' (Toplu Marka Atama)';
+    counts[r.brand] = (counts[r.brand] || 0) + 1;
+  });
+  const total = Object.keys(items).length;
+  if (!total) { alert("Atanacak ürün kalmadı (ürünlere bu arada marka atanmış olabilir)."); closeBrandAssignModal(); return; }
+  updates[`brand_assign_history/${histKey}`] = { at: now, by: actor, count: total, counts, undone: false, items };
+  try {
+    await dbRoot.update(updates);
+    closeBrandAssignModal();
+    showToast(`✅ ${total} ürün markasına atandı.`);
+  } catch (err) {
+    alert("Marka ataması yapılamadı (hiçbir değişiklik yapılmadı): " + (err.message || err));
+  }
+}
+
+function renderBrandAssignHistory() {
+  const box = document.getElementById('brand-assign-history');
+  if (!box) return;
+  const entries = Object.entries(brandAssignHistoryData).sort((a, b) => String(b[1].at).localeCompare(String(a[1].at)));
+  if (!entries.length) { box.innerHTML = ''; return; }
+  box.innerHTML = entries.map(([id, h]) => {
+    const summary = Object.entries(h.counts || {}).map(([b, c]) => `${b}: ${c}`).join(' · ');
+    return `
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 0; border-top:1px solid var(--steel-line); flex-wrap:wrap;">
+        <div style="font-size:12px; flex:1; min-width:180px;">
+          <b>${h.count} ürün markaya atandı</b> — ${summary}
+          <br><small style="color:var(--steel);">${new Date(h.at).toLocaleString('tr-TR')} · ${h.by || ''}${h.undone ? ` · <b style="color:var(--rust);">↩️ Geri alındı</b>` : ''}</small>
+        </div>
+        ${h.undone ? '' : `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="undoBrandAssign('${id}')">↩️ Geri Al</button>`}
+      </div>`;
+  }).join('');
+}
+
+async function undoBrandAssign(id) {
+  if (currentRole !== 'admin') return;
+  const h = brandAssignHistoryData[id];
+  if (!h || h.undone) return;
+  const items = h.items || {};
+  const restorable = Object.keys(items).filter(code => productsData[code] && productsData[code].brand === items[code].b);
+  const skipped = Object.keys(items).length - restorable.length;
+  if (!restorable.length) { alert("Geri alınacak ürün yok: ürünlerin markası sonradan değiştirilmiş veya ürünler silinmiş."); return; }
+  if (!confirm(`${restorable.length} ürünün markası tekrar boş yapılacak.${skipped ? `\n${skipped} ürün atlanacak (markası sonradan değişmiş veya silinmiş).` : ''}\n\nDevam edilsin mi?`)) return;
+  const now = new Date().toISOString();
+  const actor = getActorLabel();
+  const updates = {};
+  restorable.forEach(code => {
+    updates[`products/${code}/brand`] = null;
+    updates[`products/${code}/lastUpdatedBy`] = actor + ' (Toplu Marka Ataması Geri Alındı)';
+  });
+  updates[`brand_assign_history/${id}/undone`] = true;
+  updates[`brand_assign_history/${id}/undoneAt`] = now;
+  try {
+    await dbRoot.update(updates);
+    showToast(`↩️ ${restorable.length} ürünün marka ataması geri alındı.`);
   } catch (err) {
     alert("Geri alma başarısız oldu (hiçbir değişiklik yapılmadı): " + (err.message || err));
   }
