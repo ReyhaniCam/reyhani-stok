@@ -604,7 +604,15 @@ function renderBrandSettings() {
     }).join('');
   }
 
+  html += `
+    <div style="margin-top:16px; padding-top:10px; border-top:2px solid var(--charcoal);">
+      <h4 style="margin:0 0 4px; font-family:'Oswald';">🕒 Fiyat Güncelleme Geçmişi / Geri Al</h4>
+      <p style="font-size:11px; color:var(--steel); margin:0 0 6px;">Marka oranları kaydedilirken yapılan toplu fiyat güncellemeleri burada listelenir. Hata olursa "Geri Al" ile eski fiyatlara dönebilirsiniz.</p>
+      <div id="brand-price-history"></div>
+    </div>`;
+
   box.innerHTML = html;
+  renderBrandPriceHistory();
 }
 
 // Marka için "Malzeme Sınıfı" alanında öneri olarak, hem daha önce başka
@@ -617,6 +625,29 @@ function brandCategorySuggestions() {
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'tr-TR'));
 }
 
+// ============================================================================
+// MARKA BAZLI TOPLU FİYAT GÜNCELLEME
+// Marka için KDV / iskonto / kâr kaydedilince, o markadaki stok ürünlerinin
+// satış fiyatı yeni oranlara göre yeniden hesaplanır. Önce uyarı + önizleme
+// gösterilir, onaylanırsa uygulanır ve her işlem "geri alınabilir" olarak
+// brand_price_history düğümüne kaydedilir.
+// Formül (uygulamadaki diğer yerlerle aynı): Geliş Fiyatı × (1+KDV) × (1+Kâr)
+// Geliş fiyatı zaten iskontolu kaydedildiği için iskonto varsayılan olarak
+// tekrar uygulanmaz; istenirse onay penceresindeki kutuyla açılır.
+// ============================================================================
+let brandPriceHistoryData = {};
+let brandPricePlan = null;
+
+dbBrandPriceHistory.limitToLast(30).on('value', (snap) => {
+  brandPriceHistoryData = snap.val() || {};
+  renderBrandPriceHistory();
+});
+
+function calcBrandSalePrice(cost, vat, profit, discount, applyDiscount) {
+  const base = applyDiscount ? cost * (1 - (discount || 0) / 100) : cost;
+  return Math.round(base * (1 + (vat || 0) / 100) * (1 + (profit || 0) / 100) * 100) / 100;
+}
+
 function saveBrandSetting(brand) {
   if (currentRole !== 'admin') return;
   const discount = parseFloat(document.getElementById(`bs-discount-${brand}`).value) || 0;
@@ -625,10 +656,208 @@ function saveBrandSetting(brand) {
   const profit = profitEl ? (parseFloat(profitEl.value) || 0) : 0;
   const categoryEl = document.getElementById(`bs-category-${brand}`);
   const category = categoryEl ? categoryEl.value.trim() : '';
-  dbBrandSettings.child(brand).set({ discount, vat, profit, category: category || null }, (err) => {
+  const newSettings = { discount, vat, profit, category: category || null };
+
+  const products = Object.values(productsData).filter(p => p && p.code && p.brand === brand);
+  if (products.length === 0) {
+    saveBrandSettingOnly(brand, newSettings);
+    return;
+  }
+  brandPricePlan = { brand, newSettings, products, applyDiscount: false };
+  openBrandPriceModal();
+}
+
+function saveBrandSettingOnly(brand, newSettings, silent) {
+  dbBrandSettings.child(brand).set(newSettings, (err) => {
     if (err) { alert("Kaydedilemedi: " + err.message); return; }
-    showToast(`${brand} için oranlar ve malzeme sınıfı kaydedildi — bu markayla eklenen ürünlere/boru boyutlarına otomatik uygulanacak.`);
+    if (!silent) showToast(`${brand} için oranlar ve malzeme sınıfı kaydedildi — bu markayla eklenen ürünlere/boru boyutlarına otomatik uygulanacak.`);
   });
+}
+
+function computeBrandPricePlan() {
+  const plan = brandPricePlan;
+  const s = plan.newSettings;
+  const changes = [];
+  let noCost = 0, unchanged = 0;
+  plan.products.forEach(p => {
+    const cost = Number(p.costPrice) || 0;
+    if (cost <= 0) { noCost++; return; }
+    const np = calcBrandSalePrice(cost, s.vat, s.profit, s.discount, plan.applyDiscount);
+    const op = Number(p.price) || 0;
+    const vatSame = (Number(p.vat) || 0) === s.vat;
+    const profSame = (p.targetProfit == null ? null : Number(p.targetProfit)) === s.profit;
+    if (Math.abs(np - op) < 0.005 && vatSame && profSame) { unchanged++; return; }
+    changes.push({ code: p.code, name: p.name || p.code, cost, op, np, ov: p.vat == null ? null : Number(p.vat), opr: p.targetProfit == null ? null : Number(p.targetProfit) });
+  });
+  plan.changes = changes; plan.noCost = noCost; plan.unchanged = unchanged;
+}
+
+function openBrandPriceModal() {
+  let ov = document.getElementById('brand-price-modal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.id = 'brand-price-modal';
+    ov.style.zIndex = '2100';
+    ov.onclick = (e) => { if (e.target === ov) closeBrandPriceModal(); };
+    document.body.appendChild(ov);
+  }
+  renderBrandPriceModal();
+  ov.style.display = 'flex';
+}
+
+function closeBrandPriceModal() {
+  const ov = document.getElementById('brand-price-modal');
+  if (ov) ov.style.display = 'none';
+  brandPricePlan = null;
+}
+
+function toggleBrandPriceDiscount(checked) {
+  if (!brandPricePlan) return;
+  brandPricePlan.applyDiscount = !!checked;
+  renderBrandPriceModal();
+}
+
+function renderBrandPriceModal() {
+  const ov = document.getElementById('brand-price-modal');
+  if (!ov || !brandPricePlan) return;
+  computeBrandPricePlan();
+  const p = brandPricePlan, s = p.newSettings, ch = p.changes;
+  const sample = ch.slice(0, 8).map(c => `
+    <tr>
+      <td style="padding:4px 6px;">${c.name}</td>
+      <td style="padding:4px 6px; text-align:right; font-family:'IBM Plex Mono';">₺${formatMoney(c.op)}</td>
+      <td style="padding:4px 6px; text-align:right; font-family:'IBM Plex Mono'; font-weight:bold; color:var(--rust);">₺${formatMoney(c.np)}</td>
+    </tr>`).join('');
+  ov.innerHTML = `
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeBrandPriceModal()">X</button>
+      <h3 style="margin-top:0; font-family:'Oswald';">⚠️ Fiyatlar Değiştirilecek</h3>
+      <p style="font-size:13px; margin-top:-6px;"><b>${p.brand}</b> markasındaki ürünlerin satış fiyatları yeni oranlara göre güncellenecek:<br>
+        KDV <b>%${s.vat}</b> · İskonto <b>%${s.discount}</b> · Kâr <b>%${s.profit}</b></p>
+      <label style="display:flex; gap:8px; align-items:center; font-size:12px; margin:8px 0; cursor:pointer;">
+        <input type="checkbox" ${p.applyDiscount ? 'checked' : ''} onchange="toggleBrandPriceDiscount(this.checked)" style="width:auto;">
+        İskontoyu da geliş fiyatına uygula (geliş fiyatı iskontosuz/liste fiyatıysa işaretleyin)
+      </label>
+      <div style="background:#FFF7ED; border:1px solid #FDBA74; border-radius:6px; padding:8px 10px; font-size:12px; margin-bottom:8px;">
+        <b>${ch.length}</b> ürünün fiyatı değişecek
+        ${p.unchanged ? ` · ${p.unchanged} ürün zaten güncel` : ''}
+        ${p.noCost ? ` · <span style="color:var(--rust);">${p.noCost} ürün geliş fiyatı olmadığı için atlanacak</span>` : ''}
+        <br>Formül: Geliş Fiyatı${p.applyDiscount ? ' × (1 − İskonto)' : ''} × (1 + KDV) × (1 + Kâr). İşlem sonrası <b>Geri Al</b> bölümünden eski fiyatlara dönebilirsiniz.
+      </div>
+      ${ch.length ? `
+        <table style="width:100%; font-size:12px; border-collapse:collapse;">
+          <thead><tr><th style="text-align:left; padding:4px 6px;">Ürün</th><th style="text-align:right; padding:4px 6px;">Eski</th><th style="text-align:right; padding:4px 6px;">Yeni</th></tr></thead>
+          <tbody>${sample}</tbody>
+        </table>
+        ${ch.length > 8 ? `<div style="font-size:11px; color:var(--steel); margin-top:4px;">… ve ${ch.length - 8} ürün daha</div>` : ''}` : '<p style="font-size:12px; color:var(--steel);">Fiyatı değişecek ürün yok.</p>'}
+      <div style="display:flex; gap:8px; margin-top:14px; flex-wrap:wrap;">
+        <button class="btn btn-dark btn-sm" style="width:auto;" onclick="closeBrandPriceModal()">İptal</button>
+        <button class="btn btn-sm" style="width:auto;" onclick="confirmBrandSettingsOnly()">Sadece oranları kaydet</button>
+        <button class="btn btn-primary btn-sm" style="width:auto;" ${ch.length ? '' : 'disabled'} onclick="applyBrandPriceUpdate()">✅ Fiyatları Güncelle</button>
+      </div>
+    </div>`;
+}
+
+function confirmBrandSettingsOnly() {
+  if (!brandPricePlan) return;
+  const { brand, newSettings } = brandPricePlan;
+  closeBrandPriceModal();
+  saveBrandSettingOnly(brand, newSettings);
+}
+
+async function applyBrandPriceUpdate() {
+  if (currentRole !== 'admin' || !brandPricePlan) return;
+  computeBrandPricePlan();
+  const { brand, newSettings, changes, applyDiscount } = brandPricePlan;
+  if (!changes.length) { closeBrandPriceModal(); return; }
+  const now = new Date().toISOString();
+  const actor = getActorLabel();
+  const histKey = dbBrandPriceHistory.push().key;
+  const items = {};
+  const updates = {};
+  changes.forEach(c => {
+    items[c.code] = { n: c.name, op: c.op, np: c.np, ov: c.ov, opr: c.opr };
+    updates[`products/${c.code}/price`] = c.np;
+    updates[`products/${c.code}/vat`] = newSettings.vat;
+    updates[`products/${c.code}/targetProfit`] = newSettings.profit;
+    updates[`products/${c.code}/lastPriceUpdate`] = now;
+    updates[`products/${c.code}/lastUpdatedBy`] = actor + ' (Marka Fiyat Güncelleme: ' + brand + ')';
+  });
+  updates[`brand_settings/${brand}`] = newSettings;
+  updates[`brand_price_history/${histKey}`] = {
+    brand, at: now, by: actor, applyDiscount: !!applyDiscount,
+    oldSettings: brandSettingsData[brand] || null, newSettings,
+    count: changes.length, undone: false, items
+  };
+  try {
+    await dbRoot.update(updates);
+    closeBrandPriceModal();
+    showToast(`✅ ${brand}: ${changes.length} ürünün satış fiyatı güncellendi. Geri almak için "Fiyat Güncelleme Geçmişi" bölümünü kullanın.`);
+  } catch (err) {
+    alert("Fiyatlar güncellenemedi (hiçbir değişiklik yapılmadı): " + (err.message || err));
+  }
+}
+
+function renderBrandPriceHistory() {
+  const box = document.getElementById('brand-price-history');
+  if (!box) return;
+  const entries = Object.entries(brandPriceHistoryData).sort((a, b) => String(b[1].at).localeCompare(String(a[1].at)));
+  if (!entries.length) {
+    box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:8px 0;">Henüz toplu fiyat güncellemesi yapılmadı.</p>`;
+    return;
+  }
+  box.innerHTML = entries.map(([id, h]) => {
+    const s = h.newSettings || {};
+    const dt = new Date(h.at).toLocaleString('tr-TR');
+    return `
+      <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 0; border-top:1px solid var(--steel-line); flex-wrap:wrap;">
+        <div style="font-size:12px; flex:1; min-width:180px;">
+          <b>${h.brand}</b> — ${h.count} ürün · KDV %${s.vat ?? 0} · İskonto %${s.discount ?? 0} · Kâr %${s.profit ?? 0}${h.applyDiscount ? ' (iskontolu hesap)' : ''}
+          <br><small style="color:var(--steel);">${dt} · ${h.by || ''}${h.undone ? ` · <b style="color:var(--rust);">↩️ Geri alındı (${new Date(h.undoneAt).toLocaleString('tr-TR')})</b>` : ''}</small>
+        </div>
+        ${h.undone ? '' : `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="undoBrandPriceUpdate('${id}')">↩️ Geri Al</button>`}
+      </div>`;
+  }).join('');
+}
+
+async function undoBrandPriceUpdate(id) {
+  if (currentRole !== 'admin') return;
+  const h = brandPriceHistoryData[id];
+  if (!h || h.undone) return;
+  const items = h.items || {};
+  const codes = Object.keys(items);
+  const restorable = [], skipped = [];
+  codes.forEach(code => {
+    const cur = productsData[code];
+    const it = items[code];
+    if (cur && Math.abs((Number(cur.price) || 0) - it.np) < 0.005) restorable.push(code);
+    else skipped.push(code);
+  });
+  if (!restorable.length) { alert("Geri alınacak ürün bulunamadı: ürünlerin fiyatları bu işlemden sonra zaten değiştirilmiş veya ürünler silinmiş."); return; }
+  if (!confirm(`"${h.brand}" markasının ${new Date(h.at).toLocaleString('tr-TR')} tarihli fiyat güncellemesi geri alınacak.\n\n• ${restorable.length} ürün eski satış fiyatına, KDV ve kâr oranına dönecek\n${skipped.length ? `• ${skipped.length} ürün atlanacak (fiyatı bu işlemden sonra elle/başka işlemle değişmiş veya silinmiş)\n` : ''}• Markanın eski KDV/iskonto/kâr ayarları geri yüklenecek\n\nDevam edilsin mi?`)) return;
+
+  const now = new Date().toISOString();
+  const actor = getActorLabel();
+  const updates = {};
+  restorable.forEach(code => {
+    const it = items[code];
+    updates[`products/${code}/price`] = it.op;
+    updates[`products/${code}/vat`] = it.ov == null ? null : it.ov;
+    updates[`products/${code}/targetProfit`] = it.opr == null ? null : it.opr;
+    updates[`products/${code}/lastPriceUpdate`] = now;
+    updates[`products/${code}/lastUpdatedBy`] = actor + ' (Marka Fiyat Güncellemesi Geri Alındı: ' + h.brand + ')';
+  });
+  if (h.oldSettings) updates[`brand_settings/${h.brand}`] = h.oldSettings;
+  updates[`brand_price_history/${id}/undone`] = true;
+  updates[`brand_price_history/${id}/undoneAt`] = now;
+  updates[`brand_price_history/${id}/undoneBy`] = actor;
+  try {
+    await dbRoot.update(updates);
+    showToast(`↩️ ${restorable.length} ürünün fiyatı geri alındı${skipped.length ? `, ${skipped.length} ürün atlandı` : ''}.`);
+  } catch (err) {
+    alert("Geri alma başarısız oldu (hiçbir değişiklik yapılmadı): " + (err.message || err));
+  }
 }
 
 function updateCostCalc(prefix, costFieldId) {
