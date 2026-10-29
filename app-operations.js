@@ -4210,6 +4210,24 @@ function renderGrid() {
     }
   });
 
+  // ÖZET KUTULARI: kart çiziminden önce yazılır; böylece tek bir bozuk kayıt çizimi bozsa bile toplamlar görünür
+  document.getElementById('sum-count').textContent = count;
+  document.getElementById('sum-units').textContent = units.toFixed(1);
+  document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
+  const warnEl = document.getElementById('sum-warn');
+  const setGridWarn = (lines) => {
+    if (!warnEl) return;
+    if (isAdmin && lines.length) { warnEl.innerHTML = lines.join('<br>'); warnEl.style.display = 'block'; }
+    else { warnEl.innerHTML = ''; warnEl.style.display = 'none'; }
+  };
+  const warnLines = [];
+  if (badRecords.length) {
+    const esc = (t) => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    const names = badRecords.slice(0, 5).map(p => `${esc(p.name || '?')} (${esc(p.code)})`).join(', ');
+    warnLines.push(`⚠️ ${badRecords.length} üründe miktar/fiyat sayı olarak okunamıyor, toplamlara 0 olarak katıldı: ${names}${badRecords.length > 5 ? ' ...' : ''}. Bu ürünleri ✏️ Düzenle ile düzeltin.`);
+  }
+  setGridWarn(warnLines);
+
   // Sıralama
   switch(sortBy) {
     case 'name-asc': matchedProducts.sort((a,b) => (a.name || '').localeCompare(b.name || '', 'tr')); break;
@@ -4227,7 +4245,14 @@ function renderGrid() {
   // tek bir açılır/kapanır başlık altında topluyoruz. Gruplama, sayfalama
   // uygulanmadan ÖNCE tüm filtrelenmiş listede yapılır — böylece bir grubun
   // ölçüleri sayfa sınırında ikiye bölünmez.
-  const displayEntries = groupProductsForDisplay(matchedProducts);
+  let displayEntries;
+  try {
+    displayEntries = groupProductsForDisplay(matchedProducts);
+  } catch (e) {
+    console.error('Ürün gruplama hatası, düz liste gösteriliyor:', e);
+    displayEntries = matchedProducts.map(p => ({ type: 'single', product: p }));
+  }
+  const renderFailures = [];
 
   const visibleCount = Math.min(displayEntries.length, gridCurrentPage * GRID_PAGE_SIZE);
   const pageEntries = displayEntries.slice(0, visibleCount);
@@ -4236,12 +4261,20 @@ function renderGrid() {
   const htmlParts = [];
 
   pageEntries.forEach(entry => {
-    if (entry.type === 'group') {
-      entry.items.forEach(p => matchedCodes.push(p.code));
-      htmlParts.push(renderProductGroupCard(entry, canEdit, isAdmin));
-    } else {
-      matchedCodes.push(entry.product.code);
-      htmlParts.push(renderProductCard(entry.product, canEdit, isAdmin));
+    try {
+      if (entry.type === 'group') {
+        const html = renderProductGroupCard(entry, canEdit, isAdmin);
+        entry.items.forEach(p => { if (p && p.code) matchedCodes.push(p.code); });
+        htmlParts.push(html);
+      } else {
+        const html = renderProductCard(entry.product, canEdit, isAdmin);
+        if (entry.product && entry.product.code) matchedCodes.push(entry.product.code);
+        htmlParts.push(html);
+      }
+    } catch (e) {
+      console.error('Ürün kartı çizilemedi:', entry, e);
+      const bad = entry.type === 'group' ? entry.baseLabel : (entry.product && (entry.product.name || entry.product.code));
+      renderFailures.push(String(bad || '?'));
     }
   });
 
@@ -4257,22 +4290,13 @@ function renderGrid() {
     }
   }
 
-  matchedCodes.forEach(code => loadProductImageIntoCard(code));
+  matchedCodes.forEach(code => {
+    try { loadProductImageIntoCard(code); } catch (e) { console.error('Ürün fotoğrafı yüklenemedi:', code, e); }
+  });
 
-  document.getElementById('sum-count').textContent = count;
-  document.getElementById('sum-units').textContent = units.toFixed(1);
-  document.getElementById('sum-value').textContent = isAdmin ? ("₺" + formatMoney(value)) : "***";
-
-  const warnEl = document.getElementById('sum-warn');
-  if (warnEl) {
-    if (isAdmin && badRecords.length) {
-      const names = badRecords.slice(0, 5).map(p => `${p.name || '?'} (${p.code})`).join(', ');
-      warnEl.textContent = `⚠️ ${badRecords.length} üründe miktar/fiyat sayı olarak okunamıyor, toplamlara 0 olarak katıldı: ${names}${badRecords.length > 5 ? ' ...' : ''}. Bu ürünleri ✏️ Düzenle ile düzeltin.`;
-      warnEl.style.display = 'block';
-    } else {
-      warnEl.textContent = '';
-      warnEl.style.display = 'none';
-    }
+  if (renderFailures.length) {
+    warnLines.push(`⚠️ ${renderFailures.length} ürün ekranda çizilemedi (tarayıcı konsolunda ayrıntı var): ${renderFailures.slice(0, 5).join(', ')}${renderFailures.length > 5 ? ' ...' : ''}. Bu kayıtlar bozuk olabilir.`);
+    setGridWarn(warnLines);
   }
 }
 
