@@ -23,6 +23,7 @@ const dbProductImages = dbRoot.child('product_images');
 const dbLayout = dbRoot.child('store_layout');
 const dbBrandSettings = dbRoot.child('brand_settings');
 const dbBrandPriceHistory = dbRoot.child('brand_price_history'); // Marka bazlı toplu fiyat güncellemelerinin geçmişi — geri alma için
+const dbBrandAssignHistory = dbRoot.child('brand_assign_history'); // Ürünleri toplu markaya atama geçmişi — geri alma için
 const dbBarcodeCache = dbRoot.child('barcode_cache');
 const dbCustomerDebts = dbRoot.child('customer_debts');
 const dbCustomers = dbRoot.child('customers');
