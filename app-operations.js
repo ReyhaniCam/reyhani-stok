@@ -561,7 +561,15 @@ function renderBrandSettings() {
   if (!box) return;
   const brands = currentBrandList();
 
-  let html = `
+  const assignBox = `
+    <div style="padding:10px; margin-bottom:12px; background:#F1F5F9; border:1px solid var(--steel-line); border-radius:6px;">
+      <h4 style="margin:0 0 4px; font-family:'Oswald';">🔗 Markasız Ürünleri Markaya Ata</h4>
+      <p style="font-size:11px; color:var(--steel); margin:0 0 6px;">Ürün adında marka ismi geçen (ör. "Kale ...") ama markası boş olan ürünleri bulur; onayınızla ilgili markaya bağlar.</p>
+      <button class="btn btn-primary btn-sm" style="width:auto;" onclick="openBrandAssignModal()">🔍 Markasız Ürünleri Tara</button>
+      <div id="brand-assign-history" style="margin-top:8px;"></div>
+    </div>`;
+
+  let html = assignBox + `
     <div style="display:flex; gap:8px; align-items:flex-end; padding-bottom:10px; margin-bottom:4px; border-bottom:2px solid var(--charcoal); flex-wrap:wrap;">
       <div style="flex:1; min-width:120px;"><label style="margin-bottom:2px;">Yeni Marka Adı</label><input type="text" id="new-brand-name" placeholder="Örn: Ege Yıldız"></div>
       <div style="flex:1; min-width:140px;"><label style="margin-bottom:2px;">Malzeme Sınıfı</label><input type="text" id="new-brand-category" list="brand-category-suggestions" placeholder="Örn: Boru/Fitings"></div>
@@ -603,14 +611,6 @@ function renderBrandSettings() {
       `;
     }).join('');
   }
-
-  html += `
-    <div style="margin-top:16px; padding-top:10px; border-top:2px solid var(--charcoal);">
-      <h4 style="margin:0 0 4px; font-family:'Oswald';">🔗 Markasız Ürünleri Markaya Ata</h4>
-      <p style="font-size:11px; color:var(--steel); margin:0 0 6px;">Ürün adında marka ismi geçen (ör. "Kale ...") ama markası boş olan ürünleri bulur; onayınızla ilgili markaya bağlar.</p>
-      <button class="btn btn-primary btn-sm" style="width:auto;" onclick="openBrandAssignModal()">🔍 Markasız Ürünleri Tara</button>
-      <div id="brand-assign-history" style="margin-top:8px;"></div>
-    </div>`;
 
   html += `
     <div style="margin-top:16px; padding-top:10px; border-top:2px solid var(--charcoal);">
