@@ -684,6 +684,12 @@ const targetCode = urlParams.get('item');
 
 db.on('value', (snapshot) => {
   productsData = snapshot.val() || {};
+  // Bozuk kayıtlara karşı koruma: obje olmayan kayıtları at, "code" alanı eksik olanlara Firebase anahtarını yaz
+  Object.keys(productsData).forEach(k => {
+    const p = productsData[k];
+    if (!p || typeof p !== 'object') { delete productsData[k]; return; }
+    if (!p.code) p.code = k;
+  });
   renderGrid();
   updateOrderProductList();
   updateBorcOrderProductList();
