@@ -86,10 +86,21 @@ const STAFF_HASH = "2b084c9efd9150fb848e4efb0b5f03f455470f68b153814944e14a6204ec
 // ============================================================
 const DEVICE_AUTH_HASH = "12a7d32afcd5140951fe6ea7b2c8ed7a9c2b196333190f28f899aaf85699c7e6";
 const DEVICE_AUTH_STORAGE_KEY = 'reyhani_device_authorized_v1';
+// Çalışan cihaz bağlantısı: bu kodla açılan cihaz SADECE çalışan paneline girebilir.
+// Depolama değeri: 'true' = yönetici+çalışan yetkili cihaz, 'staff' = yalnızca çalışan.
+const STAFF_DEVICE_AUTH_HASH = "5ba805ecb97573c1ea6ee102459f8510b3567c781a78c301b69bb3a7ff945ad0";
+
+function getDeviceAuthLevel() {
+  try {
+    const v = localStorage.getItem(DEVICE_AUTH_STORAGE_KEY);
+    if (v === 'true') return 'admin';
+    if (v === 'staff') return 'staff';
+    return null;
+  } catch (e) { return null; }
+}
 
 function isDeviceAuthorized() {
-  try { return localStorage.getItem(DEVICE_AUTH_STORAGE_KEY) === 'true'; }
-  catch (e) { return false; }
+  return getDeviceAuthLevel() !== null;
 }
 
 async function checkDeviceAuthorizationLink() {
@@ -107,6 +118,18 @@ async function checkDeviceAuthorizationLink() {
     if (hash === DEVICE_AUTH_HASH) {
       localStorage.setItem(DEVICE_AUTH_STORAGE_KEY, 'true');
       alert("✅ Bu cihaz yönetici paneli için kalıcı olarak yetkilendirildi. Artık bu tarayıcıdan normal şekilde giriş yapabilirsiniz.");
+    } else if (hash === STAFF_DEVICE_AUTH_HASH) {
+      // Yönetici yetkili bir cihazı çalışan seviyesine DÜŞÜRME.
+      if (getDeviceAuthLevel() !== 'admin') {
+        localStorage.setItem(DEVICE_AUTH_STORAGE_KEY, 'staff');
+      }
+      // Bağlantıyı açan kişi doğrudan çalışan olarak girer (yönetici değil).
+      if (currentRole === 'guest') {
+        currentRole = 'staff';
+        await ensureDeviceNamed();
+        updateAuthUI();
+        showToast("Çalışan girişi başarılı!");
+      }
     } else {
       alert("⚠️ Cihaz yetkilendirme kodu geçersiz.");
     }
@@ -1006,7 +1029,7 @@ async function autoUpdateStockExcel() {
 async function toggleAuth() {
   if(currentRole === 'guest') {
     if (!isDeviceAuthorized()) {
-      alert("Bu cihazda yönetici paneli aktif değil.");
+      alert("Bu cihazda giriş aktif değil.");
       return;
     }
     const p = prompt("Giriş Şifresini Giriniz:");
@@ -1018,7 +1041,8 @@ async function toggleAuth() {
       alert("Şifre doğrulaması bu bağlantıda çalışamadı. Sitenin https:// ile açıldığından emin olun.");
       return;
     }
-    if(hash === ADMIN_HASH) { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
+    // Sadece çalışan bağlantısıyla yetkilendirilmiş cihazlarda yönetici şifresi KABUL EDİLMEZ.
+    if(hash === ADMIN_HASH && getDeviceAuthLevel() === 'admin') { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
     else if(hash === STAFF_HASH) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
     else { alert("Hatalı Şifre!"); return; }
     await ensureDeviceNamed();
