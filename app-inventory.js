@@ -720,6 +720,96 @@ async function lookupFisBarcodeFromPhoto(input) {
   }
 }
 
+
+// ============================================================
+// KOTASIZ İNTERNET ARAMASI: arama motoru sayfasını CORS proxy ile okuyup sonuç başlıklarından
+// ürün adı çıkarır (elle Google'da aratmanın otomatiği). Gemini Search kotasına bağlı DEĞİL.
+// ============================================================
+async function fetchViaProxies(url, perTryMs, deadline) {
+  const attempts = [
+    { u: `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(url)}` },
+    { u: `https://corsproxy.io/?url=${encodeURIComponent(url)}` },
+    { u: `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`, wrap: true },
+    { u: `https://thingproxy.freeboard.io/fetch/${url}` }
+  ];
+  for (const a of attempts) {
+    if (Date.now() > deadline) return null;
+    try {
+      const resp = await fetchWithTimeout(a.u, {}, perTryMs || 6000);
+      if (!resp.ok) continue;
+      let text;
+      if (a.wrap) { const j = await resp.json(); text = (j && j.contents) || ''; }
+      else text = await resp.text();
+      if (text && text.length > 500) return text;
+    } catch (e) { /* sıradaki proxy */ }
+  }
+  return null;
+}
+
+function cleanProductTitle(t) {
+  let s = String(t || '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\s*[-–—|·»]\s*(Trendyol|Hepsiburada|n11|Amazon|Çiçeksepeti|Akakçe|Cimri|Epey|Google|Bing|Barkod|Barcode)[^]*$/i, '');
+  s = s.replace(/\s*[-–—|,]?\s*(Fiyatı|Fiyatları|Fiyat|Satın Al|Online|Sipariş|Özellikleri|Yorumları|İncele|Modelleri)\b[^]*$/i, '');
+  s = s.replace(/\s*[-–—|]\s*$/, '').trim();
+  return s.slice(0, 120);
+}
+
+function parseSearchResults(html, engine) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const out = [];
+  if (engine === 'ddg') {
+    doc.querySelectorAll('.result, .web-result').forEach(r => {
+      const a = r.querySelector('a.result__a');
+      const sn = r.querySelector('.result__snippet');
+      if (a) out.push({ title: a.textContent || '', snippet: sn ? sn.textContent : '' });
+    });
+  } else {
+    doc.querySelectorAll('li.b_algo').forEach(r => {
+      const h = r.querySelector('h2');
+      const sn = r.querySelector('.b_caption p, .b_lineclamp2, .b_lineclamp3, .b_algoSlug');
+      if (h) out.push({ title: h.textContent || '', snippet: sn ? sn.textContent : '' });
+    });
+  }
+  return out;
+}
+
+// Sadece başlığında/özetinde barkod numarası GEÇEN sonuçlar kabul edilir (alakasız sonuçlar elenir).
+async function fetchBarcodeNameViaWebSearch(code) {
+  const deadline = Date.now() + 22000;
+  const engines = [
+    { id: 'ddg', url: `https://html.duckduckgo.com/html/?q=${encodeURIComponent(code)}` },
+    { id: 'bing', url: `https://www.bing.com/search?q=${encodeURIComponent(code)}&setlang=tr&cc=TR` }
+  ];
+  for (const eng of engines) {
+    if (Date.now() > deadline) break;
+    const html = await fetchViaProxies(eng.url, 6000, deadline);
+    if (!html) continue;
+    let results = [];
+    try { results = parseSearchResults(html, eng.id); } catch (e) { continue; }
+    const seen = new Set();
+    const candidates = [];
+    for (const r of results) {
+      if (!(r.title + ' ' + r.snippet).includes(code)) continue;
+      const t = cleanProductTitle(r.title.replace(code, '').replace(/\s+/g, ' '));
+      if (t.length < 6) continue;
+      const key = t.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      candidates.push(t);
+      if (candidates.length >= 4) break;
+    }
+    if (candidates.length) return { title: candidates[0], candidates, source: eng.id };
+  }
+  return null;
+}
+
+function pickBarcodeCandidate(i) {
+  const c = (window._barcodeCandidates || [])[i];
+  if (!c) return;
+  const nameEl = document.getElementById('f-name');
+  if (nameEl) { nameEl.value = c; if (typeof checkNameDuplicate === 'function') checkNameDuplicate(); }
+}
+
 let barcodeLookupScanner = null;
 
 function openBarcodeLookupScanner() {
@@ -959,6 +1049,17 @@ async function fetchUpcItemDb(code) {
 
 // Malzeme Fişi barkod aramasında diğer kaynaklar sonuç vermezse (401/400/bulunamadı vb.) yapay zeka internette arar
 async function tryFisGeminiFallback(code, statusEl) {
+  statusEl.textContent = "Aranıyor... (internet arama motorları)";
+  try {
+    const web = await fetchBarcodeNameViaWebSearch(sanitizeBarcodeForLookup(code) || code);
+    if (web && web.title) {
+      setFisPendingBarcode(code);
+      document.getElementById('fis-product').value = web.title;
+      checkFisProductMatch();
+      statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">🌐 İnternet aramasında bulundu: "${web.title.replace(/</g, '&lt;')}".</span> <b>Lütfen adı kontrol edin</b>, YENİ ÜRÜN bilgilerini doldurup fişe ekleyin. Barkod (${code}) ürün kodu olarak kullanılacak.`;
+      return true;
+    }
+  } catch (e) { console.warn('Web araması hatası:', e); }
   if (!getGeminiApiKey()) return false;
   statusEl.textContent = "Aranıyor... (yapay zeka internette arıyor, birkaç saniye sürebilir)";
   const ai = await fetchBarcodeNameViaGemini(sanitizeBarcodeForLookup(code) || code);
@@ -1147,6 +1248,20 @@ async function lookupBarcode(opts) {
       }
     } catch (e) { /* internet/servis sorunu: AI aramasına geç */ }
   }
+
+  // 3.5) Kotasız internet araması (arama motoru sonuç başlıkları)
+  statusEl.textContent = "Aranıyor... (internet arama motorları)";
+  try {
+    const web = await fetchBarcodeNameViaWebSearch(numericCode || code);
+    if (stale()) return;
+    if (web && web.title) {
+      setName(web.title);
+      window._barcodeCandidates = web.candidates;
+      const alts = web.candidates.slice(1).map((c, i) => `<a href="#" onclick="pickBarcodeCandidate(${i + 1}); return false;">${c.replace(/</g, '&lt;')}</a>`).join(' · ');
+      ok(`🌐 İnternet aramasında bulundu: "${web.title.replace(/</g, '&lt;')}"</span> <b>Lütfen adı kontrol edin</b>, kaydettiğinizde bu barkod hafızaya alınır.${alts ? `<br><span style="color:var(--steel);">Diğer sonuçlar (tıklayıp seçin): ${alts}</span>` : ''}`);
+      return;
+    }
+  } catch (e) { console.warn('Web araması hatası:', e); }
 
   let aiNote = getGeminiApiKey() ? '' : 'Google API anahtarı girilmediği için yapay zeka araması yapılamadı (sağ üstteki 🔑 API Key butonu).';
   // 4) Son çare: Gemini internette aratır (Türkiye'deki yerel ürünler için en etkili yol)
