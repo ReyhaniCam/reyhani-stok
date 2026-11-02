@@ -229,6 +229,8 @@
             <input type="text" id="f-barcode-lookup" placeholder="Barkod numarasını yazın..." style="flex:1; min-width:140px;">
             <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="lookupBarcode()">🔎 Bul</button>
             <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openBarcodeLookupScanner()">📷 Kamerayla Okut</button>
+            <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="document.getElementById('f-photo-input').click()">📸 Fotoğraftan Bul</button>
+            <input type="file" id="f-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="lookupBarcodeFromPhoto(this)">
           </div>
           <div id="f-barcode-lookup-status" style="font-size:11px; margin-top:8px; line-height:1.5;"></div>
         </div>
@@ -561,6 +563,8 @@
             <input type="text" id="fis-barcode-lookup" placeholder="Barkod numarasını yazın..." style="flex:1; min-width:140px;">
             <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="lookupFisBarcode()">🔎 Bul</button>
             <button type="button" class="btn btn-primary btn-sm" style="width:auto;" onclick="openFisBarcodeScanner()">📷 Kamerayla Okut</button>
+            <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="document.getElementById('fis-photo-input').click()">📸 Fotoğraftan Bul</button>
+            <input type="file" id="fis-photo-input" accept="image/*" capture="environment" style="display:none;" onchange="lookupFisBarcodeFromPhoto(this)">
           </div>
           <div id="fis-barcode-lookup-status" style="font-size:11px; margin-top:8px; line-height:1.5;"></div>
           <input type="hidden" id="fis-barcode-pending-code">
