@@ -561,6 +561,165 @@ async function applyBarcodeFix() {
 // BARCODE SCANNER FONKSİYONLARI
 // ============================================================
 
+
+// ============================================================
+// BARKOD YARDIMCILARI (kontrol basamağı, çift okuma doğrulaması, zaman aşımı, fotoğraftan tanıma)
+// ============================================================
+
+// EAN-8 / UPC-A / EAN-13 / GTIN-14 kontrol basamağı doğrulaması (yanlış okunan barkodları ayıklar)
+function isValidGtinChecksum(code) {
+  if (!/^\d{8}$|^\d{12,14}$/.test(code)) return false;
+  const d = code.split('').map(Number);
+  const check = d.pop();
+  let sum = 0;
+  for (let i = d.length - 1, w = 3; i >= 0; i--, w = (w === 3 ? 1 : 3)) sum += d[i] * w;
+  return ((10 - (sum % 10)) % 10) === check;
+}
+
+// Kameradan okunan değeri hemen kabul etmez: (1) EAN/UPC ise kontrol basamağı tutmalı,
+// (2) aynı değer arka arkaya 2 kez okunmalı. Böylece yanlış/eksik okunan barkodlar aramaya gitmez.
+function makeScanAcceptor(onAccept) {
+  let last = '', count = 0, done = false;
+  return function (decodedText, decodedResult) {
+    if (done) return;
+    const text = String(decodedText || '').trim();
+    if (!text) return;
+    const fmt = (decodedResult && decodedResult.result && decodedResult.result.format && decodedResult.result.format.formatName) || '';
+    if (/^(EAN_13|EAN_8|UPC_A)$/.test(fmt) && !isValidGtinChecksum(text)) { last = ''; count = 0; return; }
+    if (text === last) count++; else { last = text; count = 1; }
+    if (count >= 2) { done = true; onAccept(text); }
+  };
+}
+
+// Süresiz asılı kalan (ölü proxy vb.) istekleri keser
+function fetchWithTimeout(url, opts, ms) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms || 6000);
+  return fetch(url, Object.assign({}, opts || {}, { signal: ctrl.signal })).finally(() => clearTimeout(t));
+}
+
+// Hiçbir veritabanında çıkmayan barkodlar için elle bakma bağlantıları
+function barcodeWebSearchLinks(code) {
+  const q = encodeURIComponent(code);
+  return `<a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener">Google</a> / ` +
+         `<a href="https://www.trendyol.com/sr?q=${q}" target="_blank" rel="noopener">Trendyol</a> / ` +
+         `<a href="https://www.hepsiburada.com/ara?q=${q}" target="_blank" rel="noopener">Hepsiburada</a>`;
+}
+
+async function fileToResizedBase64(file, maxSide) {
+  maxSide = maxSide || 1024;
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error('Fotoğraf açılamadı.'));
+      i.src = url;
+    });
+    const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * scale);
+    c.height = Math.round(img.height * scale);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+  } finally { URL.revokeObjectURL(url); }
+}
+
+// Ürün ambalajının fotoğrafından marka + ürün adını Gemini (görsel okuma) ile çıkarır.
+// İnternet araması (Search) kullanmadığı için o özelliğin düşük kotasına takılmaz.
+async function identifyProductFromPhoto(file) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return { error: 'Google API anahtarı girilmemiş (sağ üstteki 🔑 API Key butonu).' };
+  let b64;
+  try { b64 = await fileToResizedBase64(file); } catch (e) { return { error: e.message || 'Fotoğraf okunamadı.' }; }
+  const prompt = `Bu fotoğraf, Türkiye'de satılan bir hırdavat/nalbur/yapı malzemesi ürününün ambalajı veya etiketi.
+Üzerinde YAZAN marka, ürün adı, model ve ölçü/miktar bilgisine bakarak ürünü tanımla.
+Bulursan SADECE şu JSON'u döndür:
+{"found":true,"name":"Marka + ürün adı + model/ölçü (kısa, Türkçe, satış etiketi gibi)","brand":"marka","barcode":"fotoğrafta barkodun altındaki rakamlar okunuyorsa yaz, yoksa boş bırak"}
+Yazılar okunmuyorsa: {"found":false}
+Görünmeyen hiçbir bilgiyi uydurma. JSON dışında hiçbir şey yazma.`;
+  const models = await getGeminiCandidateModels(apiKey);
+  let lastError = '';
+  for (const model of models) {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=` + encodeURIComponent(apiKey.trim());
+    try {
+      const resp = await fetchWithTimeout(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: prompt }, { inline_data: { mime_type: 'image/jpeg', data: b64 } }] }],
+          generationConfig: { temperature: 0 }
+        })
+      }, 30000);
+      const data = await resp.json().catch(() => null);
+      if (!resp.ok || !data || data.error) {
+        lastError += (lastError ? ' | ' : '') + model + ': ' + (((data && data.error && data.error.message) || ('HTTP ' + resp.status)).slice(0, 140));
+        continue;
+      }
+      const parts = (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [];
+      const text = parts.map(p => p.text || '').join('').trim();
+      const m = text.match(/\{[\s\S]*\}/);
+      if (m) {
+        try {
+          const j = JSON.parse(m[0]);
+          if (j && j.found && j.name) return { title: String(j.name).trim(), brand: j.brand || null, barcode: String(j.barcode || '').replace(/[^0-9]/g, '') };
+          return { error: 'Fotoğraftaki yazılardan ürün tanınamadı. Ürünün ön yüzünü, yazıların net göründüğü şekilde çekin.' };
+        } catch (e) { /* JSON bozuk, aşağıda ham cevap */ }
+      }
+      return { error: 'Yapay zekanın cevabı anlaşılamadı: ' + (text || '(boş cevap)').slice(0, 160) };
+    } catch (e) {
+      lastError += (lastError ? ' | ' : '') + model + ': ' + (((e && e.message) || String(e)).slice(0, 140));
+    }
+  }
+  return { error: 'Yapay zeka fotoğrafı okuyamadı: ' + lastError };
+}
+
+// Ürün Ekle ekranı: fotoğraftan isim doldur
+async function lookupBarcodeFromPhoto(input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  const statusEl = document.getElementById('f-barcode-lookup-status');
+  const nameEl = document.getElementById('f-name');
+  const lookupEl = document.getElementById('f-barcode-lookup');
+  statusEl.textContent = 'Fotoğraf okunuyor... (yapay zeka ürünü tanıyor, birkaç saniye sürer)';
+  const r = await identifyProductFromPhoto(file);
+  if (r.title) {
+    nameEl.value = r.title;
+    if (typeof checkNameDuplicate === 'function') checkNameDuplicate();
+    let extra = '';
+    if (r.barcode && isValidGtinChecksum(r.barcode) && !lookupEl.value.trim()) {
+      lookupEl.value = r.barcode;
+      document.getElementById('f-code').value = r.barcode;
+      extra = ` Fotoğraftaki barkod (${r.barcode}) da dolduruldu.`;
+    }
+    statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">📸 Fotoğraftan tanındı: "${r.title}"${r.brand ? ' — ' + r.brand : ''}.</span> <b>Lütfen adı kontrol edin</b>.${extra}`;
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--rust);">📸 ${r.error}</span>`;
+  }
+}
+
+// Malzeme Fişi ekranı: fotoğraftan isim doldur
+async function lookupFisBarcodeFromPhoto(input) {
+  const file = input.files && input.files[0];
+  input.value = '';
+  if (!file) return;
+  const statusEl = document.getElementById('fis-barcode-lookup-status');
+  const lookupEl = document.getElementById('fis-barcode-lookup');
+  statusEl.textContent = 'Fotoğraf okunuyor... (yapay zeka ürünü tanıyor, birkaç saniye sürer)';
+  const r = await identifyProductFromPhoto(file);
+  if (r.title) {
+    let code = lookupEl.value.trim();
+    if (!code && r.barcode && isValidGtinChecksum(r.barcode)) { code = r.barcode; lookupEl.value = code; }
+    if (code) setFisPendingBarcode(code);
+    document.getElementById('fis-product').value = r.title;
+    checkFisProductMatch();
+    statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">📸 Fotoğraftan tanındı: "${r.title}"${r.brand ? ' — ' + r.brand : ''}.</span> <b>Lütfen adı kontrol edin</b>, YENİ ÜRÜN bilgilerini doldurup fişe ekleyin.${code ? ` Barkod (${code}) ürün kodu olarak kullanılacak.` : ''}`;
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--rust);">📸 ${r.error}</span>`;
+  }
+}
+
 let barcodeLookupScanner = null;
 
 function openBarcodeLookupScanner() {
@@ -580,11 +739,11 @@ function openBarcodeLookupScanner() {
         Html5QrcodeSupportedFormats.CODE_128
       ]
     },
-    (decodedText) => {
+    makeScanAcceptor((decodedText) => {
       document.getElementById('f-barcode-lookup').value = decodedText;
       closeBarcodeLookupScanner();
       lookupBarcode();
-    },
+    }),
     () => {}
   ).catch((err) => {
     document.getElementById('f-barcode-lookup-status').innerHTML =
@@ -621,7 +780,7 @@ function openFisBarcodeScanner(target) {
         Html5QrcodeSupportedFormats.CODE_128
       ]
     },
-    (decodedText) => {
+    makeScanAcceptor((decodedText) => {
       closeFisBarcodeScanner();
       if (_barcodeScanTarget === 're-add') {
         document.getElementById('re-add-barcode').value = decodedText;
@@ -630,7 +789,7 @@ function openFisBarcodeScanner(target) {
         document.getElementById('fis-barcode-lookup').value = decodedText;
         lookupFisBarcode();
       }
-    },
+    }),
     () => {}
   ).catch((err) => {
     document.getElementById('fis-barcode-lookup-status').innerHTML =
@@ -671,7 +830,7 @@ async function fetchOpenFoodFacts(code) {
   const hosts = ['world.openfoodfacts.org', 'world.openproductsfacts.org', 'world.openbeautyfacts.org'];
   for (const host of hosts) {
     try {
-      const resp = await fetch(`https://${host}/api/v2/product/${encodeURIComponent(code)}.json`);
+      const resp = await fetchWithTimeout(`https://${host}/api/v2/product/${encodeURIComponent(code)}.json`, {}, 6000);
       if (!resp.ok) continue;
       const data = await resp.json();
       if (data && data.status === 1 && data.product) {
@@ -778,7 +937,7 @@ async function fetchUpcItemDb(code) {
   let lastErr = null;
   for (const attempt of attempts) {
     try {
-      const resp = await fetch(attempt.url);
+      const resp = await fetchWithTimeout(attempt.url, {}, 6000);
       if (attempt.wrapper === 'allorigins') {
         const wrapperData = await resp.json();
         const httpCode = wrapperData && wrapperData.status ? wrapperData.status.http_code : resp.status;
@@ -904,7 +1063,7 @@ async function lookupFisBarcode() {
       if (await tryFisGeminiFallback(code, statusEl)) return;
       setFisPendingBarcode(code);
       checkFisProductMatch();
-      statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod hiçbir yerde bulunamadı. Malzeme adını elle girip fişe ekleyin — barkod (${code}) yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
+      statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod hiçbir yerde bulunamadı. <b>📸 Fotoğraftan Bul</b> ile deneyin ya da bakın: ${barcodeWebSearchLinks(code)}. Malzeme adını elle girip fişe ekleyin — barkod (${code}) yine de ürün kodu olarak kaydedilecek, bir dahaki sefere otomatik tanınacak.</span>`;
     }
   } catch (err) {
     if (await tryFisGeminiFallback(code, statusEl)) return;
@@ -1003,7 +1162,9 @@ async function lookupBarcode(opts) {
     }
   }
 
-  statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod (${code}) hiçbir kaynakta bulunamadı.</span>${aiNote ? `<br><span style="color:var(--rust);">🤖 ${aiNote}</span>` : ''}<br><span style="color:var(--steel);">Barkod numarası dolduruldu — <b>ürün adını bir kez elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
+  const csNote = (numericCode === code && /^\d{8}$|^\d{12,14}$/.test(code) && !isValidGtinChecksum(code))
+    ? '<br><span style="color:var(--rust); font-weight:600;">⚠️ Bu barkodun kontrol basamağı tutmuyor — yanlış okunmuş veya yanlış yazılmış olabilir, tekrar okutun.</span>' : '';
+  statusEl.innerHTML = `<span style="color:var(--steel);">Bu barkod (${code}) hiçbir kaynakta bulunamadı.</span>${csNote}${aiNote ? `<br><span style="color:var(--rust);">🤖 ${aiNote}</span>` : ''}<br><span style="color:var(--steel);">📸 <b>Fotoğraftan Bul</b> butonuyla ürünün ön yüzünü çektirin ya da kendiniz bakın: ${barcodeWebSearchLinks(code)}.</span><br><span style="color:var(--steel);">Barkod numarası dolduruldu — <b>ürün adını bir kez elle girip kaydedin, bir dahaki sefere bu barkod otomatik tanınacak.</b></span>`;
 }
 
 // OTOMATİK BARKOD ARAMA
