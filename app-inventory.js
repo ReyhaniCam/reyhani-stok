@@ -3262,8 +3262,8 @@ function buildReceiptsContextForAI(queryText) {
   picked.sort((a, b) => (b.date + ' ' + b.time).localeCompare(a.date + ' ' + a.time));
 
   const out = picked.map(x => ({
-    tarih: x.date, saat: x.time, toptanci: x.r.wholesalerName || '-', fisNo: x.r.fisNo || null,
-    toplam: x.r.total, not: x.r.note || null, giren: x.r.processedBy || null,
+    fisId: x.id, tarih: x.date, saat: x.time, toptanci: x.r.wholesalerName || '-', fisNo: x.r.fisNo || null,
+    borcaIslendi: !!x.r.addedToDebt, toplam: x.r.total, not: x.r.note || null, giren: x.r.processedBy || null,
     kalemler: (x.r.items || []).slice(0, 40).map(i => `${i.name} x${i.qty} ${i.unit || 'Adet'}` + (i.cost ? ` (alış ${i.cost})` : ''))
   }));
   let txt = JSON.stringify(out);
@@ -3294,6 +3294,72 @@ function buildMovementsContextForAI(queryText) {
   let txt = lines.join('\n');
   if (txt.length > 24000) txt = txt.slice(0, 24000) + '\n...(kısaltıldı)';
   return txt + `\n(Not: Son 30 günde toplam ${all.length} hareket var, en yeni/eşleşen ${picked.length} tanesi gösterildi. Sütunlar: tarih saat | kod | ürün | değişim | işlem tipi | işlemi yapan)`;
+}
+
+// Toptancılar ve cari hesap ekstreleri (SADECE yönetici): her toptancının borcu + sorguda adı geçenlerin son hareketleri
+function buildWholesalersContextForAI(queryText) {
+  const keys = Object.keys(wholesalersData || {});
+  if (!keys.length) return 'Toptancı verisi bulunamadı.';
+  const msg = aiNormText(queryText || '');
+  const generic = new Set(['toptan', 'toptanci', 'ticaret', 'insaat', 'hirdavat', 'sanayi', 'limited', 'sirketi', 'ltd', 'sti', 'san', 'tic', 'pazarlama', 'gida', 'yapi']);
+  const matched = new Set();
+  keys.forEach(k => {
+    const toks = aiNormText((wholesalersData[k] || {}).name || '').split(/\s+/).filter(t => t.length >= 3 && !generic.has(t));
+    if (toks.length && toks.some(t => msg.includes(t))) matched.add(k);
+  });
+  const out = keys.map(k => {
+    const w = wholesalersData[k] || {};
+    const row = { key: k, ad: w.name || '-', durum: w.status || null, borc: Math.round(-(Number(w.balance) || 0) * 100) / 100 };
+    if (matched.has(k)) {
+      const txs = w.transactions || {};
+      row.sonHareketler = Object.keys(txs).sort().slice(-60).map(id => {
+        const t = txs[id] || {};
+        return { tarih: t.date || '', tur: t.type === 'borc' ? 'borç' : 'ödeme', tutar: Number(t.amount) || 0, aciklama: t.desc || '' };
+      });
+    }
+    return row;
+  });
+  let txt = JSON.stringify(out);
+  if (txt.length > 30000) txt = txt.slice(0, 30000) + '...(kısaltıldı)';
+  return txt + '\n(Not: "borc" = bizim toptancıya olan borcumuz (TL). "sonHareketler" yalnızca kullanıcının mesajında adı geçen toptancılar için verilir, en eski → en yeni sıralıdır.)';
+}
+
+// Asistan komutuyla toptancı ekstresine hareket ekler (SADECE yönetici, kullanıcı onayıyla)
+function handleAIWholesalerEntry(parsed) {
+  if (currentRole !== 'admin') {
+    addAIChatBubble('bot', 'Toptancı ekstresine kayıt girmek için yönetici girişi gerekiyor.', 'error');
+    return;
+  }
+  const key = parsed.wholesalerKey;
+  const w = wholesalersData[key];
+  if (!w) { addAIChatBubble('bot', 'Bu toptancıyı bulamadım: ' + key, 'error'); return; }
+  const type = parsed.type === 'odeme' ? 'odeme' : (parsed.type === 'borc' ? 'borc' : null);
+  const amount = Math.round(Number(parsed.amount) * 100) / 100;
+  if (!type || !(amount > 0)) { addAIChatBubble('bot', 'Tür (borç/ödeme) veya tutar geçersiz, işlem yapılmadı.', 'error'); return; }
+  const desc = String(parsed.desc || '').trim() || (type === 'borc' ? 'Borç kaydı (Asistan)' : 'Ödeme (Asistan)');
+  const iso = /^\d{4}-\d{2}-\d{2}$/.test(String(parsed.date || '')) ? parsed.date : new Date().toISOString().slice(0, 10);
+  const updateBalance = parsed.updateBalance !== false;
+  const curDebt = -(Number(w.balance) || 0);
+  const newDebt = updateBalance ? curDebt + (type === 'borc' ? amount : -amount) : curDebt;
+
+  const dup = Object.values(w.transactions || {}).some(t => t && t.type === type && Math.abs((Number(t.amount) || 0) - amount) < 0.005 && t.desc === desc);
+  const msg = `${w.name}\n\n${type === 'borc' ? 'BORÇ' : 'ÖDEME'}: ₺${formatMoney(amount)}\nAçıklama: ${desc}\nTarih: ${iso.split('-').reverse().join('.')}\n\n` +
+    (updateBalance ? `Bakiye de güncellenecek: borç ₺${formatMoney(curDebt)} → ₺${formatMoney(newDebt)}` : `Sadece ekstre satırı eklenecek, bakiye DEĞİŞMEYECEK (borç ₺${formatMoney(curDebt)} kalır).`) +
+    (dup ? '\n\n⚠️ Ekstrede aynı açıklama ve tutarda bir satır ZATEN var, mükerrer olabilir!' : '') + '\n\nOnaylıyor musunuz?';
+  if (!confirm(msg)) { addAIChatBubble('bot', 'İşlem iptal edildi.'); return; }
+
+  (async () => {
+    try {
+      if (updateBalance) {
+        await dbWholesalers.child(key).child('balance').transaction(cur => Math.round(((cur || 0) + (type === 'borc' ? -amount : amount)) * 100) / 100);
+      }
+      await dbWholesalers.child(key).child('transactions').push({ desc, amount, type, date: ledgerTrFromIso(iso) });
+      addAIChatBubble('bot', `✅ ${w.name} ekstresine işlendi: ${type === 'borc' ? 'borç' : 'ödeme'} ₺${formatMoney(amount)}${updateBalance ? '' : ' (bakiye değişmedi)'}.`);
+    } catch (e) {
+      console.error(e);
+      addAIChatBubble('bot', '❌ Kayıt yapılamadı: ' + ((e && e.message) || e), 'error');
+    }
+  })();
 }
 
 async function sendAIChatMessage() {
@@ -3333,6 +3399,11 @@ async function sendAIChatMessage() {
                      '\n\nSon 30 günün stok hareketleri:\n' + buildMovementsContextForAI(userMessage);
     } catch (e) { console.error('Asistan fiş/hareket bağlamı hazırlanamadı:', e); }
   }
+  if (currentRole === 'admin') {
+    try {
+      extraContext += '\n\nToptancılar ve cari hesap ekstreleri (JSON):\n' + buildWholesalersContextForAI(userMessage);
+    } catch (e) { console.error('Asistan toptancı bağlamı hazırlanamadı:', e); }
+  }
   const systemPrompt = `Sen Reyhani Cam Hırdavat deposunun akıllı asistanısın. Kullanıcıya yardım et.
 Kullanıcının rolü: ${roleInfo}
 ${aiPendingImage ? 'Kullanıcı bir fotoğraf yükledi. Lütfen fotoğrafı analiz et ve hangi modülle ilgili olduğunu tahmin et. Ardından kullanıcıya hangi modülde işlem yapmak istediğini sor. Modül seçenekleri: borç, toptancılar, satış sepeti, malzeme fişi, stok, raporlar, yerleşim, görevler, yeni ürün ekle (rafta/depoda olup sisteme hiç girilmemiş ürünleri toplu AI ile eklemek için). Fotoğraf bir mal giriş fişi ise "malzeme fişi", fotoğraf raf/ürün listesi gibi görünüyor ama fiş değilse "yeni ürün ekle" modülünü öner. Yetkisi yoksa bu modülleri önerme.' : ''}
@@ -3344,13 +3415,17 @@ veya kullanıcı bir ürünün stoğunu artırmak/azaltmak istiyorsa:
 {"action": "update_stock", "code": "ÜRÜN_KODU", "change": sayı (pozitif=ekleme, negatif=azaltma), "reply": "onay mesajı"}
 veya kullanıcı bir ürünün fiyatını değiştirmek istiyorsa:
 {"action": "update_price", "code": "ÜRÜN_KODU", "price": sayı, "reply": "onay mesajı"}
+veya (SADECE yönetici) bir toptancının cari hesap ekstresine borç/ödeme satırı girilmesini istiyorsa:
+{"action": "add_wholesaler_entry", "wholesalerKey": "TOPTANCI_KEY", "type": "borc" veya "odeme", "amount": sayı, "desc": "ekstre açıklaması", "date": "YYYY-MM-DD", "updateBalance": true veya false, "reply": "onay mesajı"}
 veya kullanıcıyı bir modüle yönlendirmek istiyorsan (önce kullanıcıdan onay al, sonra yönlendir):
 {"action": "navigate", "module": "borc|toptanci|siparis|fis|stok|raporlar|yerlesim|gorevler|ekle", "reply": "yönlendirme açıklaması"}
 
 Kurallar:
-- Kullanıcı yetkisi yoksa (ziyaretçi), asla update_stock, update_price veya navigate yapma, sadece stok sorgulama yap.
+- Kullanıcı yetkisi yoksa (ziyaretçi), asla update_stock, update_price veya navigate yapma, sadece stok sorgulama yap. Çalışan yetkisinde toptancı borcu/ekstresi bilgisi verme ve add_wholesaler_entry yapma (bu yönetici verisidir).
 - update_stock/update_price önerirken, "code" gerçek bir ürün kodu olmalı.
 - Ürünü net bulamazsan, action:"none" ile sor.
+- Toptancı ekstresi/borcu sorularında "Toptancılar ve cari hesap ekstreleri" verisine bak; "veri yok" deme. Bir fişin ekstreye yansıyıp yansımadığını, o toptancının sonHareketler listesinde fişin numarası/tutarı/tarihi ile eşleşen bir "borç" satırı olup olmadığına bakarak söyle (fiş açıklaması genelde "Malzeme Fişi: <fişNo veya fisId>" biçimindedir).
+- add_wholesaler_entry SADECE yönetici içindir ve yalnızca kullanıcı açıkça "işle/gir/ekle" gibi bir komut verdiğinde kullanılır; "wholesalerKey" verideki gerçek key olmalı. Eksik bir fiş için: type "borc", amount fiş toplamı, desc "Malzeme Fişi: <fişNo veya fisId>", date fişin tarihi. "updateBalance" için kullanıcıya SOR: toptancının verideki "borc" rakamı bu fişi zaten içeriyorsa false (sadece ekstre satırı), içermiyorsa true (bakiye de artar); kullanıcı net söylemediyse action:"none" ile sor.
 - Modül navigasyonu için önce kullanıcıya sor, onay al, sonra navigate action'ı ile yönlendir.
 - Asla JSON dışında metin yazma, kod bloğu kullanma.
 
@@ -3415,6 +3490,9 @@ ${inventoryContext}${extraContext}`;
     } else if (parsed.action === 'update_price' && parsed.code) {
       addAIChatBubble('bot', parsed.reply || 'Fiyat değişikliği yapmak istiyorum, onaylıyor musunuz?');
       handleAIChatConfirmAction(parsed);
+    } else if (parsed.action === 'add_wholesaler_entry' && parsed.wholesalerKey) {
+      addAIChatBubble('bot', parsed.reply || 'Toptancı ekstresine kayıt girmek istiyorum, onaylıyor musunuz?');
+      handleAIWholesalerEntry(parsed);
     } else if (parsed.action === 'navigate' && parsed.module) {
       addAIChatBubble('bot', parsed.reply || 'Yönlendiriliyor...');
       const tabMap = {
