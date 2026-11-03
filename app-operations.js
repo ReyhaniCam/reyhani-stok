@@ -1186,6 +1186,7 @@ function renderRecentUpdates() {
 }
 
 function switchTab(tabName) {
+  if (typeof enforceDeviceRole === 'function') enforceDeviceRole();
   if(tabName === 'ekle' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'borc' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
@@ -2806,6 +2807,45 @@ function cancelFisEdit() {
   renderGoodsReceiptCart();
 }
 
+// Fişin borcunu toptancı bakiyesine ve ekstresine işler. Hata olursa fırlatır (artık sessiz kalmaz).
+function postReceiptDebtToWholesaler(p) {
+  return new Promise((resolve, reject) => {
+    let seenCur = 0, syncDiff = 0;
+    dbWholesalers.child(p.wKey).child('balance').transaction(cur => {
+      seenCur = Number(cur || 0);
+      let base = seenCur;
+      syncDiff = 0;
+      if (p.syncBalance) { base = -p.slipPrev; syncDiff = base - seenCur; }   // sistem borcunu fişteki eski bakiyeye eşitle
+      return Math.round((base - p.grandTotal) * 100) / 100;                    // + bu fişin mallarını borç olarak ekle
+    }, async (err2, committed) => {
+      if (err2) return reject(new Error('Bakiye güncellenemedi: ' + (err2.message || err2)));
+      if (!committed) return reject(new Error('Bakiye güncellemesi onaylanmadı (bağlantı/yetki sorunu olabilir).'));
+      const tDate = new Date().toLocaleString('tr-TR');
+      try {
+        if (p.syncBalance && Math.abs(syncDiff) > 0.005) {
+          await dbWholesalers.child(p.wKey).child('transactions').push({
+            desc: `Fiş eski bakiye mutabakatı (sistem ₺${formatMoney(-seenCur)} → fiş ₺${formatMoney(p.slipPrev)})`,
+            amount: Math.abs(syncDiff),
+            type: syncDiff < 0 ? 'borc' : 'odeme',
+            date: tDate
+          });
+        }
+        if (p.grandTotal > 0) {
+          await dbWholesalers.child(p.wKey).child('transactions').push({
+            desc: 'Malzeme Fişi: ' + (p.fisNo || p.receiptId),
+            amount: p.grandTotal,
+            type: 'borc',
+            date: tDate
+          });
+        }
+        resolve();
+      } catch (e) {
+        reject(new Error('Bakiye güncellendi ama ekstre satırı yazılamadı: ' + ((e && e.message) || e)));
+      }
+    });
+  });
+}
+
 async function completeGoodsReceipt() {
   try {
     await completeGoodsReceiptCore();
@@ -2853,6 +2893,10 @@ async function completeGoodsReceiptCore() {
 
   let grandTotal = 0;
   goodsReceiptCart.forEach(i => grandTotal += i.total);
+
+  if (addDebt && !(grandTotal > 0) && !syncBalance) {
+    if (!confirm("Bu fişin mal toplamı ₺0 görünüyor (alış fiyatları girilmemiş olabilir).\n\nBu durumda toptancı ekstresine HİÇBİR borç satırı yazılmaz.\n\nYine de devam edilsin mi? (İptal: fişe dönüp fiyatları kontrol edin)")) return;
+  }
 
   const usedCodes = new Set();
   const finalItems = [];
@@ -2951,33 +2995,12 @@ async function completeGoodsReceiptCore() {
         });
       }
       if(addDebt && (grandTotal > 0 || syncBalance)) {
-        let seenCur = 0, syncDiff = 0;
-        dbWholesalers.child(wKey).child('balance').transaction(cur => {
-          seenCur = Number(cur || 0);
-          let base = seenCur;
-          syncDiff = 0;
-          if (syncBalance) { base = -slipPrev; syncDiff = base - seenCur; }   // sistem borcunu fişteki eski bakiyeye eşitle
-          return Math.round((base - grandTotal) * 100) / 100;                 // + bu fişin mallarını borç olarak ekle
-        }, (err2, committed) => {
-          if(err2 || !committed) return;
-          const tDate = new Date().toLocaleString('tr-TR');
-          if (syncBalance && Math.abs(syncDiff) > 0.005) {
-            dbWholesalers.child(wKey).child('transactions').push({
-              desc: `Fiş eski bakiye mutabakatı (sistem ₺${formatMoney(-seenCur)} → fiş ₺${formatMoney(slipPrev)})`,
-              amount: Math.abs(syncDiff),
-              type: syncDiff < 0 ? 'borc' : 'odeme',
-              date: tDate
-            });
-          }
-          if (grandTotal > 0) {
-            dbWholesalers.child(wKey).child('transactions').push({
-              desc: 'Malzeme Fişi: ' + (fisNo || receiptId),
-              amount: grandTotal,
-              type: 'borc',
-              date: tDate
-            });
-          }
-        });
+        postReceiptDebtToWholesaler({ wKey, receiptId, fisNo, grandTotal, syncBalance, slipPrev })
+          .catch(e => {
+            console.error(e);
+            alert("⚠️ Fiş ve stok kaydedildi ama toptancı ekstresine/borcuna işlenirken sorun oldu:\n" + ((e && e.message) || e) +
+                  "\n\nToptancılar > Ekstre ekranındaki \"🛠 Eksik fişleri ekstreye işle\" düğmesiyle tamamlayabilirsiniz.");
+          });
       }
       dbNotifications.push({
         text: `Malzeme Fişi: ${wholesaler.name} firmasından ${finalItems.length} kalem malzeme girişi yapıldı (₺${formatMoney(grandTotal)}).`,
