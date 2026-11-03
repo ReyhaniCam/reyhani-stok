@@ -2118,6 +2118,7 @@ function buildLedgerShell(key) {
         <button class="btn btn-success btn-sm" onclick="ledgerOpenForm('add')">➕ Ekle</button>
         <button class="btn btn-primary btn-sm" onclick="ledgerOpenForm('edit')">✏️ Değiştir</button>
         <button class="btn btn-danger btn-sm" onclick="ledgerDeleteSelected()">❌ Sil</button>
+        <button class="btn btn-dark btn-sm" onclick="repairMissingReceiptEntries()">🛠 Eksik fişleri ekstreye işle</button>
       ` : '<span></span><span></span><span></span>'}
       <button class="btn btn-dark btn-sm" onclick="closeHistory()">⬅ Geri</button>
     </div>
@@ -2203,6 +2204,53 @@ function renderLedger(scrollToEnd) {
 function ledgerSelect(id) {
   ledgerState.selectedId = id;
   document.querySelectorAll('#ledger-body tr.ledger-row').forEach(tr => tr.classList.toggle('ledger-sel', tr.getAttribute('data-id') === id));
+}
+
+
+// ============================================================
+// EKSİK FİŞLERİ EKSTREYE İŞLE: bu toptancıya ait, "borç olarak işle" işaretli ama ekstrede satırı
+// bulunmayan Malzeme Fişlerini bulur ve (onayla) ekstreye / bakiyeye ekler.
+// ============================================================
+async function repairMissingReceiptEntries() {
+  if (currentRole !== 'admin' || !activeWholesalerKey) return;
+  const key = activeWholesalerKey;
+  const w = wholesalersData[key] || {};
+  try {
+    const [txSnap, rcSnap] = await Promise.all([
+      dbWholesalers.child(key).child('transactions').once('value'),
+      dbGoodsReceipts.once('value')
+    ]);
+    const txList = Object.values(txSnap.val() || {});
+    const all = rcSnap.val() || {};
+    const missing = [];
+    Object.keys(all).forEach(date => Object.keys(all[date] || {}).forEach(rid => {
+      const r = all[date][rid];
+      if (!r || r.wholesalerKey !== key || !r.addedToDebt || !(Number(r.total) > 0)) return;
+      const has = txList.some(t => t.desc && (t.desc.includes(rid) || (r.fisNo && t.desc.includes(r.fisNo))));
+      if (!has) missing.push({ date, rid, r });
+    }));
+    if (!missing.length) { alert('Bu toptancı için ekstrede eksik görünen fiş bulunamadı.\n\nFiş "borç olarak işle" kutusu kapalıyken kaydedilmiş ya da başka bir toptancı seçilmiş olabilir.'); return; }
+    missing.sort((a, b) => (a.date + (a.r.time || '')).localeCompare(b.date + (b.r.time || '')));
+    const list = missing.map(m => `• ${m.date} ${m.r.time || ''} — ${m.r.fisNo || m.rid} — ₺${formatMoney(m.r.total)}`).join('\n');
+    const sum = missing.reduce((a, m) => a + Number(m.r.total), 0);
+    if (!confirm(`${w.name || 'Bu toptancı'} için ekstrede satırı OLMAYAN ${missing.length} fiş bulundu:\n\n${list}\n\nToplam: ₺${formatMoney(sum)}\n\nBu fişler ekstreye "Malzeme Fişi" borç satırı olarak eklensin mi?`)) return;
+    const curDebt = -(Number(w.balance) || 0);
+    const addBal = confirm(`Mevcut sistem borcu: ₺${formatMoney(curDebt)}\n\nBu ₺${formatMoney(sum)} tutar toptancı BAKİYESİNE de eklensin mi?\n\nTamam: bakiye de artar (fişler bakiyeye hiç yansımamışsa bunu seçin)\nİptal: sadece ekstre satırları eklenir, bakiye değişmez (toptancı listesindeki borç fişleri zaten içeriyorsa bunu seçin)`);
+    for (const m of missing) {
+      const total = Number(m.r.total);
+      if (addBal) await dbWholesalers.child(key).child('balance').transaction(cur => Math.round(((cur || 0) - total) * 100) / 100);
+      await dbWholesalers.child(key).child('transactions').push({
+        desc: 'Malzeme Fişi: ' + (m.r.fisNo || m.rid),
+        amount: total,
+        type: 'borc',
+        date: ledgerTrFromIso(m.date)
+      });
+    }
+    showToast(`${missing.length} fiş ekstreye işlendi.`);
+  } catch (e) {
+    console.error(e);
+    alert('Eksik fişler işlenirken hata oluştu: ' + ((e && e.message) || e));
+  }
 }
 
 function ledgerNav(dir) {
