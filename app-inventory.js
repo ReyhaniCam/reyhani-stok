@@ -2904,6 +2904,8 @@ async function processDebtReceiptWithAI(event) {
 
     if (aiCustomer) document.getElementById('borc-sale-customer').value = aiCustomer;
     if (aiPhone) document.getElementById('borc-sale-phone').value = aiPhone;
+    // El yazısından okunan isim kayıtlı müşteriyle eşleşiyorsa kayıtlı yazıma çevrilir (benzerse uyarı gösterilir).
+    if (typeof refreshBorcCustomerHint === 'function') refreshBorcCustomerHint(true);
 
     let addedCount = 0;
     const unmatchedNames = [];
