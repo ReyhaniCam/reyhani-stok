@@ -2839,8 +2839,9 @@ function buildCustomerStatement(debts, c) {
     const amount = Number(d.amount || 0);
     const ts = Date.parse(d.createdAt) || Date.parse(d.date) || 0;
     const day = d.date || String(d.createdAt || '').slice(0, 10);
-    const desc = d.description || (d.items ? d.items.map(i => i.name + ' x' + i.qty).join(', ') : '');
-    rows.push({ kind: 'borc', debtKey: k, ts, date: day, desc: desc + (d.dueDate ? ` (Vade: ${ahlTrDate(d.dueDate)})` : '') + (d.senetNo ? ` — Senet No: ${d.senetNo}` : ''), amount });
+    const hasItems = Array.isArray(d.items) && d.items.length > 0;
+    const desc = hasItems ? 'Ürün satışı' : (d.description || '');
+    rows.push({ kind: 'borc', debtKey: k, ts, date: day, items: hasItems ? d.items : null, desc: desc + (d.dueDate ? ` (Vade: ${ahlTrDate(d.dueDate)})` : '') + (d.senetNo ? ` — Senet No: ${d.senetNo}` : ''), amount });
 
     let recorded = 0;
     Object.keys(d.payments || {}).forEach(pid => {
@@ -2881,7 +2882,8 @@ function ahlEnsureShell() {
     </div>
     <div class="ledger-footer" id="ahl-footer"></div>
     <div class="ledger-actions" id="ahl-actions">
-      ${isAdmin ? `<button class="btn btn-success btn-sm" onclick="ahlOpenCollect()">💰 Tahsilat Al</button>` : '<span></span>'}
+      ${isAdmin ? `<button class="btn btn-primary btn-sm" onclick="ahlGoAddProducts()">➕ Ürün / Borç Ekle</button>
+      <button class="btn btn-success btn-sm" onclick="ahlOpenCollect()">💰 Tahsilat Al</button>` : '<span></span>'}
       <button class="btn btn-dark btn-sm" onclick="ahlRowAction('slip')">🖨️ Borç Fişi</button>
       <button class="btn btn-primary btn-sm" onclick="ahlRowAction('invoice')">🧾 A4 Fatura</button>
       <button class="btn btn-warning btn-sm" onclick="ahlRowAction('senet')">🖋️ Senet</button>
@@ -2934,7 +2936,7 @@ function ahlPaintRows() {
   let html = shown.map(({ r, i }) => `<tr class="ledger-row${i === ahlSel ? ' ledger-sel' : ''}" data-i="${i}" onclick="ahlSelect(${i})">
       <td>${ahEsc(ahlTrDate(r.date))}</td>
       <td>${typeLabel[r.kind]}</td>
-      <td class="desc">${ahEsc(r.desc)}</td>
+      <td class="desc">${ahEsc(r.desc)}${ahlItemsHtml(r)}</td>
       <td class="num">${r.kind === 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td>
       <td class="num">${r.kind !== 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td>
       <td class="num">${formatMoney(r.balance)} TL</td></tr>`).join('');
@@ -2948,6 +2950,21 @@ function ahlPaintRows() {
     <span>Bulunan Kayıt = <b>${shown.length}</b></span>`;
 
   if (!q && !ft) { const sc = document.getElementById('ahl-scroll'); if (sc) sc.scrollTop = sc.scrollHeight; }
+}
+
+function ahlItemsHtml(r) {
+  if (!r.items || !r.items.length) return '';
+  return '<div style="font-size:12px; color:#555; margin-top:3px; line-height:1.5;">' + r.items.map(it =>
+    `• ${ahEsc(it.name)} — ${ahEsc(it.qty)} ${ahEsc(it.unit || 'Adet')} × ${formatMoney(it.price)} TL = <b>${formatMoney(it.total != null ? it.total : it.price * it.qty)} TL</b>`
+  ).join('<br>') + '</div>';
+}
+
+// Ekstredeyken yeni ürün eklemek için formu görünür yapar.
+function ahlGoAddProducts() {
+  const modal = document.querySelector('#ah-ledger-modal .modal-content');
+  if (modal) modal.scrollTop = 0;
+  const inp = document.getElementById('ah-ledger-product');
+  if (inp) { inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); inp.focus(); }
 }
 
 function ahlSelect(i) {
@@ -3056,7 +3073,7 @@ function printCustomerLedger() {
   ahlRows.forEach(r => { if (r.kind === 'borc') totB += r.amount; else totO += r.amount; });
   const bal = Math.round((totB - totO) * 100) / 100;
   const typeLabel = { borc: 'Borç', odeme: 'Tahsilat', eski: 'Tahsilat' };
-  const rows = ahlRows.map(r => `<tr><td>${ahEsc(ahlTrDate(r.date))}</td><td>${typeLabel[r.kind]}</td><td>${ahEsc(r.desc)}</td><td class="n">${r.kind === 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td><td class="n">${r.kind !== 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td><td class="n">${formatMoney(r.balance)} TL</td></tr>`).join('');
+  const rows = ahlRows.map(r => `<tr><td>${ahEsc(ahlTrDate(r.date))}</td><td>${typeLabel[r.kind]}</td><td>${ahEsc(r.desc)}${ahlItemsHtml(r)}</td><td class="n">${r.kind === 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td><td class="n">${r.kind !== 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td><td class="n">${formatMoney(r.balance)} TL</td></tr>`).join('');
   const logo = (typeof SENET_LOGO_SRC !== 'undefined') ? `<img src="${SENET_LOGO_SRC}" style="width:22mm;height:22mm;object-fit:cover;border-radius:2mm;">` : '';
   const win = window.open('', '_blank');
   if (!win) { alert('Yazdırma penceresi engellendi. Tarayıcıdan bu site için açılır pencerelere izin verin.'); return; }
