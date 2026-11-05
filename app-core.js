@@ -1825,8 +1825,13 @@ function completeBorcSale() {
     return;
   }
   
-  const customer = document.getElementById('borc-sale-customer').value.trim();
-  const phone = document.getElementById('borc-sale-phone').value.trim();
+  // Kayıtlı müşteri varsa onun yazımı kullanılır: harf/boşluk/telefon farkları yüzünden ayrı kayıt açılmaz.
+  const __ident = resolveCustomerIdentity(
+    document.getElementById('borc-sale-customer').value,
+    document.getElementById('borc-sale-phone').value
+  );
+  const customer = __ident.name;
+  const phone = __ident.phone;
   const termDays = parseInt(document.getElementById('borc-sale-term').value);
   const note = document.getElementById('borc-sale-note').value.trim();
   
@@ -1937,6 +1942,7 @@ function completeBorcSale() {
       document.getElementById('borc-sale-customer').value = '';
       document.getElementById('borc-sale-phone').value = '';
       document.getElementById('borc-sale-note').value = '';
+      refreshBorcCustomerHint(false);
       renderCustomerDebts();
       renderGrid();
 
@@ -2067,6 +2073,7 @@ function renderCustomerDebts() {
               ${currentRole === 'admin' ? `
                 <button class="btn btn-success btn-sm" onclick="payDebt('${key}', ${d.amount})" style="width:auto;">💰 Ödeme Al</button>
                 <button class="btn btn-info btn-sm" onclick="openBorcEditModal('${key}')" style="width:auto;">✏️ Düzenle</button>
+                <button class="btn btn-dark btn-sm" onclick="openLedgerForDebt('${key}')" style="width:auto;">📖 Müşteri Ekstresi</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteCustomerDebt('${key}')" style="width:auto;">🗑️ Sil</button>
                 <button class="btn btn-dark btn-sm" onclick="printDebtSlip('${key}')" style="width:auto;">🖨️ Borç Fişi</button>
                 <button class="btn btn-primary btn-sm" onclick="reprintInvoice('${key}')" style="width:auto;">🧾 A4 Fatura</button>
@@ -2094,31 +2101,52 @@ function renderCustomerDebts() {
   });
 }
 
+// Tahsilat kaydı: borcun kalanını düşer ve müşteri ekstresinde görünmesi için 'payments' altına satır ekler.
+function recordDebtPayment(key, amount, newRemaining, desc, isoDate) {
+  const now = new Date();
+  const iso = isoDate || now.toISOString().slice(0, 10);
+  const createdAt = isoDate ? new Date(iso + 'T' + now.toTimeString().slice(0, 8)).toISOString() : now.toISOString();
+  return Promise.all([
+    dbCustomerDebts.child(key).update({
+      remaining: newRemaining,
+      status: newRemaining <= 0.004 ? 'Kapalı' : 'Kısmi',
+      lastUpdatedBy: getActorLabel()
+    }),
+    dbCustomerDebts.child(key).child('payments').push({
+      amount: amount,
+      desc: desc || 'Tahsilat',
+      date: iso,
+      time: now.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      createdAt: createdAt,
+      by: getActorLabel()
+    })
+  ]);
+}
+
 function payDebt(key, totalAmount) {
   if (currentRole !== 'admin') return;
   const amount = prompt("Alınan ödeme tutarını girin (₺):");
   if (amount === null) return;
-  const parsed = parseFloat(amount);
+  const parsed = parseFloat(String(amount).replace(',', '.'));
   if (isNaN(parsed) || parsed <= 0) { alert("Geçerli bir tutar girin!"); return; }
 
   dbCustomerDebts.child(key).once('value', (snap) => {
     const d = snap.val();
     if (!d) { alert("Borç bulunamadı!"); return; }
 
-    const remaining = d.remaining || d.amount;
-    const newRemaining = Math.max(0, remaining - parsed);
-    const newStatus = newRemaining === 0 ? 'Kapalı' : 'Kısmi';
+    const remaining = d.remaining != null ? Number(d.remaining) : Number(d.amount || 0);
+    if (remaining <= 0.004) { alert("Bu borcun kalan tutarı yok."); return; }
+    if (parsed > remaining + 0.004 &&
+        !confirm(`Girilen tutar (${formatMoney(parsed)}₺) kalan borçtan (${formatMoney(remaining)}₺) fazla.\n\nSadece ${formatMoney(remaining)}₺ tahsilat olarak işlenecek. Devam edilsin mi?`)) return;
 
-    dbCustomerDebts.child(key).update({
-      remaining: newRemaining,
-      status: newStatus,
-      lastUpdatedBy: getActorLabel()
-    }, (err) => {
-      if (!err) {
-        showToast(`${parsed}₺ ödeme alındı! Kalan: ${newRemaining}₺`);
-        renderCustomerDebts();
-      }
-    });
+    const applied = Math.min(parsed, remaining);
+    const newRemaining = Math.round((remaining - applied) * 100) / 100;
+
+    recordDebtPayment(key, applied, newRemaining, 'Tahsilat').then(() => {
+      showToast(`${formatMoney(applied)}₺ ödeme alındı! Kalan: ${formatMoney(newRemaining)}₺`);
+      renderCustomerDebts();
+      if (ahLedgerCustomerKey) renderCustomerLedger();
+    }).catch(err => alert("Ödeme kaydedilemedi: " + (err && err.message ? err.message : err)));
   });
 }
 
@@ -2126,14 +2154,20 @@ function markDebtClosed(key) {
   if (currentRole !== 'admin') return;
   if (!confirm("Bu borcu tamamen kapatmak istediğinize emin misiniz?")) return;
 
-  dbCustomerDebts.child(key).update({
-    remaining: 0,
-    status: 'Kapalı',
-    lastUpdatedBy: getActorLabel()
-  }, (err) => {
-    if (!err) {
+  dbCustomerDebts.child(key).once('value', (snap) => {
+    const d = snap.val();
+    if (!d) return;
+    const remaining = d.remaining != null ? Number(d.remaining) : Number(d.amount || 0);
+    const done = () => {
       showToast("Borç kapatıldı!");
       renderCustomerDebts();
+      if (ahLedgerCustomerKey) renderCustomerLedger();
+    };
+    if (remaining > 0.004) {
+      recordDebtPayment(key, remaining, 0, 'Borç kapatıldı (kalan bakiye)').then(done)
+        .catch(err => alert("Kapatılamadı: " + (err && err.message ? err.message : err)));
+    } else {
+      dbCustomerDebts.child(key).update({ remaining: 0, status: 'Kapalı', lastUpdatedBy: getActorLabel() }, done);
     }
   });
 }
@@ -2267,7 +2301,10 @@ function saveBorcEdit() {
     // Borç kaydını güncelle
     const dueDate = oldData.dueDate || null;
     const term = oldData.term || 'Belirsiz';
-    const status = grandTotal > 0 ? 'Açık' : 'Kapalı';
+    // Daha önce alınmış tahsilatlar korunur (eskiden düzenleme kalanı sıfırlayıp tüm tutarı tekrar borç yapıyordu).
+    const paidSoFar = Math.max(0, Number(oldData.amount || 0) - Number(oldData.remaining != null ? oldData.remaining : (oldData.amount || 0)));
+    const newRemaining = Math.max(0, Math.round((grandTotal - paidSoFar) * 100) / 100);
+    const status = (grandTotal <= 0 || newRemaining <= 0.004) ? 'Kapalı' : (paidSoFar > 0.004 ? 'Kısmi' : 'Açık');
     dbCustomerDebts.child(borcEditKey).update({
       customer,
       phone,
@@ -2281,7 +2318,7 @@ function saveBorcEdit() {
         total: item.total || item.price * item.qty
       })),
       amount: grandTotal,
-      remaining: grandTotal,
+      remaining: newRemaining,
       status: status,
       lastUpdatedBy: 'Yönetici (Düzenlendi)'
     }, (err) => {
@@ -2412,37 +2449,173 @@ let customersData = {};
 
 dbCustomers.on('value', (snapshot) => {
   customersData = snapshot.val() || {};
+  if (typeof updateBorcCustomerDatalist === 'function') updateBorcCustomerDatalist();
   const tab = document.getElementById('tab-acikhesap');
   if (tab && tab.classList.contains('active')) renderCustomerAccounts();
 });
 
+// ------------------------------------------------------------
+// TÜRKÇE UYUMLU İSİM / TELEFON NORMALİZASYONU
+// "Ahmet YILMAZ", "ahmet  yilmaz", "AHMET YILMAZ " ve "Yılmaz Ahmet" aynı müşteri sayılır.
+// (JS'in toLowerCase()'i Türkçe İ/I/ı harflerini yanlış çevirdiği için eskiden eşleşmiyordu.)
+// ------------------------------------------------------------
+function ahEsc(v) {
+  return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function trFold(s) {
+  return String(s == null ? '' : s)
+    .replace(/[İIı]/g, 'i')
+    .toLowerCase()
+    .replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+// Kelime sırasından bağımsız anahtar: "Yılmaz Ahmet" == "Ahmet Yılmaz"
+function nameKey(s) {
+  return trFold(s).split(' ').filter(Boolean).sort().join(' ');
+}
+
+// Telefon: sadece rakamlar, +90 / 0 öneki atılır, son 10 hane karşılaştırılır. Çok kısaysa yok sayılır.
+function normPhone(s) {
+  let d = String(s == null ? '' : s).replace(/\D/g, '');
+  if (d.length >= 12 && d.startsWith('90')) d = d.slice(2);
+  d = d.replace(/^0+/, '');
+  return d.length >= 7 ? d.slice(-10) : '';
+}
+
+// İki (isim, telefon) çifti aynı müşteriye mi ait?
+//  - Telefonlar aynıysa: aynı müşteri.
+//  - İsimler (normalize edilmiş) aynıysa: aynı müşteri; ANCAK iki tarafta da farklı telefon varsa farklı kişi sayılır.
+function sameCustomer(nameA, phoneA, nameB, phoneB) {
+  const pA = normPhone(phoneA), pB = normPhone(phoneB);
+  if (pA && pB && pA === pB) return true;
+  const kA = nameKey(nameA), kB = nameKey(nameB);
+  if (!kA || !kB || kA !== kB) return false;
+  if (pA && pB && pA !== pB) return false;
+  return true;
+}
+
 // Bir borç kaydının, verilen müşteri (isim/telefon) ile eşleşip eşleşmediğini kontrol eder.
-// Telefon numarası varsa telefon üzerinden, yoksa isim üzerinden eşleştirir.
 function matchesCustomer(d, name, phone) {
-  const cleanPhone = (phone || '').replace(/\s+/g, '');
-  if (cleanPhone) {
-    return (d.phone || '').replace(/\s+/g, '') === cleanPhone;
-  }
-  return (d.customer || '').trim().toLowerCase() === (name || '').trim().toLowerCase();
+  return sameCustomer(d.customer, d.phone, name, phone);
 }
 
 // Aynı isim/telefonla kayıtlı bir müşteri var mı diye bakar, varsa kaydının anahtarını döner.
 function findCustomerKey(name, phone) {
-  const cleanPhone = (phone || '').replace(/\s+/g, '');
-  const cleanName = (name || '').trim().toLowerCase();
   const keys = Object.keys(customersData || {});
   for (const k of keys) {
     const c = customersData[k];
-    if (cleanPhone && c.phone && c.phone.replace(/\s+/g, '') === cleanPhone) return k;
-    if (!cleanPhone && c.name && c.name.trim().toLowerCase() === cleanName) return k;
+    if (c && sameCustomer(c.name, c.phone, name, phone)) return k;
   }
   return null;
+}
+
+// Kayıtlı müşteri varsa onun yazımını (ve eksikse telefonunu) döner; yoksa girileni temizleyip döner.
+function resolveCustomerIdentity(name, phone) {
+  const cleanName = String(name || '').trim().replace(/\s+/g, ' ');
+  const cleanPhone = String(phone || '').trim();
+  const key = findCustomerKey(cleanName, cleanPhone);
+  if (!key) return { name: cleanName, phone: cleanPhone, key: null };
+  const c = customersData[key];
+  return { name: c.name || cleanName, phone: cleanPhone || c.phone || '', key };
+}
+
+function ahLev(a, b) {
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// Birebir eşleşmeyen ama benzer görünen kayıtlı müşteriler (sadece ÖNERİ için; otomatik birleştirme yapmaz).
+function similarCustomers(name, phone) {
+  const k = trFold(name);
+  if (!k) return [];
+  const toks = k.split(' ').filter(t => t.length >= 2);
+  const out = [];
+  Object.keys(customersData || {}).forEach(key => {
+    const c = customersData[key];
+    if (!c || sameCustomer(c.name, c.phone, name, phone)) return;
+    const ck = trFold(c.name);
+    if (!ck) return;
+    const ct = ck.split(' ').filter(t => t.length >= 2);
+    const subset = toks.length && ct.length && (toks.every(t => ct.includes(t)) || ct.every(t => toks.includes(t)));
+    const close = Math.min(k.length, ck.length) >= 5 && ahLev(k, ck) <= 2;
+    if (subset || close) out.push({ key, name: c.name, phone: c.phone || '' });
+  });
+  return out.slice(0, 5);
+}
+
+// --- Borç satışı formundaki müşteri adı kutusu: kayıtlı müşteri seçici + uyarı ---
+let borcHintList = [];
+
+function updateBorcCustomerDatalist() {
+  const dl = document.getElementById('borc-customer-datalist');
+  if (!dl) return;
+  dl.innerHTML = Object.values(customersData || {}).map(c => c && c.name).filter(Boolean)
+    .sort((a, b) => a.localeCompare(b, 'tr')).map(n => `<option value="${ahEsc(n)}">`).join('');
+}
+
+function refreshBorcCustomerHint(autoFix) {
+  const nameEl = document.getElementById('borc-sale-customer');
+  const phoneEl = document.getElementById('borc-sale-phone');
+  const hint = document.getElementById('borc-customer-hint');
+  if (!nameEl || !phoneEl || !hint) return;
+  const name = nameEl.value.trim(), phone = phoneEl.value.trim();
+  borcHintList = [];
+  if (!name) { hint.style.display = 'none'; hint.innerHTML = ''; return; }
+
+  const key = findCustomerKey(name, phone);
+  hint.style.display = 'block';
+  if (key) {
+    const c = customersData[key];
+    if (autoFix) {
+      nameEl.value = c.name;
+      if (!phone && c.phone) phoneEl.value = c.phone;
+    }
+    hint.style.color = 'var(--success, #15803D)';
+    hint.innerHTML = `✅ Kayıtlı müşteri: <b>${ahEsc(c.name)}</b>${c.phone ? ' — 📞 ' + ahEsc(c.phone) : ''}. Bu satış aynı hesaba işlenecek.`;
+    return;
+  }
+  borcHintList = similarCustomers(name, phone);
+  if (borcHintList.length) {
+    hint.style.color = 'var(--rust, #B45309)';
+    hint.innerHTML = `⚠️ Bu isimle kayıtlı müşteri yok. Benzer kayıtlar: ` +
+      borcHintList.map((s, i) => `<button type="button" class="btn btn-warning btn-sm" style="width:auto; padding:3px 8px; margin:2px;" onclick="pickBorcCustomerSuggestion(${i})">${ahEsc(s.name)}</button>`).join('') +
+      ` <span style="color:var(--steel);">Aynı kişiyse üstüne tıklayın; değilse yeni müşteri olarak kaydedilir.</span>`;
+  } else {
+    hint.style.color = 'var(--steel)';
+    hint.innerHTML = '🆕 Kayıtlı müşteri bulunamadı — satışta yeni müşteri olarak kaydedilecek.';
+  }
+}
+
+function pickBorcCustomerSuggestion(i) {
+  const s = borcHintList[i];
+  if (!s) return;
+  document.getElementById('borc-sale-customer').value = s.name;
+  if (s.phone) document.getElementById('borc-sale-phone').value = s.phone;
+  refreshBorcCustomerHint(false);
 }
 
 // Borç satışı sırasında girilen müşteri, açık hesap defterinde kayıtlı değilse otomatik olarak ekler.
 function upsertCustomerAccount(name, phone) {
   if (!name) return;
-  if (findCustomerKey(name, phone)) return;
+  const existingKey = findCustomerKey(name, phone);
+  if (existingKey) {
+    const ex = customersData[existingKey];
+    if (ex && !ex.phone && normPhone(phone)) dbCustomers.child(existingKey).update({ phone: phone });
+    return;
+  }
   dbCustomers.push({
     name: name,
     phone: phone || '',
@@ -2494,7 +2667,9 @@ function renderCustomerAccounts() {
   const pagDiv = document.getElementById('ah-pagination');
   if (!listDiv) return;
 
-  const search = (document.getElementById('ah-search').value || '').trim().toLowerCase();
+  const searchRaw = document.getElementById('ah-search').value || '';
+  const search = trFold(searchRaw);
+  const searchDigits = searchRaw.replace(/\D/g, '');
 
   dbCustomerDebts.once('value', (snap) => {
     const debts = snap.val() || {};
@@ -2502,8 +2677,8 @@ function renderCustomerAccounts() {
 
     if (search) {
       entries = entries.filter(c =>
-        (c.name || '').toLowerCase().includes(search) ||
-        (c.phone || '').toLowerCase().includes(search)
+        trFold(c.name).includes(search) ||
+        (searchDigits.length >= 3 && String(c.phone || '').replace(/\D/g, '').includes(searchDigits))
       );
     }
 
@@ -2625,6 +2800,7 @@ function openCustomerLedger(key) {
   ahLedgerCustomerKey = key;
   ahLedgerPage = 1;
   ahLedgerCart = [];
+  ahlResetShell();
   document.getElementById('ah-ledger-product').value = '';
   document.getElementById('ah-ledger-qty').value = '1';
   document.getElementById('ah-ledger-manual-desc').value = '';
@@ -2641,68 +2817,374 @@ function closeCustomerLedger() {
   ahLedgerCart = [];
 }
 
+// ------------------------------------------------------------
+// MÜŞTERİ CARİ HESAP EKSTRESİ (Toptancı ekstresiyle aynı görünüm)
+// Tarih | Tür | Açıklama | Borç | Alacak | Bakiye — altta T. Borç, T. Alacak, Bakiye
+// ------------------------------------------------------------
+let ahlShellReady = false, ahlSel = null, ahlFilterText = '', ahlFilterType = '', ahlRows = [];
+
+function ahlResetShell() { ahlShellReady = false; ahlSel = null; ahlFilterText = ''; ahlFilterType = ''; ahlRows = []; }
+
+function ahlTrDate(iso) {
+  const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : (iso || '-');
+}
+
+// Bir müşterinin borç kayıtlarından (ve onlara bağlı tahsilatlardan) tarih sıralı satır listesi üretir.
+function buildCustomerStatement(debts, c) {
+  const rows = [];
+  Object.keys(debts || {}).forEach(k => {
+    const d = debts[k];
+    if (!d || !matchesCustomer(d, c.name, c.phone)) return;
+    const amount = Number(d.amount || 0);
+    const ts = Date.parse(d.createdAt) || Date.parse(d.date) || 0;
+    const day = d.date || String(d.createdAt || '').slice(0, 10);
+    const desc = d.description || (d.items ? d.items.map(i => i.name + ' x' + i.qty).join(', ') : '');
+    rows.push({ kind: 'borc', debtKey: k, ts, date: day, desc: desc + (d.dueDate ? ` (Vade: ${ahlTrDate(d.dueDate)})` : '') + (d.senetNo ? ` — Senet No: ${d.senetNo}` : ''), amount });
+
+    let recorded = 0;
+    Object.keys(d.payments || {}).forEach(pid => {
+      const p = d.payments[pid] || {};
+      const a = Number(p.amount || 0);
+      recorded += a;
+      rows.push({ kind: 'odeme', debtKey: k, payId: pid, ts: Date.parse(p.createdAt) || (ts + 1), date: p.date || String(p.createdAt || '').slice(0, 10), desc: p.desc || 'Tahsilat', amount: a });
+    });
+    // Ödeme satırı tutulmadan önce yapılmış tahsilatlar (eski kayıtlar) tek satır olarak gösterilir.
+    const rem = d.remaining != null ? Number(d.remaining) : amount;
+    const legacy = Math.round((amount - rem - recorded) * 100) / 100;
+    if (legacy > 0.005) rows.push({ kind: 'eski', debtKey: k, ts: ts + 1, date: day, desc: 'Tahsilat (eski kayıt — ayrıntısı tutulmamış)', amount: legacy });
+  });
+  rows.sort((a, b) => (a.ts - b.ts) || (a.kind === 'borc' ? -1 : 1));
+  let bal = 0;
+  rows.forEach(r => { bal += (r.kind === 'borc' ? r.amount : -r.amount); r.balance = Math.round(bal * 100) / 100; });
+  return rows;
+}
+
+function ahlEnsureShell() {
+  const list = document.getElementById('ah-ledger-list');
+  if (ahlShellReady && document.getElementById('ahl-body')) return;
+  if (typeof injectLedgerStyle === 'function') injectLedgerStyle();
+  document.getElementById('ah-ledger-summary').innerHTML = '';
+  document.getElementById('ah-ledger-pagination').innerHTML = '';
+  const isAdmin = currentRole === 'admin';
+  list.innerHTML = `
+    <div class="ledger-tools">
+      <input type="text" id="ahl-q" placeholder="🔍 Sorgula: açıklama, tutar veya tarih yazın..." oninput="ahlSetFilter()">
+      <select id="ahl-t" onchange="ahlSetFilter()"><option value="">Tümü</option><option value="borc">Borç</option><option value="odeme">Tahsilat</option></select>
+      <button class="btn btn-dark btn-sm" style="width:auto;" onclick="printCustomerLedger()">🖨️ Yazdır</button>
+    </div>
+    <div class="ledger-scroll" id="ahl-scroll">
+      <table class="ledger-table">
+        <thead><tr><th style="width:92px;">Tarih</th><th style="width:110px;">Tür</th><th>Açıklama</th><th class="num" style="width:110px;">Borç</th><th class="num" style="width:110px;">Alacak</th><th class="num" style="width:120px;">Bakiye</th></tr></thead>
+        <tbody id="ahl-body"></tbody>
+      </table>
+    </div>
+    <div class="ledger-footer" id="ahl-footer"></div>
+    <div class="ledger-actions" id="ahl-actions">
+      ${isAdmin ? `<button class="btn btn-success btn-sm" onclick="ahlOpenCollect()">💰 Tahsilat Al</button>` : '<span></span>'}
+      <button class="btn btn-dark btn-sm" onclick="ahlRowAction('slip')">🖨️ Borç Fişi</button>
+      <button class="btn btn-primary btn-sm" onclick="ahlRowAction('invoice')">🧾 A4 Fatura</button>
+      <button class="btn btn-warning btn-sm" onclick="ahlRowAction('senet')">🖋️ Senet</button>
+      ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="ahlDeletePayment()">❌ Tahsilatı Sil</button>` : ''}
+    </div>
+    <div id="ahl-collect-box"></div>
+    <p style="font-size:11px; color:var(--steel); margin:8px 0 0;">Fiş/fatura/senet butonları için önce tablodan ilgili satırı seçin.</p>
+  `;
+  ahlShellReady = true;
+}
+
 function renderCustomerLedger() {
   const c = customersData[ahLedgerCustomerKey];
   if (!c) { closeCustomerLedger(); return; }
   document.getElementById('ah-ledger-title').textContent = '📖 ' + c.name + (c.phone ? ' — 📞 ' + c.phone : '');
 
   dbCustomerDebts.once('value', (snap) => {
-    const debts = snap.val() || {};
-    const txs = Object.keys(debts)
-      .filter(k => matchesCustomer(debts[k], c.name, c.phone))
-      .map(k => ({ key: k, ...debts[k] }))
-      .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    ahlRows = buildCustomerStatement(snap.val() || {}, c);
+    if (ahlSel != null && !ahlRows[ahlSel]) ahlSel = null;
+    ahlEnsureShell();
+    ahlPaintRows();
+  });
+}
 
-    let totalDebt = 0, totalRemaining = 0;
-    txs.forEach(t => {
-      totalDebt += Number(t.amount || 0);
-      totalRemaining += Number(t.remaining != null ? t.remaining : t.amount || 0);
+function ahlSetFilter() {
+  ahlFilterText = (document.getElementById('ahl-q').value || '').trim();
+  ahlFilterType = document.getElementById('ahl-t').value;
+  ahlPaintRows();
+}
+
+function ahlPaintRows() {
+  const body = document.getElementById('ahl-body');
+  if (!body) return;
+  let totB = 0, totO = 0;
+  ahlRows.forEach(r => { if (r.kind === 'borc') totB += r.amount; else totO += r.amount; });
+  const bal = Math.round((totB - totO) * 100) / 100;
+
+  const q = trFold(ahlFilterText), ft = ahlFilterType;
+  const shown = [];
+  ahlRows.forEach((r, i) => {
+    if (ft && (ft === 'borc') !== (r.kind === 'borc')) return;
+    if (q) {
+      const hay = trFold(`${r.desc} ${ahlTrDate(r.date)} ${formatMoney(r.amount)} ${r.amount}`);
+      if (!hay.includes(q)) return;
+    }
+    shown.push({ r, i });
+  });
+
+  const typeLabel = { borc: 'Borç', odeme: 'Tahsilat', eski: 'Tahsilat (eski)' };
+  let html = shown.map(({ r, i }) => `<tr class="ledger-row${i === ahlSel ? ' ledger-sel' : ''}" data-i="${i}" onclick="ahlSelect(${i})">
+      <td>${ahEsc(ahlTrDate(r.date))}</td>
+      <td>${typeLabel[r.kind]}</td>
+      <td class="desc">${ahEsc(r.desc)}</td>
+      <td class="num">${r.kind === 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td>
+      <td class="num">${r.kind !== 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td>
+      <td class="num">${formatMoney(r.balance)} TL</td></tr>`).join('');
+  if (!html) html = '<tr><td colspan="6" style="text-align:center; padding:18px; color:#777;">Kayıt bulunamadı.</td></tr>';
+  body.innerHTML = html;
+
+  document.getElementById('ahl-footer').innerHTML = `
+    <span>T. Borç = <b>${formatMoney(totB)} TL</b></span>
+    <span>T. Alacak = <b>${formatMoney(totO)} TL</b></span>
+    <span>Bakiye = <b style="color:${bal > 0.004 ? 'var(--rust)' : 'var(--success)'}; font-size:15px;">${formatMoney(Math.abs(bal))} TL ${bal > 0.004 ? '(Müşteri Borçlu)' : (bal < -0.004 ? '(Müşteri Alacaklı)' : '(Hesap Kapalı)')}</b></span>
+    <span>Bulunan Kayıt = <b>${shown.length}</b></span>`;
+
+  if (!q && !ft) { const sc = document.getElementById('ahl-scroll'); if (sc) sc.scrollTop = sc.scrollHeight; }
+}
+
+function ahlSelect(i) {
+  ahlSel = i;
+  document.querySelectorAll('#ahl-body tr.ledger-row').forEach(tr => tr.classList.toggle('ledger-sel', Number(tr.getAttribute('data-i')) === i));
+}
+
+function ahlRowAction(kind) {
+  const r = ahlSel != null ? ahlRows[ahlSel] : null;
+  if (!r) { alert('Önce tablodan bir satır seçin.'); return; }
+  if (kind === 'slip') printDebtSlip(r.debtKey);
+  else if (kind === 'invoice') reprintInvoice(r.debtKey);
+  else if (kind === 'senet') printSenet(r.debtKey);
+}
+
+function ahlOpenCollect() {
+  if (currentRole !== 'admin') return;
+  const box = document.getElementById('ahl-collect-box');
+  box.innerHTML = `
+    <div class="ledger-form">
+      <div style="font-weight:800; margin-bottom:8px;">💰 Tahsilat Al <span style="font-weight:400; font-size:11px; color:var(--steel);">(en eski açık borçtan başlayarak düşülür)</span></div>
+      <div class="form-row">
+        <div><label>Tarih</label><input type="date" id="ahl-c-date" value="${new Date().toISOString().slice(0, 10)}"></div>
+        <div><label>Tutar (₺)</label><input type="number" id="ahl-c-amount" step="0.01" min="0.01" placeholder="0.00"></div>
+      </div>
+      <div class="form-row" style="grid-template-columns:1fr;">
+        <div><label>Açıklama</label><input type="text" id="ahl-c-desc" placeholder="Örn: Nakit / Havale / Kredi kartı"></div>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn btn-success btn-sm" onclick="ahlCollect()">💾 Kaydet</button>
+        <button class="btn btn-dark btn-sm" onclick="document.getElementById('ahl-collect-box').innerHTML=''">Vazgeç</button>
+      </div>
+    </div>`;
+  document.getElementById('ahl-c-amount').focus();
+}
+
+async function ahlCollect() {
+  if (currentRole !== 'admin') return;
+  const c = customersData[ahLedgerCustomerKey];
+  if (!c) return;
+  const iso = document.getElementById('ahl-c-date').value;
+  const amount = parseFloat(String(document.getElementById('ahl-c-amount').value).replace(',', '.'));
+  const desc = document.getElementById('ahl-c-desc').value.trim() || 'Tahsilat';
+  if (!iso || isNaN(amount) || amount <= 0) { alert('Lütfen tarih ve geçerli bir tutar girin.'); return; }
+
+  try {
+    const snap = await dbCustomerDebts.once('value');
+    const debts = snap.val() || {};
+    const open = Object.keys(debts)
+      .filter(k => matchesCustomer(debts[k], c.name, c.phone))
+      .map(k => ({ k, d: debts[k], rem: debts[k].remaining != null ? Number(debts[k].remaining) : Number(debts[k].amount || 0) }))
+      .filter(x => x.rem > 0.004)
+      .sort((a, b) => (a.d.createdAt || '').localeCompare(b.d.createdAt || ''));
+    const totalOpen = open.reduce((s, x) => s + x.rem, 0);
+    if (!open.length) { alert('Bu müşterinin açık borcu yok.'); return; }
+    if (amount > totalOpen + 0.004) { alert(`Tahsilat tutarı (${formatMoney(amount)}₺) açık bakiyeden (${formatMoney(totalOpen)}₺) fazla olamaz.`); return; }
+
+    let left = amount;
+    for (const x of open) {
+      if (left <= 0.004) break;
+      const pay = Math.min(x.rem, left);
+      await recordDebtPayment(x.k, Math.round(pay * 100) / 100, Math.round((x.rem - pay) * 100) / 100, desc, iso);
+      left = Math.round((left - pay) * 100) / 100;
+    }
+    showToast(`${formatMoney(amount)}₺ tahsilat işlendi.`);
+    document.getElementById('ahl-collect-box').innerHTML = '';
+    renderCustomerLedger();
+    renderCustomerAccounts();
+    renderCustomerDebts();
+  } catch (e) {
+    alert('Tahsilat kaydedilemedi: ' + (e && e.message ? e.message : e));
+  }
+}
+
+async function ahlDeletePayment() {
+  if (currentRole !== 'admin') return;
+  const r = ahlSel != null ? ahlRows[ahlSel] : null;
+  if (!r || r.kind !== 'odeme') {
+    alert(r && r.kind === 'eski' ? 'Eski kayıttan gelen toplu tahsilat satırı silinemez.' : 'Silmek için tablodan bir "Tahsilat" satırı seçin.');
+    return;
+  }
+  if (!confirm(`Bu tahsilat silinsin mi?\n\n${ahlTrDate(r.date)} — ${r.desc}\n${formatMoney(r.amount)} TL\n\nTutar ilgili borcun kalanına geri eklenecek.`)) return;
+  try {
+    const snap = await dbCustomerDebts.child(r.debtKey).once('value');
+    const d = snap.val();
+    if (!d) { alert('Borç kaydı bulunamadı.'); return; }
+    const amount = Number(d.amount || 0);
+    const rem = d.remaining != null ? Number(d.remaining) : amount;
+    const newRem = Math.min(amount, Math.round((rem + r.amount) * 100) / 100);
+    await dbCustomerDebts.child(r.debtKey).update({ remaining: newRem, status: newRem >= amount - 0.004 ? 'Açık' : 'Kısmi', lastUpdatedBy: getActorLabel() });
+    await dbCustomerDebts.child(r.debtKey).child('payments').child(r.payId).remove();
+    ahlSel = null;
+    showToast('Tahsilat silindi, borç kalanı düzeltildi.');
+    renderCustomerLedger();
+    renderCustomerAccounts();
+    renderCustomerDebts();
+  } catch (e) {
+    alert('Silinemedi: ' + (e && e.message ? e.message : e));
+  }
+}
+
+function printCustomerLedger() {
+  const c = customersData[ahLedgerCustomerKey];
+  if (!c) return;
+  let totB = 0, totO = 0;
+  ahlRows.forEach(r => { if (r.kind === 'borc') totB += r.amount; else totO += r.amount; });
+  const bal = Math.round((totB - totO) * 100) / 100;
+  const typeLabel = { borc: 'Borç', odeme: 'Tahsilat', eski: 'Tahsilat' };
+  const rows = ahlRows.map(r => `<tr><td>${ahEsc(ahlTrDate(r.date))}</td><td>${typeLabel[r.kind]}</td><td>${ahEsc(r.desc)}</td><td class="n">${r.kind === 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td><td class="n">${r.kind !== 'borc' ? formatMoney(r.amount) + ' TL' : ''}</td><td class="n">${formatMoney(r.balance)} TL</td></tr>`).join('');
+  const logo = (typeof SENET_LOGO_SRC !== 'undefined') ? `<img src="${SENET_LOGO_SRC}" style="width:22mm;height:22mm;object-fit:cover;border-radius:2mm;">` : '';
+  const win = window.open('', '_blank');
+  if (!win) { alert('Yazdırma penceresi engellendi. Tarayıcıdan bu site için açılır pencerelere izin verin.'); return; }
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${ahEsc(c.name)} - Cari Ekstre</title>
+    <style>@page{size:A4;margin:12mm} body{font-family:Arial,sans-serif;color:#111;font-size:12px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .h{display:flex;align-items:center;gap:6mm;border-bottom:2px solid #26282B;padding-bottom:4mm;margin-bottom:4mm}
+    h1{margin:0;font-size:18px;letter-spacing:1px} .sub{color:#555;font-size:11px;margin-top:1mm}
+    table{width:100%;border-collapse:collapse} th{background:#26282B;color:#fff;text-align:left;padding:5px 6px;font-size:11px} td{padding:4px 6px;border-bottom:1px solid #ddd}
+    .n{text-align:right;white-space:nowrap} tr{page-break-inside:avoid} .t{margin-top:5mm;display:flex;justify-content:flex-end;gap:10mm;font-size:13px}</style></head><body>
+    <div class="h">${logo}<div><h1>${ahEsc(c.name)}</h1><div class="sub">${c.phone ? '📞 ' + ahEsc(c.phone) + ' — ' : ''}Müşteri Cari Hesap Ekstresi — REYHANİ CAM HIRDAVAT — ${new Date().toLocaleDateString('tr-TR')}</div></div></div>
+    <table><thead><tr><th style="width:80px">Tarih</th><th style="width:70px">Tür</th><th>Açıklama</th><th class="n" style="width:95px">Borç</th><th class="n" style="width:95px">Alacak</th><th class="n" style="width:100px">Bakiye</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="t"><span>T. Borç: <b>${formatMoney(totB)} TL</b></span><span>T. Alacak: <b>${formatMoney(totO)} TL</b></span><span>Bakiye: <b>${formatMoney(Math.abs(bal))} TL ${bal > 0.004 ? '(Müşteri Borçlu)' : (bal < -0.004 ? '(Müşteri Alacaklı)' : '')}</b></span></div>
+    </body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 400);
+}
+
+// Borç listesindeki bir kayıttan, o müşterinin ekstresini açar (kart yoksa otomatik oluşturur).
+function openLedgerForDebt(debtKey) {
+  dbCustomerDebts.child(debtKey).once('value', (snap) => {
+    const d = snap.val();
+    if (!d) return;
+    let key = findCustomerKey(d.customer, d.phone);
+    if (!key) {
+      const obj = { name: d.customer, phone: d.phone || '', address: '', tckn: '', note: '', createdAt: new Date().toISOString(), createdBy: getActorLabel(), autoCreated: true };
+      const ref = dbCustomers.push(obj);
+      key = ref.key;
+      customersData[key] = obj;
+    }
+    openCustomerLedger(key);
+  });
+}
+
+// Mevcut mükerrer kayıtları (harf/boşluk/kelime sırası/telefon farkıyla ayrı yazılmış) tek isimde birleştirir.
+async function mergeDuplicateCustomers() {
+  if (currentRole !== 'admin') { alert('Bu işlem için yönetici yetkisi gerekir!'); return; }
+  try {
+    const snap = await dbCustomerDebts.once('value');
+    const debts = snap.val() || {};
+    const ents = [];
+    Object.keys(customersData || {}).forEach(k => ents.push({ t: 'card', k, name: customersData[k].name || '', phone: customersData[k].phone || '' }));
+    Object.keys(debts).forEach(k => ents.push({ t: 'debt', k, name: debts[k].customer || '', phone: debts[k].phone || '' }));
+    ents.forEach(e => { e.nk = nameKey(e.name); e.np = normPhone(e.phone); });
+
+    const parent = ents.map((_, i) => i);
+    const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const union = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[b] = a; };
+
+    // 1) aynı telefon = aynı müşteri
+    const byPhone = {};
+    ents.forEach((e, i) => { if (e.np) { if (byPhone[e.np] != null) union(byPhone[e.np], i); else byPhone[e.np] = i; } });
+    // 2) aynı (normalize) isim: tek bir telefon varsa hepsini birleştir; birden fazla farklı telefon varsa telefonsuzlar kendi aralarında kalır (karışıklık riskine karşı)
+    const byName = {};
+    ents.forEach((e, i) => { if (e.nk) (byName[e.nk] = byName[e.nk] || []).push(i); });
+    Object.values(byName).forEach(idxs => {
+      const phones = new Set(idxs.map(i => ents[i].np).filter(Boolean));
+      if (phones.size <= 1) idxs.forEach(i => union(idxs[0], i));
+      else { const blanks = idxs.filter(i => !ents[i].np); blanks.forEach(i => union(blanks[0], i)); }
     });
 
-    document.getElementById('ah-ledger-summary').innerHTML = `
-      <div style="background:var(--bg); border:1px solid var(--steel-line); border-radius:var(--radius); padding:12px; margin-bottom:14px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; font-size:13px;">
-        <span><strong>${txs.length}</strong> işlem kaydı</span>
-        <span>Toplam: <strong>${formatMoney(totalDebt)}₺</strong></span>
-        <span>Kalan: <strong style="color:${totalRemaining > 0 ? 'var(--rust)' : 'var(--success)'}">${formatMoney(totalRemaining)}₺</strong></span>
-      </div>
-    `;
+    const groups = {};
+    ents.forEach((e, i) => { (groups[find(i)] = groups[find(i)] || []).push(e); });
 
-    const totalPages = Math.max(1, Math.ceil(txs.length / AH_LEDGER_PAGE_SIZE));
-    if (ahLedgerPage > totalPages) ahLedgerPage = totalPages;
-    if (ahLedgerPage < 1) ahLedgerPage = 1;
-    const pageTxs = txs.slice((ahLedgerPage - 1) * AH_LEDGER_PAGE_SIZE, ahLedgerPage * AH_LEDGER_PAGE_SIZE);
+    const plans = [];
+    Object.values(groups).forEach(g => {
+      const names = new Set(g.map(e => e.name.trim()));
+      const cards = g.filter(e => e.t === 'card');
+      if (names.size <= 1 && cards.length <= 1) return; // zaten tutarlı
+      // standart isim: kart varsa kartınki; yoksa en çok kullanılan yazım
+      let canon;
+      if (cards.length) {
+        canon = cards.slice().sort((a, b) => g.filter(e => e.name === b.name).length - g.filter(e => e.name === a.name).length)[0];
+      }
+      const canonName = canon ? canon.name : (() => {
+        const cnt = {}; g.forEach(e => { const n = e.name.trim(); cnt[n] = (cnt[n] || 0) + 1; });
+        return Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || b.length - a.length)[0];
+      })();
+      const canonPhone = (canon && canon.phone) || (g.find(e => e.phone) || {}).phone || '';
+      plans.push({ g, canonName, canonPhone, canonCard: canon || null });
+    });
 
-    const listDiv = document.getElementById('ah-ledger-list');
-    if (txs.length === 0) {
-      listDiv.innerHTML = '<p style="color:var(--steel); font-size:13px; text-align:center;">Bu müşteriye ait işlem yok.</p>';
-    } else {
-      listDiv.innerHTML = pageTxs.map(d => `
-        <div class="tag" style="margin-bottom:10px;">
-          <div class="tag-title">📅 ${d.date || ''} ${d.time || ''}</div>
-          <div class="tag-code">
-            📝 ${d.description || (d.items ? d.items.map(i => i.name + ' x' + i.qty).join(', ') : '')}
-            <br>💰 ${formatMoney(d.amount)}₺ ${d.remaining != null && d.remaining !== d.amount ? '| Kalan: ' + formatMoney(d.remaining) + '₺' : ''}
-            ${d.status === 'Açık' ? ' | 🔴 Açık' : d.status === 'Kısmi' ? ' | 🟡 Kısmi' : ' | 🟢 Kapalı'}
-            ${d.dueDate ? ' | ⏰ Vade: ' + d.dueDate : ''}
-            ${d.senetNo ? '<br>🖋️ Senet No: ' + d.senetNo + ' (' + (d.senetDate || '') + ')' : ''}
-          </div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;">
-            <button class="btn btn-dark btn-sm" style="width:auto;" onclick="printDebtSlip('${d.key}')">🖨️ Borç Fişi</button>
-            ${d.items && d.items.length ? `<button class="btn btn-primary btn-sm" style="width:auto;" onclick="reprintInvoice('${d.key}')">🧾 A4 Fatura</button>` : ''}
-            <button class="btn btn-warning btn-sm" style="width:auto;" onclick="printSenet('${d.key}')">🖋️ Senet Yazdır</button>
-          </div>
-        </div>
-      `).join('');
+    if (!plans.length) { alert('Birleştirilecek mükerrer müşteri/borç kaydı bulunamadı.'); return; }
+
+    const preview = plans.slice(0, 12).map(p => {
+      const others = {};
+      p.g.forEach(e => { const n = e.name.trim(); if (n !== p.canonName) others[n] = (others[n] || 0) + 1; });
+      const dupCards = p.g.filter(e => e.t === 'card').length - (p.canonCard ? 1 : 0);
+      const parts = Object.keys(others).map(n => `"${n}" (${others[n]})`);
+      if (dupCards > 0) parts.push(`${dupCards} yinelenen müşteri kartı`);
+      return `• "${p.canonName}" ← ${parts.join(', ') || 'kart/telefon bilgisi tamamlanacak'}`;
+    }).join('\n');
+    if (!confirm(`${plans.length} müşteri grubunda birleştirme yapılacak:\n\n${preview}${plans.length > 12 ? `\n… ve ${plans.length - 12} grup daha` : ''}\n\nBorç kayıtlarındaki isimler standart isme çevrilecek, yinelenen müşteri kartları tek karta indirilecek. Tutarlara ve ödemelere dokunulmaz. Devam edilsin mi?`)) return;
+
+    let changedDebts = 0, removedCards = 0;
+    for (const p of plans) {
+      for (const e of p.g) {
+        if (e.t === 'debt') {
+          const upd = {};
+          if (e.name !== p.canonName) upd.customer = p.canonName;
+          if (!e.phone && p.canonPhone) upd.phone = p.canonPhone;
+          if (Object.keys(upd).length) { await dbCustomerDebts.child(e.k).update(upd); changedDebts++; }
+        }
+      }
+      const cards = p.g.filter(e => e.t === 'card');
+      if (cards.length) {
+        const keep = p.canonCard || cards[0];
+        const merged = {};
+        ['phone', 'address', 'tckn', 'note'].forEach(f => {
+          if (!customersData[keep.k][f]) {
+            const src = cards.map(c => customersData[c.k][f]).find(Boolean);
+            if (src) merged[f] = src;
+          }
+        });
+        if (keep.name !== p.canonName) merged.name = p.canonName;
+        if (Object.keys(merged).length) await dbCustomers.child(keep.k).update(merged);
+        for (const c of cards) if (c.k !== keep.k) { await dbCustomers.child(c.k).remove(); removedCards++; }
+      } else {
+        const obj = { name: p.canonName, phone: p.canonPhone || '', address: '', tckn: '', note: '', createdAt: new Date().toISOString(), createdBy: getActorLabel(), autoCreated: true };
+        await dbCustomers.push(obj);
+      }
     }
-
-    let pagHtml = '';
-    if (totalPages > 1) {
-      pagHtml += `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="ahLedgerChangePage(-1)" ${ahLedgerPage <= 1 ? 'disabled' : ''}>◀ Önceki Sayfa</button>`;
-      pagHtml += `<span style="font-size:12px; color:var(--steel);">Sayfa ${ahLedgerPage} / ${totalPages}</span>`;
-      pagHtml += `<button class="btn btn-dark btn-sm" style="width:auto;" onclick="ahLedgerChangePage(1)" ${ahLedgerPage >= totalPages ? 'disabled' : ''}>Sonraki Sayfa ▶</button>`;
-    }
-    document.getElementById('ah-ledger-pagination').innerHTML = pagHtml;
-  });
+    showToast(`Birleştirme tamamlandı: ${changedDebts} borç kaydı düzeltildi, ${removedCards} yinelenen kart kaldırıldı.`);
+    renderCustomerAccounts();
+    renderCustomerDebts();
+  } catch (e) {
+    alert('Birleştirme sırasında hata: ' + (e && e.message ? e.message : e));
+  }
 }
 
 function ahLedgerChangePage(delta) {
