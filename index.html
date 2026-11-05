@@ -953,13 +953,15 @@
         <div class="form-row">
           <div>
             <label>Müşteri Adı / Firma</label>
-            <input type="text" id="borc-sale-customer" placeholder="Örn: Ahmet Usta İnşaat">
+            <input type="text" id="borc-sale-customer" list="borc-customer-datalist" autocomplete="off" placeholder="Örn: Ahmet Usta İnşaat" oninput="refreshBorcCustomerHint(false)" onchange="refreshBorcCustomerHint(true)">
+            <datalist id="borc-customer-datalist"></datalist>
           </div>
           <div>
             <label>Telefon</label>
-            <input type="text" id="borc-sale-phone" placeholder="0555 123 45 67">
+            <input type="text" id="borc-sale-phone" placeholder="0555 123 45 67" onchange="refreshBorcCustomerHint(true)">
           </div>
         </div>
+        <div id="borc-customer-hint" style="display:none; font-size:12px; margin:-6px 0 12px;"></div>
         <div class="form-row">
           <div style="position:relative;">
             <label>Ürün Ara (İsme, Koda veya Barkoda Göre)</label>
@@ -1088,6 +1090,7 @@
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px; flex-wrap:wrap; gap:8px;">
         <h3 style="font-family:'Oswald'; margin:0;">👥 Kayıtlı Müşteriler</h3>
+        <button class="btn btn-warning btn-sm" onclick="mergeDuplicateCustomers()" style="width:auto;" title="Harf/boşluk/telefon farkıyla ayrı yazılmış aynı müşterileri tek isimde toplar">🧹 Mükerrer Kayıtları Birleştir</button>
         <input type="text" id="ah-search" placeholder="İsim veya telefon ara..." oninput="ahCurrentPage=1; renderCustomerAccounts();" style="max-width:220px; padding:8px 12px;">
       </div>
       <div id="ah-customer-list" style="margin-top:10px;"></div>
