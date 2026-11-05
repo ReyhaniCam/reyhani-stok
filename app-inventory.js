@@ -2902,10 +2902,13 @@ async function processDebtReceiptWithAI(event) {
     const aiPhone = (parsed.phone || '').trim();
     const parsedItems = Array.isArray(parsed.items) ? parsed.items : [];
 
-    if (aiCustomer) document.getElementById('borc-sale-customer').value = aiCustomer;
+    if (aiCustomer) {
+      // Fotoğraftan okunan ad, kayıtlı müşteriyle aynı/benzerse kayıtlı adı kullan (harf farkı yüzünden ayrı kayıt oluşmasın)
+      const ident = (typeof resolveCustomerIdentity === 'function') ? resolveCustomerIdentity(aiCustomer, aiPhone) : { name: aiCustomer, phone: aiPhone };
+      document.getElementById('borc-sale-customer').value = ident.name;
+      if (!aiPhone && ident.phone) document.getElementById('borc-sale-phone').value = ident.phone;
+    }
     if (aiPhone) document.getElementById('borc-sale-phone').value = aiPhone;
-    // El yazısından okunan isim kayıtlı müşteriyle eşleşiyorsa kayıtlı yazıma çevrilir (benzerse uyarı gösterilir).
-    if (typeof refreshBorcCustomerHint === 'function') refreshBorcCustomerHint(true);
 
     let addedCount = 0;
     const unmatchedNames = [];
