@@ -2124,6 +2124,18 @@ function buildLedgerShell(key) {
     </div>
     <div id="ledger-form-box"></div>
     ${isAdmin ? `
+    <div class="ledger-rc" style="margin-top:14px; border:1px solid var(--steel-line); border-radius:6px; padding:10px; background:#fff;">
+      <div style="font-family:'Oswald',sans-serif; font-size:16px; margin-bottom:4px;">📦 Bu Toptancının Malzeme Fişleri</div>
+      <div style="font-size:11px; color:var(--steel); margin-bottom:8px;">Bu firmaya girilmiş tüm malzeme fişleri burada listelenir. İstediğiniz fişi "Ekstreye Yükle" ile cari hesap ekstresine borç satırı olarak ekleyebilirsiniz.</div>
+      <div class="ledger-tools">
+        <input type="text" id="ledger-rc-q" placeholder="🔍 Fiş no, tarih, ürün adı veya tutar..." oninput="ledgerRcSetFilter()">
+        <select id="ledger-rc-f" onchange="ledgerRcSetFilter()">
+          <option value="">Tüm fişler</option><option value="missing">Sadece ekstrede OLMAYANLAR</option><option value="in">Sadece ekstrede OLANLAR</option>
+        </select>
+      </div>
+      <div id="ledger-rc-list" style="max-height:40vh; overflow:auto;"></div>
+    </div>` : ''}
+    ${isAdmin ? `
     <details style="margin-top:12px;">
       <summary style="cursor:pointer; font-size:12px; color:var(--steel);">⚙️ Bakiyeyi manuel düzelt</summary>
       <div style="margin-top:8px; background:#FFF7ED; border:1px dashed var(--warning, #F59E0B); padding:10px; border-radius:6px;">
@@ -2194,6 +2206,7 @@ function renderLedger(scrollToEnd) {
   if (nameEl) nameEl.textContent = w.name || '';
   const manual = document.getElementById('h-manual-balance');
   if (manual && document.activeElement !== manual) manual.value = w.balance || 0;
+  renderLedgerReceipts();
 
   if (scrollToEnd) {
     const sc = document.getElementById('ledger-scroll');
@@ -2253,6 +2266,118 @@ async function repairMissingReceiptEntries() {
   }
 }
 
+// ============================================================
+// EKSTRE ALTI: BU TOPTANCININ MALZEME FİŞLERİ (istenen fiş ekstreye yüklenebilir)
+// ============================================================
+function ledgerRcNorm(v) { return String(v == null ? '' : v).toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').trim(); }
+
+async function loadLedgerReceipts(key) {
+  const box = document.getElementById('ledger-rc-list');
+  if (!box) return;
+  box.innerHTML = '<div style="color:#777; padding:10px;">Fişler yükleniyor...</div>';
+  try {
+    const snap = await dbGoodsReceipts.once('value');
+    if (key !== activeWholesalerKey) return;
+    const all = snap.val() || {};
+    const wName = ledgerRcNorm((wholesalersData[key] || {}).name);
+    const list = [];
+    Object.keys(all).forEach(date => Object.keys(all[date] || {}).forEach(rid => {
+      const r = all[date][rid];
+      if (!r) return;
+      const sameKey = r.wholesalerKey === key;
+      const sameName = !sameKey && wName && ledgerRcNorm(r.wholesalerName) === wName;   // aynı isimli başka kayda girilmiş fişler
+      if (!sameKey && !sameName) return;
+      list.push({ date, rid, r, sameName });
+    }));
+    list.sort((a, b) => (b.date + (b.r.time || '')).localeCompare(a.date + (a.r.time || '')));
+    ledgerState.receipts = list;
+    renderLedgerReceipts();
+  } catch (e) {
+    console.error(e);
+    box.innerHTML = '<div style="color:#B91C1C; padding:10px;">Fişler okunamadı: ' + ledgerEsc((e && e.message) || e) + '</div>';
+  }
+}
+
+function ledgerReceiptInStatement(item) {
+  const label = 'Malzeme Fişi: ' + (item.r.fisNo || item.rid);
+  return Object.values(ledgerState.data || {}).some(t => t && t.desc && (t.desc === label || t.desc.includes(item.rid)));
+}
+
+function ledgerRcSetFilter() {
+  renderLedgerReceipts();
+}
+
+function renderLedgerReceipts() {
+  const box = document.getElementById('ledger-rc-list');
+  if (!box || !ledgerState.receipts) return;
+  const q = ledgerRcNorm((document.getElementById('ledger-rc-q') || {}).value);
+  const f = (document.getElementById('ledger-rc-f') || {}).value || '';
+  const rows = ledgerState.receipts.map(it => Object.assign({}, it, { inSt: ledgerReceiptInStatement(it) })).filter(it => {
+    if (f === 'missing' && it.inSt) return false;
+    if (f === 'in' && !it.inSt) return false;
+    if (!q) return true;
+    const names = (it.r.items || []).map(i => i.name).join(' ');
+    return ledgerRcNorm(`${it.date} ${it.r.time || ''} ${it.r.fisNo || ''} ${it.rid} ${formatMoney(it.r.total || 0)} ${it.r.total || ''} ${names}`).includes(q);
+  });
+  if (!rows.length) { box.innerHTML = '<div style="color:#777; padding:10px; text-align:center;">Bu filtreye uyan malzeme fişi yok.</div>'; return; }
+  box.innerHTML = rows.map(it => {
+    const r = it.r, total = Number(r.total) || 0;
+    const badge = it.inSt
+      ? '<span style="background:#DCFCE7; color:#166534; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">✅ Ekstrede var</span>'
+      : '<span style="background:#FEF3C7; color:#92400E; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">⚠️ Ekstrede yok</span>';
+    const extra = [
+      it.sameName ? 'başka toptancı kaydına girilmiş (aynı isim)' : '',
+      r.addedToDebt === false ? 'kaydedilirken "borç olarak işle" kapalıydı' : ''
+    ].filter(Boolean).join(' · ');
+    const items = (r.items || []).map(i => `<li>${ledgerEsc(i.name)} — ${ledgerEsc(i.qty)} ${ledgerEsc(i.unit || '')} × ₺${formatMoney(Number(i.cost) || 0)} = <b>₺${formatMoney(Number(i.total) || 0)}</b></li>`).join('');
+    return `<div style="border:1px solid #E2E5EA; border-radius:6px; padding:8px 10px; margin-bottom:6px; background:${it.inSt ? '#fff' : '#FFFBEB'};">
+      <div style="display:flex; flex-wrap:wrap; gap:6px 12px; align-items:center; justify-content:space-between;">
+        <div style="font-size:13px;"><b>${ledgerEsc(it.date)}</b> ${ledgerEsc(r.time || '')} · ${r.fisNo ? 'İrsaliye: <b>' + ledgerEsc(r.fisNo) + '</b>' : ledgerEsc(it.rid)} · ${(r.items || []).length} kalem · <b>₺${formatMoney(total)}</b> ${badge}</div>
+        <button class="btn btn-primary btn-sm" style="width:auto;" onclick="ledgerLoadReceipt('${ledgerEsc(it.date)}','${ledgerEsc(it.rid)}')">📥 Ekstreye Yükle</button>
+      </div>
+      ${extra ? `<div style="font-size:11px; color:#92400E; margin-top:2px;">${ledgerEsc(extra)}</div>` : ''}
+      <details style="margin-top:4px;"><summary style="cursor:pointer; font-size:12px; color:var(--steel);">Kalemleri göster</summary><ul style="margin:6px 0 0 18px; font-size:12px;">${items || '<li>Kalem yok</li>'}</ul></details>
+    </div>`;
+  }).join('');
+}
+
+async function ledgerLoadReceipt(date, rid) {
+  if (currentRole !== 'admin' || !activeWholesalerKey) return;
+  const key = activeWholesalerKey;
+  const item = (ledgerState.receipts || []).find(x => x.date === date && x.rid === rid);
+  if (!item) { alert('Fiş bulunamadı, listeyi yenileyip tekrar deneyin.'); return; }
+  const r = item.r, total = Number(r.total) || 0;
+  const w = wholesalersData[key] || {};
+  const label = `${date} ${r.time || ''} — ${r.fisNo || rid} — ₺${formatMoney(total)}`;
+  if (!(total > 0)) { alert('Bu fişin tutarı ₺0 görünüyor, ekstreye yüklenemez.\n\n' + label); return; }
+  if (ledgerReceiptInStatement(item) && !confirm('⚠️ Bu fiş ekstrede ZATEN görünüyor.\n\n' + label + '\n\nYine de ikinci bir borç satırı eklensin mi? (mükerrer olabilir)')) return;
+  if (!confirm(`${w.name || 'Bu toptancı'} ekstresine "Malzeme Fişi" borç satırı olarak yüklenecek:\n\n${label}\n\nOnaylıyor musunuz?`)) return;
+  const curDebt = -(Number(w.balance) || 0);
+  const addBal = confirm(`Mevcut sistem borcu: ₺${formatMoney(curDebt)}\n\nBu ₺${formatMoney(total)} tutar toptancı BAKİYESİNE de eklensin mi?\n\nTamam: bakiye de artar (fiş bakiyeye hiç yansımamışsa bunu seçin)\nİptal: sadece ekstre satırı eklenir, bakiye değişmez (borç bu fişi zaten içeriyorsa bunu seçin)`);
+  try {
+    if (addBal) await dbWholesalers.child(key).child('balance').transaction(cur => Math.round(((cur || 0) - total) * 100) / 100);
+    await dbWholesalers.child(key).child('transactions').push({
+      desc: 'Malzeme Fişi: ' + (r.fisNo || rid),
+      amount: total,
+      type: 'borc',
+      date: ledgerTrFromIso(date, r.time ? r.time + ':00' : undefined)
+    });
+    const upd = {};
+    if (!r.addedToDebt) upd.addedToDebt = true;
+    if (item.sameName) upd.wholesalerKey = key;   // fiş bu toptancıya bağlanır
+    if (Object.keys(upd).length) {
+      await dbGoodsReceipts.child(date).child(rid).update(upd);
+      Object.assign(r, upd);
+      item.sameName = false;
+    }
+    showToast('Fiş ekstreye yüklendi.');
+    renderLedgerReceipts();
+  } catch (e) {
+    console.error(e);
+    alert('Fiş ekstreye yüklenirken hata oluştu: ' + ((e && e.message) || e));
+  }
+}
+
 function ledgerNav(dir) {
   const keys = Object.keys(wholesalersData).sort((a, b) => (wholesalersData[a].name || '').localeCompare(wholesalersData[b].name || '', 'tr-TR'));
   if (keys.length < 2) return;
@@ -2264,6 +2389,7 @@ function ledgerNav(dir) {
 function loadHistory(key) {
   ledgerState = { selectedId: null, filterText: '', filterType: '', formMode: null, editId: null, data: {} };
   buildLedgerShell(key);
+  loadLedgerReceipts(key);
   let first = true;
   dbWholesalers.child(key).child('transactions').on('value', snap => {
     if (key !== activeWholesalerKey) return;
