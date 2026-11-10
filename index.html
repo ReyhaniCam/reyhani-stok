@@ -987,7 +987,10 @@
         </div>
 
         <div id="borc-cart-photo-review" style="display:none; margin-top:14px; padding-top:14px; border-top:1px solid var(--steel-line);">
-          <h4 style="margin:0 0 4px; font-family:'Oswald'; font-size:14px;">📋 Fotoğraftan Okunanlar</h4>
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:4px;">
+            <h4 style="margin:0; font-family:'Oswald'; font-size:14px;">📋 Fotoğraftan Okunanlar</h4>
+            <button type="button" class="btn btn-danger btn-sm" style="width:auto;" onclick="closeBorcCartPhotoReview()" title="Bu listeyi kapat">✕ Kapat</button>
+          </div>
           <p style="font-size:11px; color:var(--steel); margin-top:0; margin-bottom:10px;">Yapay zeka yanlış okuyabilir veya yanlış ürünle eşleştirebilir — borç sepetine eklemeden önce kontrol edin.</p>
           <div id="borc-cart-photo-items"></div>
           <button type="button" class="btn btn-success" style="margin-top:10px; width:100%;" onclick="confirmBorcCartPhotoItems()">✅ İşaretlileri Borç Sepetine Ekle</button>
