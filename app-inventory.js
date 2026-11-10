@@ -2062,7 +2062,7 @@ function injectLedgerStyle() {
     .ledger-tools{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px; align-items:center;}
     .ledger-tools input{flex:1; min-width:160px;} .ledger-tools select{width:auto;}
     .ledger-scroll{overflow:auto; max-height:46vh; border:1px solid var(--steel-line); border-radius:4px; background:#fff;}
-    .ledger-table{width:100%; border-collapse:collapse; font-size:13px; min-width:620px; color:#111;}
+    .ledger-table{width:100%; border-collapse:collapse; font-size:13px; min-width:780px; color:#111;}
     .ledger-table th{position:sticky; top:0; background:#E6E9EE; border-bottom:1px solid #9AA0A6; padding:6px 8px; text-align:left; font-weight:700; z-index:1;}
     .ledger-table td{padding:5px 8px; border-bottom:1px solid #EEF0F3; white-space:nowrap;}
     .ledger-table td.desc{white-space:normal; min-width:220px;}
@@ -2076,6 +2076,23 @@ function injectLedgerStyle() {
     .ledger-form{margin-top:12px; background:var(--bg); padding:12px; border-radius:6px; border:1px solid var(--steel-line);}
   `;
   document.head.appendChild(st);
+}
+
+// Her satır için "bu hareketten SONRA toplam borç" (yürüyen bakiye). Devir tutarından başlar.
+// + = toptancıya borcumuz, - = alacağımız. Filtre/arama bu rakamları değiştirmez.
+function ledgerRunningDebt(all, opening) {
+  const map = {};
+  let run = opening;
+  all.forEach(r => {
+    run = Math.round((run + (r.type === 'borc' ? r.amount : -r.amount)) * 100) / 100;
+    map[r.id] = run;
+  });
+  return map;
+}
+function ledgerDebtText(v) {
+  if (v > 0.005) return ledgerMoney(v);
+  if (v < -0.005) return ledgerMoney(-v) + ' (Alacak)';
+  return ledgerMoney(0);
 }
 
 function getLedgerSorted() {
@@ -2108,7 +2125,7 @@ function buildLedgerShell(key) {
     </div>
     <div class="ledger-scroll" id="ledger-scroll">
       <table class="ledger-table">
-        <thead><tr><th style="width:92px;">Tarih</th><th style="width:110px;">Tür</th><th>Açıklama</th><th class="num" style="width:120px;">Borç</th><th class="num" style="width:120px;">Alacak</th></tr></thead>
+        <thead><tr><th style="width:92px;">Tarih</th><th style="width:110px;">Tür</th><th>Açıklama</th><th class="num" style="width:120px;">Borç</th><th class="num" style="width:120px;">Alacak</th><th class="num" style="width:150px;" title="Bu satırdan sonra o toptancıya toplam borcunuz">Toplam Borç</th></tr></thead>
         <tbody id="ledger-body"></tbody>
       </table>
     </div>
@@ -2167,6 +2184,7 @@ function renderLedger(scrollToEnd) {
   const opening = Math.round((balanceDebt - (sumB - sumO)) * 100) / 100; // hareket kaydı olmayan devir
   let totB = sumB + (opening > 0 ? opening : 0);
   let totO = sumO + (opening < 0 ? -opening : 0);
+  const runMap = ledgerRunningDebt(all, opening);
 
   const q = ledgerState.filterText, ft = ledgerState.filterType;
   const shown = all.filter(r => {
@@ -2180,7 +2198,8 @@ function renderLedger(scrollToEnd) {
   if (Math.abs(opening) > 0.005 && !q && !ft) {
     html += `<tr class="ledger-virtual" title="Hareket kaydı bulunmayan önceki bakiye (devir)">
       <td>-</td><td>Devir</td><td class="desc">Devreden / önceki bakiye (hareket kaydı olmayan kısım)</td>
-      <td class="num">${opening > 0 ? formatMoney(opening) + ' TL' : ''}</td><td class="num">${opening < 0 ? formatMoney(-opening) + ' TL' : ''}</td></tr>`;
+      <td class="num">${opening > 0 ? formatMoney(opening) + ' TL' : ''}</td><td class="num">${opening < 0 ? formatMoney(-opening) + ' TL' : ''}</td>
+      <td class="num"><b>${ledgerDebtText(opening)}</b></td></tr>`;
   }
   shown.forEach(r => {
     const sel = r.id === ledgerState.selectedId ? ' ledger-sel' : '';
@@ -2189,9 +2208,10 @@ function renderLedger(scrollToEnd) {
       <td>${r.type === 'borc' ? 'Borç Dekontu' : 'Ödeme'}</td>
       <td class="desc">${ledgerEsc(r.t.desc)}</td>
       <td class="num">${r.type === 'borc' ? ledgerMoney(r.amount) : ''}</td>
-      <td class="num">${r.type === 'odeme' ? ledgerMoney(r.amount) : ''}</td></tr>`;
+      <td class="num">${r.type === 'odeme' ? ledgerMoney(r.amount) : ''}</td>
+      <td class="num"><b>${ledgerDebtText(runMap[r.id])}</b></td></tr>`;
   });
-  if (!html) html = '<tr><td colspan="5" style="text-align:center; padding:18px; color:#777;">Kayıt bulunamadı.</td></tr>';
+  if (!html) html = '<tr><td colspan="6" style="text-align:center; padding:18px; color:#777;">Kayıt bulunamadı.</td></tr>';
   body.innerHTML = html;
 
   const footer = document.getElementById('ledger-footer');
@@ -2492,8 +2512,9 @@ function printLedger() {
   const balanceDebt = -(Number(w.balance) || 0);
   const opening = Math.round((balanceDebt - (sumB - sumO)) * 100) / 100;
   const totB = sumB + (opening > 0 ? opening : 0), totO = sumO + (opening < 0 ? -opening : 0);
-  const rows = (Math.abs(opening) > 0.005 ? `<tr><td>-</td><td>Devir</td><td>Devreden / önceki bakiye</td><td class="n">${opening > 0 ? ledgerMoney(opening) : ''}</td><td class="n">${opening < 0 ? ledgerMoney(-opening) : ''}</td></tr>` : '') +
-    all.map(r => `<tr><td>${ledgerEsc(ledgerDateOnly(r.t.date))}</td><td>${r.type === 'borc' ? 'Borç Dekontu' : 'Ödeme'}</td><td>${ledgerEsc(r.t.desc)}</td><td class="n">${r.type === 'borc' ? ledgerMoney(r.amount) : ''}</td><td class="n">${r.type === 'odeme' ? ledgerMoney(r.amount) : ''}</td></tr>`).join('');
+  const runMap = ledgerRunningDebt(all, opening);
+  const rows = (Math.abs(opening) > 0.005 ? `<tr><td>-</td><td>Devir</td><td>Devreden / önceki bakiye</td><td class="n">${opening > 0 ? ledgerMoney(opening) : ''}</td><td class="n">${opening < 0 ? ledgerMoney(-opening) : ''}</td><td class="n"><b>${ledgerDebtText(opening)}</b></td></tr>` : '') +
+    all.map(r => `<tr><td>${ledgerEsc(ledgerDateOnly(r.t.date))}</td><td>${r.type === 'borc' ? 'Borç Dekontu' : 'Ödeme'}</td><td>${ledgerEsc(r.t.desc)}</td><td class="n">${r.type === 'borc' ? ledgerMoney(r.amount) : ''}</td><td class="n">${r.type === 'odeme' ? ledgerMoney(r.amount) : ''}</td><td class="n"><b>${ledgerDebtText(runMap[r.id])}</b></td></tr>`).join('');
   const logo = (typeof SENET_LOGO_SRC !== 'undefined') ? `<img src="${SENET_LOGO_SRC}" style="width:22mm;height:22mm;object-fit:cover;border-radius:2mm;">` : '';
   const win = window.open('', '_blank');
   if (!win) { alert('Yazdırma penceresi engellendi. Tarayıcıdan bu site için açılır pencerelere izin verin.'); return; }
@@ -2504,7 +2525,7 @@ function printLedger() {
     table{width:100%;border-collapse:collapse} th{background:#26282B;color:#fff;text-align:left;padding:5px 6px;font-size:11px} td{padding:4px 6px;border-bottom:1px solid #ddd}
     .n{text-align:right;white-space:nowrap} tr{page-break-inside:avoid} .t{margin-top:5mm;display:flex;justify-content:flex-end;gap:10mm;font-size:13px}</style></head><body>
     <div class="h">${logo}<div><h1>${ledgerEsc(w.name)}</h1><div class="sub">Cari Hesap Ekstresi — REYHANİ CAM HIRDAVAT — ${new Date().toLocaleDateString('tr-TR')}</div></div></div>
-    <table><thead><tr><th style="width:80px">Tarih</th><th style="width:90px">Tür</th><th>Açıklama</th><th class="n" style="width:100px">Borç</th><th class="n" style="width:100px">Alacak</th></tr></thead><tbody>${rows}</tbody></table>
+    <table><thead><tr><th style="width:80px">Tarih</th><th style="width:90px">Tür</th><th>Açıklama</th><th class="n" style="width:100px">Borç</th><th class="n" style="width:100px">Alacak</th><th class="n" style="width:110px">Toplam Borç</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="t"><span>T. Borç: <b>${ledgerMoney(totB)}</b></span><span>T. Alacak: <b>${ledgerMoney(totO)}</b></span><span>Bakiye: <b>${ledgerMoney(Math.abs(balanceDebt))} ${balanceDebt > 0 ? '(Borç)' : (balanceDebt < 0 ? '(Alacak)' : '')}</b></span></div>
     </body></html>`);
   win.document.close();
