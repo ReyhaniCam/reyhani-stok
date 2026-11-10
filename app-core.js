@@ -161,6 +161,20 @@ let devicesData = {};
 let currentDeviceId = null;
 let currentDeviceName = null;
 let currentDeviceIP = null; // Bu cihazın gerçek genel (public) IP adresi — girişte otomatik alınır
+const DEVICE_UNNAMED = 'İsimsiz Cihaz'; // isim verilmediğinde kullanılan yer tutucu
+
+// Sistemdeki (Firebase) cihaz kaydındaki ad, bu tarayıcının hafızasındakinden farklıysa
+// (örn. yönetici "Cihazlar" listesinden adı değiştirdiyse) bu cihaz da yeni adı benimser.
+// Böylece "Son Güncellenenler" gibi yerlerde de doğru ad görünür.
+function syncCurrentDeviceNameFromDb() {
+  if (!currentDeviceId) return;
+  const rec = devicesData && devicesData[currentDeviceId];
+  const dbName = rec && rec.name ? String(rec.name).trim() : '';
+  if (!dbName || dbName === DEVICE_UNNAMED || dbName === currentDeviceName) return;
+  currentDeviceName = dbName;
+  try { localStorage.setItem('reyhani_device_name', dbName); } catch (e) {}
+  updateDeviceBadge();
+}
 
 // ---------- SORUN / HATA BİLDİRİM SİSTEMİ (AI destekli) ----------
 // Kullanıcı sorunu kendi cümleleriyle yazar → yapay zeka bunu düzgün, net bir
@@ -240,32 +254,37 @@ async function ensureDeviceNamed() {
   await fetchPublicIP();
   const envLabel = getDeviceEnvironmentLabel();
 
-  if (!currentDeviceName) {
-    try {
-      const snap = await dbDevices.child(currentDeviceId).once('value');
-      const existing = snap.val();
-      if (existing && existing.name) {
-        currentDeviceName = existing.name;
-        try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
-      }
-    } catch (e) { /* yoksay, aşağıda soracağız */ }
+  // Sistemdeki kayıt ile bu tarayıcının hafızası İKİ YÖNLÜ eşitlenir:
+  // sistemde gerçek bir ad varsa o geçerlidir (yönetici listeden değiştirmiş olabilir).
+  let dbRecord = null;
+  try {
+    const snap = await dbDevices.child(currentDeviceId).once('value');
+    dbRecord = snap.val();
+  } catch (e) { /* çevrimdışı olabilir, yerel adla devam */ }
+  const dbName = dbRecord && dbRecord.name ? String(dbRecord.name).trim() : '';
+  if (dbName && dbName !== DEVICE_UNNAMED && dbName !== currentDeviceName) {
+    currentDeviceName = dbName;
+    try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
   }
 
-  if (!currentDeviceName) {
-    const name = prompt("Bu cihazdan sisteme ilk kez giriş yapılıyor.\n\nBu cihaza bir isim verin (örn. 'İşyeri Bilgisayarı', 'Ahmet - Telefon') — bundan sonra yaptığınız her güncellemede bu isim, gerçek IP adresiniz ve cihaz türünüz (Windows/Android/iPhone vb.) birlikte kaydedilecek:");
-    currentDeviceName = (name || '').trim() || 'İsimsiz Cihaz';
+  // Hiç ad yoksa (veya daha önce boş geçilip "İsimsiz Cihaz" kalmışsa) ad sor.
+  if (!currentDeviceName || currentDeviceName === DEVICE_UNNAMED) {
+    const name = prompt("Bu cihaza bir isim verin (örn. 'İşyeri Bilgisayarı', 'Ahmet - Telefon') — bundan sonra yaptığınız her güncellemede bu isim, gerçek IP adresiniz ve cihaz türünüz (Windows/Android/iPhone vb.) birlikte kaydedilecek:");
+    const typed = (name || '').trim();
+    currentDeviceName = typed || currentDeviceName || DEVICE_UNNAMED;
     try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
-    await dbDevices.child(currentDeviceId).set({
-      name: currentDeviceName,
-      firstSeenAt: new Date().toISOString(),
-      lastSeenAt: new Date().toISOString(),
-      lastRole: currentRole,
-      lastIP: currentDeviceIP,
-      env: envLabel
-    });
-  } else {
-    dbDevices.child(currentDeviceId).update({ lastSeenAt: new Date().toISOString(), lastRole: currentRole, lastIP: currentDeviceIP, env: envLabel });
   }
+
+  // Ad HER girişte sisteme de yazılır (kayıt silinmişse ya da adı eksikse onarır).
+  const nowIso = new Date().toISOString();
+  dbDevices.child(currentDeviceId).update({
+    name: currentDeviceName,
+    firstSeenAt: (dbRecord && dbRecord.firstSeenAt) || nowIso,
+    lastSeenAt: nowIso,
+    lastRole: currentRole,
+    lastIP: currentDeviceIP,
+    env: envLabel
+  }).catch(() => {});
 
   updateDeviceBadge();
 }
@@ -541,7 +560,7 @@ function renameCurrentDevice() {
   if (currentRole === 'guest' || !currentDeviceId) return;
   const name = prompt("Bu cihazın sistemdeki adını değiştirin:", currentDeviceName || '');
   if (name === null) return;
-  currentDeviceName = name.trim() || 'İsimsiz Cihaz';
+  currentDeviceName = name.trim() || DEVICE_UNNAMED;
   try { localStorage.setItem('reyhani_device_name', currentDeviceName); } catch (e) {}
   dbDevices.child(currentDeviceId).update({ name: currentDeviceName, lastSeenAt: new Date().toISOString() });
   updateDeviceBadge();
@@ -855,6 +874,7 @@ dbCatalogAiHistory.on('value', (snapshot) => {
 
 dbDevices.on('value', (snapshot) => {
   devicesData = snapshot.val() || {};
+  syncCurrentDeviceNameFromDb();
   if (typeof renderDevicesList === 'function') renderDevicesList();
 });
 
