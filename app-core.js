@@ -302,6 +302,7 @@ function getActorLabel() {
 }
 
 function updateDeviceBadge() {
+  if (typeof updateDashGreeting === 'function') updateDashGreeting();
   const badge = document.getElementById('device-badge');
   const nameEl = document.getElementById('device-badge-name');
   if (!badge || !nameEl) return;
@@ -1079,14 +1080,21 @@ async function toggleAuth() {
 // ============================================================
 // DASHBOARD / KARŞILAMA PANELİ
 // ============================================================
+// Karşılama adı: giriş yapılmışsa cihazın adı (örn. "Patronun Bilgisayarı");
+// cihaza henüz gerçek bir ad verilmemişse rolün adı (Yönetici/Çalışan); giriş yoksa Ziyaretçi.
+function updateDashGreeting() {
+  const nameEl = document.getElementById('dash-user-name');
+  if (!nameEl) return;
+  const hasDeviceName = currentRole !== 'guest' && currentDeviceName && currentDeviceName !== DEVICE_UNNAMED;
+  if (hasDeviceName) nameEl.textContent = currentDeviceName;
+  else if (currentRole === 'admin') nameEl.textContent = 'Yönetici';
+  else if (currentRole === 'staff') nameEl.textContent = 'Çalışan';
+  else nameEl.textContent = 'Ziyaretçi';
+}
+
 function renderDashboard() {
   // Kullanıcı adını göster
-  const nameEl = document.getElementById('dash-user-name');
-  if (nameEl) {
-    if (currentRole === 'admin') nameEl.textContent = 'Yönetici';
-    else if (currentRole === 'staff') nameEl.textContent = 'Çalışan';
-    else nameEl.textContent = 'Ziyaretçi';
-  }
+  updateDashGreeting();
 
   const allProducts = Object.values(productsData || {});
   const totalProducts = allProducts.length;
