@@ -1694,6 +1694,91 @@ async function processBorcCartPhoto(event) {
   }
 }
 
+function closeBorcCartPhotoReview() {
+  const hasPending = borcCartPhotoReviewItems.length > 0;
+  if (hasPending && !confirm("Fotoğraftan okunan liste kapatılsın mı? Sepete eklenmeyen satırlar silinecek.")) return;
+  borcCartPhotoReviewItems = [];
+  const box = document.getElementById('borc-cart-photo-review');
+  const itemsEl = document.getElementById('borc-cart-photo-items');
+  const statusEl = document.getElementById('borc-cart-photo-status');
+  if (itemsEl) itemsEl.innerHTML = '';
+  if (box) box.style.display = 'none';
+  if (statusEl) { statusEl.style.display = 'none'; statusEl.innerHTML = ''; }
+}
+
+function _borcEsc(str) {
+  return String(str == null ? '' : str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Harf yazdıkça stoktaki ürünleri bulur: her kelime, ürün adı/kodu/barkodunun
+// HERHANGİ bir yerinde geçiyorsa eşleşir (tek harf bile yeterli). Türkçe harfler
+// (ş/s, ı/i, ö/o...) birbirinin yerine yazılmış olsa da bulunur.
+function searchProductsForBorcPhoto(query, limit) {
+  limit = limit || 10;
+  const fold = s => (typeof foldTr === 'function' ? foldTr(s) : normalizeTr(s));
+  const q = fold(query || '');
+  if (!q) return [];
+  const tokens = q.split(' ').filter(Boolean);
+  const out = [];
+  Object.values(productsData).forEach(p => {
+    const name = fold(p.name || '');
+    const hay = name + ' ' + fold(String(p.code || '')) + ' ' + fold(String(p.barcode || ''));
+    if (!tokens.every(t => hay.includes(t))) return;
+    let score = 0;
+    if (name.startsWith(q)) score += 3;
+    else if (name.includes(q)) score += 2;
+    tokens.forEach(t => { if (name.split(' ').some(w => w.startsWith(t))) score += 1; });
+    out.push({ product: p, score });
+  });
+  out.sort((a, b) => b.score - a.score || String(a.product.name).localeCompare(String(b.product.name), 'tr'));
+  let results = out.slice(0, limit).map(o => o.product);
+
+  // Yazım hatası varsa (ör. "dirsk") bulanık eşleşmeyi de ekle
+  if (results.length < limit && typeof findSimilarProducts === 'function') {
+    findSimilarProducts(query, limit).forEach(m => {
+      if (results.length < limit && !results.some(r => r.code === m.product.code)) results.push(m.product);
+    });
+  }
+  return results;
+}
+
+let _borcPhotoSearchCodes = {};
+
+function updateBorcPhotoSearch(i, value) {
+  const box = document.getElementById('borc-photo-results-' + i);
+  if (!box) return;
+  const q = (value || '').trim();
+  if (!q) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  const results = searchProductsForBorcPhoto(q, 10);
+  _borcPhotoSearchCodes[i] = results.map(p => p.code);
+  box.style.display = 'block';
+  if (results.length === 0) {
+    box.innerHTML = '<div style="padding:10px; font-size:12px; color:var(--steel);">Eşleşen ürün bulunamadı. Farklı harfler deneyin.</div>';
+    return;
+  }
+  box.innerHTML = results.map((p, k) => `
+    <div style="padding:8px 10px; cursor:pointer; border-top:1px dashed var(--steel-line); font-size:12px;" onclick="pickBorcPhotoSearchResult(${i}, ${k})">
+      <strong>${_borcEsc(p.name)}</strong> <span style="color:var(--steel); font-family:'IBM Plex Mono';">(${_borcEsc(p.code)})</span>
+      <br><small style="color:var(--steel);">Stok: ${p.qty || 0} ${_borcEsc(p.unit || 'Adet')} · ₺${formatMoney(p.price || 0)}</small>
+    </div>
+  `).join('');
+}
+
+function pickBorcPhotoSearchResult(i, k) {
+  const code = (_borcPhotoSearchCodes[i] || [])[k];
+  if (code == null) return;
+  const it = borcCartPhotoReviewItems[i];
+  if (it) it.changing = false;
+  selectBorcCartPhotoSuggestion(i, code);
+}
+
+function toggleBorcPhotoChange(i) {
+  const it = borcCartPhotoReviewItems[i];
+  if (!it) return;
+  it.changing = !it.changing;
+  renderBorcCartPhotoReview();
+}
+
 function renderBorcCartPhotoReview() {
   const box = document.getElementById('borc-cart-photo-review');
   const itemsEl = document.getElementById('borc-cart-photo-items');
@@ -1701,32 +1786,38 @@ function renderBorcCartPhotoReview() {
 
   if (borcCartPhotoReviewItems.length === 0) { box.style.display = 'none'; return; }
   box.style.display = 'block';
+  _borcPhotoSearchCodes = {};
 
   itemsEl.innerHTML = borcCartPhotoReviewItems.map((it, i) => {
-    // Eşleşmeyen satırlar için satış sepetindeki ile AYNI "bunu mu
-    // aramıştınız?" benzer-ürün önerisi (findSimilarProducts).
     const suggestions = !it.matched && it.aiName && typeof findSimilarProducts === 'function' ? findSimilarProducts(it.aiName, 3) : [];
+    const showSearch = !it.matched || it.changing;
 
     return `
     <div style="padding:8px 0; border-top:1px dashed var(--steel-line);">
       <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <input type="checkbox" ${it.include ? 'checked' : ''} ${!it.matched ? 'disabled' : ''} onchange="borcCartPhotoReviewItems[${i}].include=this.checked">
         <div style="flex:1; min-width:160px;">
-          <input type="text" value="${(it.aiName || '').replace(/"/g, '&quot;')}" style="width:100%; font-size:12px;" oninput="borcCartPhotoReviewItems[${i}].aiName=this.value">
+          <input type="text" value="${_borcEsc(it.aiName)}" style="width:100%; font-size:12px;" oninput="borcCartPhotoReviewItems[${i}].aiName=this.value">
           ${it.matched
-            ? `<small style="color:var(--success);">✅ Eşleşti: ${it.matchedName} (${it.matchedCode}) · Stok: ${it.matchedStock} · ₺${formatMoney(it.matchedPrice)}</small>`
-            : `<small style="color:var(--rust);">⚠️ "${it.aiName}" adıyla birebir eşleşen ürün yok</small>`}
+            ? `<small style="color:var(--success);">✅ Eşleşti: ${_borcEsc(it.matchedName)} (${_borcEsc(it.matchedCode)}) · Stok: ${it.matchedStock} · ₺${formatMoney(it.matchedPrice)}</small>`
+            : `<small style="color:var(--rust);">⚠️ "${_borcEsc(it.aiName)}" adıyla birebir eşleşen ürün yok</small>`}
         </div>
         <input type="number" value="${it.qty}" min="0.1" step="any" style="width:70px; font-size:12px;" oninput="borcCartPhotoReviewItems[${i}].qty=parseFloat(this.value)||0">
-        ${!it.matched ? `<button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="researchBorcCartPhotoItem(${i})">🔍 Yeniden Ara</button>` : ''}
+        ${!it.matched ? `<button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="researchBorcCartPhotoItem(${i})">🔍 Yeniden Ara</button>` : `<button type="button" class="btn btn-info btn-sm" style="width:auto;" onclick="toggleBorcPhotoChange(${i})">✏️ Değiştir</button>`}
       </div>
-      ${suggestions.length > 0 ? `
+      ${showSearch ? `
+        <div style="margin:8px 0 0 26px; position:relative;">
+          <input type="text" id="borc-photo-search-${i}" placeholder="🔎 Stoktaki ürünü ara — harfleri yazın, listeden seçin" autocomplete="off" style="width:100%; font-size:12px;" oninput="updateBorcPhotoSearch(${i}, this.value)">
+          <div id="borc-photo-results-${i}" style="display:none; max-height:220px; overflow-y:auto; margin-top:4px; background:#fff; border:1px solid var(--steel-line); border-radius:8px; box-shadow:0 4px 14px rgba(0,0,0,0.12);"></div>
+        </div>
+      ` : ''}
+      ${suggestions.length > 0 && !it.matched ? `
         <div style="margin:6px 0 0 26px; font-size:11px;">
           <span style="color:var(--steel);">Böyle bir ürün mevcut değil, bunu mu aramıştınız?</span>
           <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;">
             ${suggestions.map(s => `
-              <button type="button" class="btn btn-warning btn-sm" style="width:auto;" onclick="selectBorcCartPhotoSuggestion(${i}, '${s.product.code}')">
-                ${s.product.name} <small>(stokta mevcut, ${s.product.qty ?? 0} ${s.product.unit || 'Adet'})</small>
+              <button type="button" class="btn btn-warning btn-sm" style="width:auto;" onclick="selectBorcCartPhotoSuggestion(${i}, '${String(s.product.code).replace(/'/g, "\\'")}')">
+                ${_borcEsc(s.product.name)} <small>(stokta mevcut, ${s.product.qty ?? 0} ${_borcEsc(s.product.unit || 'Adet')})</small>
               </button>
             `).join('')}
           </div>
@@ -1762,6 +1853,7 @@ function selectBorcCartPhotoSuggestion(i, code) {
   it.matchedPrice = p.price || 0;
   it.matchedStock = p.qty || 0;
   it.include = true;
+  it.changing = false;
   renderBorcCartPhotoReview();
 }
 
