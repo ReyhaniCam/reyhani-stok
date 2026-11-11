@@ -66,6 +66,7 @@ let goodsReceiptCart = [];
 var fisSlipInfo = null; // Fişten okunan eski bakiye / ara toplam / genel toplam bilgisi
 let fisEditingIndex = null; // null = yeni ekleme modu; sayı ise o index düzenleniyor demektir
 let globalPastReceipts = {};
+let allGoodsReceiptsRaw = {};          // tüm malzeme fişleri (toptancı filtresi için)
 let gridCurrentPage = 1;
 let lastGridSearch = null;
 const GRID_PAGE_SIZE = 60;
@@ -756,6 +757,13 @@ dbWholesalers.on('value', (snapshot) => {
   wholesalersData = snapshot.val() || {};
   if(currentRole === 'admin') renderWholesalers();
   renderFisWholesalerOptions();
+  if (typeof rebuildProductWholesalerMap === 'function') rebuildProductWholesalerMap();
+});
+
+// Stok Listesi "Toptancıya Göre" filtresi için: tüm fişlerden ürün→toptancı eşleşmesi çıkarılır
+dbGoodsReceipts.on('value', snapshot => {
+  allGoodsReceiptsRaw = snapshot.val() || {};
+  if (typeof rebuildProductWholesalerMap === 'function') rebuildProductWholesalerMap();
 });
 
 dbGoodsReceipts.on('value', snapshot => {
@@ -1368,6 +1376,8 @@ function updateAuthUI() {
   if(mergeProductsBtn) mergeProductsBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   const importCleanupBtn = document.getElementById('import-cleanup-btn');
   if(importCleanupBtn) importCleanupBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+  const wsFilterBtn = document.getElementById('ws-filter-btn');
+  if(wsFilterBtn) wsFilterBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   const devicesBtn = document.getElementById('devices-btn');
   if(devicesBtn) devicesBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   updateDeviceBadge();
