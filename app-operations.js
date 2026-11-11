@@ -533,6 +533,117 @@ function populateGridBrandFilter() {
   sel.value = current || '';
 }
 
+// ============================================================
+// STOK LİSTESİ — TOPTANCIYA GÖRE FİLTRE
+// Ürün → toptancı eşleşmesi malzeme fişlerinden (goods_receipts) çıkarılır:
+// bir toptancıdan fişle mal girişi yapılan her ürün o toptancının ürünü sayılır.
+// ============================================================
+let productWholesalerMap = {};      // { ürünKodu: { toptanciKey: true } }
+let wholesalerProductCount = {};    // { toptanciKey: ürün sayısı }
+let selectedWsFilter = {};          // { toptanciKey: true }
+
+function wsFilterNorm(v) { return String(v == null ? '' : v).toLocaleLowerCase('tr-TR').replace(/\s+/g, ' ').trim(); }
+function wsFilterEsc(t) { return String(t == null ? '' : t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function rebuildProductWholesalerMap() {
+  const nameToKey = {};
+  Object.keys(wholesalersData || {}).forEach(k => {
+    const w = wholesalersData[k];
+    if (w && w.name) nameToKey[wsFilterNorm(w.name)] = k;
+  });
+  const map = {};
+  Object.keys(allGoodsReceiptsRaw || {}).forEach(date => {
+    const day = allGoodsReceiptsRaw[date] || {};
+    Object.keys(day).forEach(rid => {
+      const r = day[rid];
+      if (!r) return;
+      let key = (r.wholesalerKey && wholesalersData[r.wholesalerKey]) ? r.wholesalerKey : nameToKey[wsFilterNorm(r.wholesalerName)];
+      if (!key) return;
+      (r.items || []).forEach(it => {
+        if (!it || !it.code) return;
+        (map[it.code] = map[it.code] || {})[key] = true;
+      });
+    });
+  });
+  productWholesalerMap = map;
+  const counts = {};
+  Object.keys(map).forEach(code => {
+    if (!productsData[code]) return;
+    Object.keys(map[code]).forEach(k => { counts[k] = (counts[k] || 0) + 1; });
+  });
+  wholesalerProductCount = counts;
+  // seçili olup silinmiş toptancıları temizle
+  Object.keys(selectedWsFilter).forEach(k => { if (!wholesalersData[k]) delete selectedWsFilter[k]; });
+  const panel = document.getElementById('ws-filter-panel');
+  if (panel && panel.style.display !== 'none') renderWsFilterPanel();
+  updateWsFilterButton();
+  if (Object.keys(selectedWsFilter).length && typeof renderGrid === 'function') renderGrid();
+}
+
+function productPassesWholesalerFilter(p) {
+  const sel = Object.keys(selectedWsFilter);
+  if (!sel.length) return true;
+  const m = productWholesalerMap[p.code];
+  if (!m) return false;
+  return sel.some(k => m[k]);
+}
+
+function updateWsFilterButton() {
+  const btn = document.getElementById('ws-filter-btn');
+  if (!btn) return;
+  const n = Object.keys(selectedWsFilter).length;
+  btn.textContent = n ? `🤝 Toptancı (${n} seçili)` : '🤝 Toptancıya Göre';
+  btn.classList.toggle('btn-warning', n > 0);
+  btn.classList.toggle('btn-info', n === 0);
+}
+
+function toggleWsFilterPanel() {
+  const panel = document.getElementById('ws-filter-panel');
+  if (!panel) return;
+  const open = panel.style.display === 'none';
+  panel.style.display = open ? 'block' : 'none';
+  if (open) renderWsFilterPanel();
+}
+
+function renderWsFilterPanel() {
+  const box = document.getElementById('ws-filter-list');
+  if (!box) return;
+  const q = wsFilterNorm((document.getElementById('ws-filter-search') || {}).value);
+  const keys = Object.keys(wholesalersData || {})
+    .filter(k => wholesalersData[k] && wholesalersData[k].name)
+    .filter(k => !q || wsFilterNorm(wholesalersData[k].name).includes(q))
+    .sort((a, b) => wholesalersData[a].name.localeCompare(wholesalersData[b].name, 'tr'));
+  if (!keys.length) {
+    box.innerHTML = '<div style="color:var(--steel); font-size:12px;">Kayıtlı toptancı bulunamadı.</div>';
+    return;
+  }
+  box.innerHTML = keys.map(k => {
+    const checked = selectedWsFilter[k] ? 'checked' : '';
+    const cnt = wholesalerProductCount[k] || 0;
+    return `<label style="display:flex; align-items:center; gap:8px; background:#fff; border:1px solid ${selectedWsFilter[k] ? 'var(--charcoal)' : 'var(--steel-line)'}; border-radius:6px; padding:7px 9px; cursor:pointer; margin:0; text-transform:none; font-size:13px;">
+      <input type="checkbox" ${checked} onchange="toggleWsFilterKey('${wsFilterEsc(k)}', this.checked)" style="width:auto; margin:0;">
+      <span style="flex:1;">${wsFilterEsc(wholesalersData[k].name)}</span>
+      <span style="font-size:11px; color:var(--steel);">${cnt} ürün</span>
+    </label>`;
+  }).join('');
+}
+
+function toggleWsFilterKey(key, on) {
+  if (on) selectedWsFilter[key] = true; else delete selectedWsFilter[key];
+  gridCurrentPage = 1;
+  updateWsFilterButton();
+  renderWsFilterPanel();
+  renderGrid();
+}
+
+function clearWsFilter() {
+  selectedWsFilter = {};
+  gridCurrentPage = 1;
+  updateWsFilterButton();
+  renderWsFilterPanel();
+  renderGrid();
+}
+
 function addBrandGroup() {
   if (currentRole !== 'admin') return;
   const input = document.getElementById('new-brand-name');
@@ -4641,6 +4752,7 @@ function renderGrid() {
 
     if (brandFilter && p.brand !== brandFilter) return;
     if (groupFilter && p.category !== groupFilter) return;
+    if (!productPassesWholesalerFilter(p)) return;
     if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
       count++;
       units += safeNum(p.qty);
