@@ -1302,7 +1302,8 @@ function switchTab(tabName) {
   if(tabName === 'toptanci' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'borc' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'acikhesap' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
-  if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'fis' || tabName === 'katalog') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
+  if(tabName === 'fis' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'katalog') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -2396,7 +2397,7 @@ async function addToGoodsReceipt() {
 }
 
 async function addToGoodsReceiptCore() {
-  if(currentRole !== 'admin' && currentRole !== 'staff') return;
+  if(currentRole !== 'admin') return;
   const inputVal = document.getElementById('fis-product').value.trim();
   const qty = parseFloat(document.getElementById('fis-qty').value);
   const costRaw = document.getElementById('fis-cost').value;
@@ -2967,7 +2968,7 @@ async function completeGoodsReceipt() {
 }
 
 async function completeGoodsReceiptCore() {
-  if(currentRole !== 'admin' && currentRole !== 'staff') return;
+  if(currentRole !== 'admin') return;
   // Bir kalem düzenleme modundaysa ve "💾 Düzenlemeyi Kaydet"e basılmadıysa değişiklikler kaybolmasın
   if (fisEditingIndex !== null) {
     if (!confirm("Düzenlemekte olduğunuz kalem henüz kaydedilmedi.\n\nTamam: düzenlemeyi kaydet ve fişe devam et\nİptal: işlemi durdur")) return;
@@ -3160,6 +3161,7 @@ async function generateReceiptExcel(receipt, receiptId, dateStr) {
 }
 
 async function downloadReceiptById(receiptId) {
+  if(currentRole !== 'admin') return;
   const target = globalPastReceipts[receiptId];
   if(target) {
     await generateReceiptExcel(target.receiptData, receiptId, target.date);
@@ -3180,7 +3182,7 @@ let reEditingIndex = null; // null = yeni kalem ekleme modu; sayı ise o index't
 let _reAddMatchDebounce = null;
 
 function openReceiptEditModal(receiptId) {
-  if(currentRole !== 'admin' && currentRole !== 'staff') return;
+  if(currentRole !== 'admin') return;
   const target = globalPastReceipts[receiptId];
   if(!target) { alert("Bu fişin detayları bulunamadı."); return; }
 
@@ -4352,7 +4354,7 @@ function updateReceiptEditTotal() {
 }
 
 async function saveReceiptEdit() {
-  if(currentRole !== 'admin' && currentRole !== 'staff') return;
+  if(currentRole !== 'admin') return;
   if(!receiptEditTarget) return;
 
   const { receiptId, date, original } = receiptEditTarget;
