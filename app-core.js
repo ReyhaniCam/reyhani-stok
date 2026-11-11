@@ -1215,7 +1215,7 @@ const COMMAND_MODULES = [
   { label: 'QR Okut', icon: '📷', tab: 'okut', keywords: 'qr barkod okut tara kamera' },
   { label: 'Günlük Görevler', icon: '📋', tab: 'gorevler', keywords: 'gorev task yapilacaklar', role: 'staff' },
   { label: 'Toptancılar', icon: '🤝', tab: 'toptanci', keywords: 'toptanci tedarikci', role: 'admin' },
-  { label: 'Malzeme Fişi', icon: '📥', tab: 'fis', keywords: 'fis mal girisi malzeme fisi', role: 'staff' },
+  { label: 'Malzeme Fişi', icon: '📥', tab: 'fis', keywords: 'fis mal girisi malzeme fisi', role: 'admin' },
   { label: 'Satış / Sepet', icon: '🛒', tab: 'siparis', keywords: 'satis sepet siparis sat', role: 'staff' },
   { label: 'Yerleşim', icon: '🗺️', tab: 'yerlesim', keywords: 'yerlesim kroki stand harita magaza plani', role: 'staff' },
   { label: 'Raporlar', icon: '📊', tab: 'raporlar', keywords: 'rapor raporlar', role: 'staff' },
@@ -1394,7 +1394,7 @@ function updateAuthUI() {
   
   const canAccessStaffOrAdmin = (currentRole === 'admin' || currentRole === 'staff');
   document.getElementById('nav-siparis-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
-  document.getElementById('nav-fis-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
+  document.getElementById('nav-fis-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';   // Malzeme Fişi: sadece yönetici
   document.getElementById('nav-yerlesim-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
   document.getElementById('nav-reports-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
   document.getElementById('nav-gorevler-btn').style.display = canAccessStaffOrAdmin ? 'block' : 'none';
