@@ -2687,12 +2687,26 @@ async function downloadZReportByDate(dateStr) {
 // düzenlenebilir tabloya döker, günlük toplamı hesaplar ve Firebase'e kaydeder.
 // ============================================================
 const dbAiSalesReports = dbRoot.child('ai_sales_reports');
-let aiSalesRows = [];          // {name, qty, amount}
+let aiSalesRows = [];          // {name, qty, amount, customer}
 let aiSalesDeclaredTotals = []; // kağıtta yazan genel toplamlar (varsa) — kontrol için
 let aiSalesDirty = false;
 let globalAiSalesReports = {};
+let aiSalesDate = null;         // ekrandaki raporun KAYDEDİLECEĞİ tarih (null = bugün)
+let aiSalesEditingDate = null;  // ekrana yüklenen kayıtlı raporun tarihi (null = yeni rapor)
+let aiSalesExpanded = {};       // kayıtlı raporlar listesinde açık olan detaylar
+let aiSalesLedgerOpen = {};     // müşteri defterinde açık olan müşteriler
 
-function aiSalesToday() { return new Date().toISOString().slice(0, 10); }
+// Yerel (Türkiye) saatine göre bugünün tarihi — gece yarısından sonra bir önceki güne yazılmasın
+function aiSalesToday() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+function aiSalesCurDate() { return aiSalesDate || aiSalesToday(); }
+function aiSalesRound(n) { return Math.round(((parseFloat(n) || 0) + Number.EPSILON) * 100) / 100; }
+function aiSalesFmtDate(d) {
+  const m = String(d || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : String(d || '');
+}
 
 function aiSalesParseNum(v) {
   if (typeof v === 'number') return isFinite(v) ? v : 0;
@@ -2708,19 +2722,41 @@ function aiSalesTotal() {
   return aiSalesRows.reduce((t, r) => t + (parseFloat(r.amount) || 0), 0);
 }
 
-function renderAiSalesReview() {
-  const box = document.getElementById('ai-sales-review');
-  if (!box) return;
-  if (!aiSalesRows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
-  box.style.display = 'block';
-  const rowsHtml = aiSalesRows.map((r, i) => `
-    <tr>
-      <td style="padding:3px;"><input type="text" value="${escHtml(r.name)}" onchange="updateAiSalesRow(${i}, 'name', this.value)" style="width:100%; min-width:140px;"></td>
-      <td style="padding:3px;"><input type="number" step="any" value="${r.qty}" onchange="updateAiSalesRow(${i}, 'qty', this.value)" style="width:70px;"></td>
-      <td style="padding:3px;"><input type="number" step="any" value="${r.amount}" onchange="updateAiSalesRow(${i}, 'amount', this.value)" style="width:100px;"></td>
-      <td style="padding:3px;"><button class="btn btn-sm" onclick="removeAiSalesRow(${i})" style="width:auto;">🗑️</button></td>
-    </tr>`).join('');
+// Kayıtlı (tanınan) müşteriler arasında bu isimle eşleşeni bulur; yoksa '' döner
+function aiSalesKnownCustomer(name) {
+  const n = (typeof normCust === 'function') ? normCust(name) : String(name || '').trim().toLowerCase();
+  if (!n) return '';
+  const list = Object.values(typeof customersData !== 'undefined' ? (customersData || {}) : {});
+  for (const c of list) { if (c && c.name && normCust(c.name) === n) return c.name; }
+  return '';
+}
+
+// Satırları müşteri adına göre gruplar: [{key, name, count, total, items:[]}]
+function aiSalesGroupByCustomer(rows) {
+  const map = {};
+  (rows || []).forEach(r => {
+    const cn = String(r.customer || '').trim();
+    if (!cn) return;
+    const key = (typeof normCust === 'function' ? normCust(cn) : cn.toLowerCase()) || cn.toLowerCase();
+    if (!map[key]) map[key] = { key, name: cn, count: 0, total: 0, items: [] };
+    map[key].count++;
+    map[key].total += parseFloat(r.amount) || 0;
+    map[key].items.push(r);
+  });
+  return Object.values(map).sort((a, b) => b.total - a.total);
+}
+
+function aiSalesRefreshCustomerDatalist() {
+  let dl = document.getElementById('ai-sales-customer-datalist');
+  if (!dl) { dl = document.createElement('datalist'); dl.id = 'ai-sales-customer-datalist'; document.body.appendChild(dl); }
+  dl.innerHTML = Object.values(typeof customersData !== 'undefined' ? (customersData || {}) : {})
+    .map(c => c && c.name ? `<option value="${escHtml(c.name)}"></option>` : '').join('');
+}
+
+function aiSalesSummaryHtml() {
   const total = aiSalesTotal();
+  const groups = aiSalesGroupByCustomer(aiSalesRows);
+  const custTotal = groups.reduce((t, g) => t + g.total, 0);
   let warn = '';
   const declared = aiSalesDeclaredTotals.filter(t => t > 0);
   if (declared.length) {
@@ -2731,19 +2767,76 @@ function renderAiSalesReview() {
       warn = `<div style="font-size:12px; color:var(--success); margin-top:6px;">✅ Satır toplamı kağıttaki genel toplamla uyuşuyor.</div>`;
     }
   }
+  let custHtml = '';
+  if (groups.length) {
+    custHtml = `<div style="margin-top:10px; padding:10px; border:1px dashed var(--steel-line); border-radius:6px;">
+      <div style="font-family:'Oswald'; font-size:14px; margin-bottom:6px;">👤 MÜŞTERİ ADINA ALINANLAR <span style="font-size:12px; color:var(--steel);">(₺${formatMoney(custTotal)} • diğer satışlar: ₺${formatMoney(total - custTotal)})</span></div>
+      ${groups.map(g => `<div style="display:flex; justify-content:space-between; gap:8px; font-size:13px; padding:2px 0;"><span>${escHtml(g.name)} <span style="color:var(--steel); font-size:11px;">(${g.count} kalem)</span></span><strong>₺${formatMoney(g.total)}</strong></div>`).join('')}
+    </div>`;
+  }
+  return `<div style="font-family:'Oswald'; font-size:18px;">📊 Gün İçi Toplam Satış: <span style="color:var(--success);">₺${formatMoney(total)}</span> <span style="font-size:12px; color:var(--steel);">(${aiSalesRows.length} satır)</span></div>${warn}${custHtml}`;
+}
+
+function aiSalesRefreshSummary() {
+  const el = document.getElementById('ai-sales-summary');
+  if (el) el.innerHTML = aiSalesSummaryHtml();
+  const d = document.getElementById('ai-sales-dirty');
+  if (d) d.style.display = aiSalesDirty ? 'inline' : 'none';
+}
+
+function aiSalesCustFlagHtml(name) {
+  const v = String(name || '').trim();
+  if (!v) return '';
+  return aiSalesKnownCustomer(v) ? '<span title="Kayıtlı müşteri" style="color:var(--success);">✓</span>' : '<span title="Kayıtlı müşteri listesinde yok (yine de kaydedilir)" style="color:var(--rust);">!</span>';
+}
+
+function renderAiSalesReview() {
+  const box = document.getElementById('ai-sales-review');
+  if (!box) return;
+  aiSalesRefreshCustomerDatalist();
+  if (!aiSalesRows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  const inp = 'width:100%; box-sizing:border-box;';
+  const rowsHtml = aiSalesRows.map((r, i) => {
+    const unit = r.qty > 0 ? aiSalesRound(r.amount / r.qty) : 0;
+    return `
+    <tr style="border-bottom:1px solid var(--steel-line);">
+      <td style="padding:3px; color:var(--steel); font-size:11px;">${i + 1}</td>
+      <td style="padding:3px;"><input type="text" id="aisr-name-${i}" value="${escHtml(r.name)}" onchange="updateAiSalesRow(${i}, 'name', this.value)" style="${inp} min-width:150px;"></td>
+      <td style="padding:3px;"><input type="number" step="any" id="aisr-qty-${i}" value="${r.qty}" onchange="updateAiSalesRow(${i}, 'qty', this.value)" style="width:64px;"></td>
+      <td style="padding:3px;"><input type="number" step="any" id="aisr-unit-${i}" value="${unit}" onchange="updateAiSalesRow(${i}, 'unit', this.value)" style="width:84px;"></td>
+      <td style="padding:3px;"><input type="number" step="any" id="aisr-amt-${i}" value="${r.amount}" onchange="updateAiSalesRow(${i}, 'amount', this.value)" style="width:92px;"></td>
+      <td style="padding:3px; white-space:nowrap;"><input type="text" id="aisr-cust-${i}" list="ai-sales-customer-datalist" placeholder="(boş = normal satış)" value="${escHtml(r.customer || '')}" onchange="updateAiSalesRow(${i}, 'customer', this.value)" style="width:150px;"> <span id="aisr-flag-${i}">${aiSalesCustFlagHtml(r.customer)}</span></td>
+      <td style="padding:3px; white-space:nowrap;">
+        <button class="btn btn-sm" title="Satırı kopyala" onclick="duplicateAiSalesRow(${i})" style="width:auto;">⧉</button>
+        <button class="btn btn-sm" title="Satırı sil" onclick="removeAiSalesRow(${i})" style="width:auto;">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const editBanner = aiSalesEditingDate
+    ? `<div style="background:rgba(245,158,11,.12); border:1px solid #F59E0B; border-radius:6px; padding:8px 10px; font-size:13px; margin-bottom:10px; text-align:left;">✏️ <strong>${escHtml(aiSalesFmtDate(aiSalesEditingDate))}</strong> tarihli kayıtlı raporu düzenliyorsunuz. Kaydettiğinizde aynı rapor güncellenir.</div>`
+    : '';
   box.innerHTML = `
+    ${editBanner}
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:8px; text-align:left;">
+      <label style="font-size:13px;">📅 Rapor tarihi:
+        <input type="date" id="ai-sales-date" value="${aiSalesCurDate()}" onchange="setAiSalesDate(this.value)" style="width:auto;">
+      </label>
+      <span id="ai-sales-dirty" style="display:${aiSalesDirty ? 'inline' : 'none'}; font-size:12px; color:#F59E0B;">● Kaydedilmemiş değişiklik var</span>
+    </div>
     <div style="overflow-x:auto;">
-      <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead><tr style="text-align:left; border-bottom:1px solid var(--steel-line);"><th>Malzeme</th><th>Adet</th><th>Tutar (₺)</th><th></th></tr></thead>
+      <table style="width:100%; border-collapse:collapse; font-size:13px; text-align:left;">
+        <thead><tr style="border-bottom:1px solid var(--steel-line);"><th>#</th><th>Malzeme</th><th>Adet</th><th>Birim ₺</th><th>Tutar (₺)</th><th>Müşteri Adına</th><th></th></tr></thead>
         <tbody>${rowsHtml}</tbody>
       </table>
     </div>
-    <div style="font-family:'Oswald'; font-size:18px; margin-top:10px;">📊 Gün İçi Toplam Satış: <span style="color:var(--success);">₺${formatMoney(total)}</span> <span style="font-size:12px; color:var(--steel);">(${aiSalesRows.length} satır)</span></div>
-    ${warn}
+    <div style="font-size:11px; color:var(--steel); margin-top:4px; text-align:left;">İpucu: Adeti değiştirirseniz tutar birim fiyata göre yeniden hesaplanır; birim fiyatı veya tutarı doğrudan da düzeltebilirsiniz.</div>
+    <div id="ai-sales-summary" style="margin-top:10px; text-align:left;">${aiSalesSummaryHtml()}</div>
     <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
-      <button class="btn btn-success" onclick="saveAiSalesReport()">💾 Bugünün Raporu Olarak Kaydet</button>
+      <button class="btn btn-success" onclick="saveAiSalesReport()">💾 ${aiSalesEditingDate ? 'Değişiklikleri Kaydet' : 'Raporu Kaydet'} (${escHtml(aiSalesFmtDate(aiSalesCurDate()))})</button>
       <button class="btn btn-dark" onclick="downloadAiSalesExcel(null)">📊 Excel İndir</button>
-      <button class="btn btn-sm" onclick="clearAiSalesRows()" style="width:auto;">Temizle</button>
+      <button class="btn btn-sm" onclick="clearAiSalesRows()" style="width:auto;">${aiSalesEditingDate ? 'Düzenlemeyi Bırak' : 'Temizle'}</button>
     </div>`;
 }
 
@@ -2756,18 +2849,60 @@ function aiSalesSetStatus(msg, color) {
   el.innerHTML = msg;
 }
 
-function updateAiSalesRow(i, field, val) {
-  const r = aiSalesRows[i]; if (!r) return;
-  if (field === 'name') r.name = String(val || '').trim();
-  else r[field] = aiSalesParseNum(val);
+function setAiSalesDate(v) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) { renderAiSalesReview(); return; }
+  aiSalesDate = v;
   aiSalesDirty = true;
   renderAiSalesReview();
 }
+
+// Odağı kaybettirmeden (sekmeyle diğer kutuya geçilebilsin diye) satırı yerinde günceller
+function updateAiSalesRow(i, field, val) {
+  const r = aiSalesRows[i]; if (!r) return;
+  if (field === 'name') {
+    r.name = String(val || '').trim();
+  } else if (field === 'customer') {
+    let v = String(val || '').trim();
+    const known = aiSalesKnownCustomer(v);
+    if (known) v = known;               // yazım farkı olsa da kayıtlı müşteri adına çevir
+    r.customer = v;
+    const ci = document.getElementById('aisr-cust-' + i); if (ci) ci.value = v;
+    const fl = document.getElementById('aisr-flag-' + i); if (fl) fl.innerHTML = aiSalesCustFlagHtml(v);
+  } else if (field === 'qty') {
+    const unit = r.qty > 0 ? r.amount / r.qty : 0;
+    r.qty = aiSalesParseNum(val);
+    if (unit > 0 && r.qty > 0) r.amount = aiSalesRound(unit * r.qty);
+  } else if (field === 'unit') {
+    const u = aiSalesParseNum(val);
+    r.amount = aiSalesRound(u * (r.qty > 0 ? r.qty : 1));
+  } else if (field === 'amount') {
+    r.amount = aiSalesParseNum(val);
+  }
+  aiSalesDirty = true;
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+  set('aisr-qty-' + i, r.qty);
+  set('aisr-amt-' + i, r.amount);
+  set('aisr-unit-' + i, r.qty > 0 ? aiSalesRound(r.amount / r.qty) : 0);
+  aiSalesRefreshSummary();
+}
 function removeAiSalesRow(i) { aiSalesRows.splice(i, 1); aiSalesDirty = true; renderAiSalesReview(); }
-function addAiSalesRow() { aiSalesRows.push({ name: '', qty: 1, amount: 0 }); aiSalesDirty = true; renderAiSalesReview(); }
+function duplicateAiSalesRow(i) {
+  const r = aiSalesRows[i]; if (!r) return;
+  aiSalesRows.splice(i + 1, 0, { ...r });
+  aiSalesDirty = true; renderAiSalesReview();
+}
+function addAiSalesRow(forCustomer) {
+  aiSalesRows.push({ name: '', qty: 1, amount: 0, customer: '' });
+  aiSalesDirty = true;
+  renderAiSalesReview();
+  const idx = aiSalesRows.length - 1;
+  const el = document.getElementById((forCustomer ? 'aisr-cust-' : 'aisr-name-') + idx);
+  if (el) { el.scrollIntoView({ block: 'center' }); el.focus(); }
+}
 function clearAiSalesRows() {
-  if (aiSalesRows.length && !confirm('Ekrandaki satırlar temizlensin mi? (Kayıtlı rapor silinmez.)')) return;
+  if (aiSalesRows.length && aiSalesDirty && !confirm('Kaydedilmemiş değişiklikler var, ekrandaki satırlar kapatılsın mı? (Kayıtlı raporlar silinmez.)')) return;
   aiSalesRows = []; aiSalesDeclaredTotals = []; aiSalesDirty = false;
+  aiSalesDate = null; aiSalesEditingDate = null;
   aiSalesSetStatus('');
   renderAiSalesReview();
 }
@@ -2808,7 +2943,7 @@ async function processAiSalesPhotos(event) {
       items.forEach(it => {
         const name = String(it.name || '').trim();
         if (!name) return;
-        aiSalesRows.push({ name, qty: aiSalesParseNum(it.qty) || 1, amount: aiSalesParseNum(it.amount) });
+        aiSalesRows.push({ name, qty: aiSalesParseNum(it.qty) || 1, amount: aiSalesParseNum(it.amount), customer: '' });
         added++;
       });
       if (parsed && parsed.total) aiSalesDeclaredTotals.push(aiSalesParseNum(parsed.total));
@@ -2828,24 +2963,64 @@ async function processAiSalesPhotos(event) {
   }
 }
 
+function aiSalesCleanRows() {
+  return aiSalesRows.filter(r => r.name).map(r => ({
+    name: r.name, qty: r.qty || 0, amount: r.amount || 0, customer: String(r.customer || '').trim()
+  }));
+}
+
 function saveAiSalesReport() {
   if (!aiSalesRows.length) { alert('Kaydedilecek satır yok.'); return; }
-  const clean = aiSalesRows.filter(r => r.name).map(r => ({ name: r.name, qty: r.qty || 0, amount: r.amount || 0 }));
-  const dateStr = aiSalesToday();
+  const clean = aiSalesCleanRows();
+  if (!clean.length) { alert('Malzeme adı boş olan satırlar kaydedilemez.'); return; }
+  const dateStr = aiSalesCurDate();
+  const old = aiSalesEditingDate;
   const existing = globalAiSalesReports[dateStr];
-  if (existing && !confirm(`Bugün için kayıtlı bir AI satış raporu var (₺${formatMoney(existing.total || 0)}). Ekrandaki satırlarla DEĞİŞTİRİLSİN mi?`)) return;
+  if (old && old !== dateStr) {
+    if (existing && !confirm(`${aiSalesFmtDate(dateStr)} tarihinde zaten bir rapor var (₺${formatMoney(existing.total || 0)}). Bu rapor oraya TAŞINIP onun yerine geçsin mi? (${aiSalesFmtDate(old)} kaydı silinir)`)) return;
+    if (!existing && !confirm(`Bu rapor ${aiSalesFmtDate(old)} tarihinden ${aiSalesFmtDate(dateStr)} tarihine TAŞINACAK (eski tarihteki kayıt silinir). Devam edilsin mi?`)) return;
+  } else if (!old && existing) {
+    if (!confirm(`${aiSalesFmtDate(dateStr)} için kayıtlı bir AI satış raporu var (₺${formatMoney(existing.total || 0)}). Ekrandaki satırlarla DEĞİŞTİRİLSİN mi?`)) return;
+  }
+  const src = (old && globalAiSalesReports[old]) || existing || {};
+  const groups = aiSalesGroupByCustomer(clean);
   const report = {
     date: dateStr,
     time: new Date().toLocaleTimeString('tr-TR'),
     items: clean,
     total: clean.reduce((t, r) => t + r.amount, 0),
-    createdBy: getActorLabel()
+    customerTotals: groups.map(g => ({ name: g.name, count: g.count, total: aiSalesRound(g.total) })),
+    createdBy: src.createdBy || getActorLabel(),
+    createdTime: src.createdTime || new Date().toLocaleTimeString('tr-TR')
   };
-  dbAiSalesReports.child(dateStr).set(report, (err) => {
+  if (src.createdBy) { report.updatedBy = getActorLabel(); report.updatedAt = new Date().toLocaleString('tr-TR'); }
+  const ops = {};
+  ops[dateStr] = report;
+  if (old && old !== dateStr) ops[old] = null;
+  dbAiSalesReports.update(ops, (err) => {
     if (err) { alert('Rapor kaydedilemedi: ' + (err.message || err)); return; }
     aiSalesDirty = false;
+    aiSalesEditingDate = dateStr;
+    aiSalesDate = dateStr;
+    renderAiSalesReview();
     showToast('AI satış raporu kaydedildi!');
   });
+}
+
+function deleteAiSalesReport(dateStr) {
+  const rep = globalAiSalesReports[dateStr]; if (!rep) return;
+  if (currentRole !== 'admin') { alert('Rapor silmek için yönetici yetkisi gerekir.'); return; }
+  if (!confirm(`${aiSalesFmtDate(dateStr)} tarihli AI satış raporu (₺${formatMoney(rep.total || 0)}) KALICI olarak silinsin mi?`)) return;
+  dbAiSalesReports.child(dateStr).remove((err) => {
+    if (err) { alert('Silinemedi: ' + (err.message || err)); return; }
+    if (aiSalesEditingDate === dateStr) { aiSalesRows = []; aiSalesEditingDate = null; aiSalesDate = null; aiSalesDirty = false; renderAiSalesReview(); }
+    showToast('Rapor silindi.');
+  });
+}
+
+function toggleAiSalesDetail(dateStr) {
+  aiSalesExpanded[dateStr] = !aiSalesExpanded[dateStr];
+  renderAiSalesSavedList();
 }
 
 async function downloadAiSalesExcel(dateStr) {
@@ -2855,55 +3030,150 @@ async function downloadAiSalesExcel(dateStr) {
     if (!rep) { alert('Rapor bulunamadı.'); return; }
     rows = rep.items || []; total = rep.total || 0; label = dateStr;
   } else {
-    rows = aiSalesRows; total = aiSalesTotal(); label = aiSalesToday();
+    rows = aiSalesRows; total = aiSalesTotal(); label = aiSalesCurDate();
   }
-  const aoa = [['Malzeme', 'Adet', 'Tutar (₺)']];
-  rows.forEach(r => aoa.push([r.name, r.qty, r.amount]));
-  aoa.push(['', '', '']);
-  aoa.push(['GÜN İÇİ TOPLAM SATIŞ', '', total]);
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const aoa = [['Malzeme', 'Adet', 'Birim Fiyat (₺)', 'Tutar (₺)', 'Müşteri Adına']];
+  rows.forEach(r => aoa.push([r.name, r.qty, r.qty > 0 ? aiSalesRound(r.amount / r.qty) : 0, r.amount, r.customer || '']));
+  aoa.push(['', '', '', '', '']);
+  aoa.push(['GÜN İÇİ TOPLAM SATIŞ', '', '', total, '']);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'AI Satış ' + label);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), ('AI Satış ' + label).slice(0, 31));
+  const groups = aiSalesGroupByCustomer(rows);
+  if (groups.length) {
+    const a2 = [['Müşteri', 'Malzeme', 'Adet', 'Tutar (₺)']];
+    groups.forEach(g => {
+      g.items.forEach(r => a2.push([g.name, r.name, r.qty, r.amount]));
+      a2.push([g.name + ' TOPLAM', '', '', g.total]);
+      a2.push(['', '', '', '']);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(a2), 'Müşteri Adına');
+  }
   await saveExcelFile(wb, `Reyhani_AI_Satis_Raporu_${label}.xlsx`);
+}
+
+// ---- Kayıtlı raporlar listesi (detay açılır, düzenle/sil) ----
+function renderAiSalesSavedList() {
+  const list = document.getElementById('ai-sales-saved-list');
+  if (!list) return;
+  const keys = Object.keys(globalAiSalesReports).sort().reverse();
+  const isAdmin = (typeof currentRole !== 'undefined' && currentRole === 'admin');
+  list.innerHTML = keys.length ? keys.map(d => {
+    const rep = globalAiSalesReports[d] || {};
+    const items = rep.items || [];
+    const groups = aiSalesGroupByCustomer(items);
+    const editing = aiSalesEditingDate === d;
+    const open = !!aiSalesExpanded[d];
+    const detail = open ? `<div style="width:100%; overflow-x:auto; margin-top:6px;">
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+          <thead><tr style="text-align:left; border-bottom:1px solid var(--steel-line);"><th>Malzeme</th><th>Adet</th><th>Tutar</th><th>Müşteri</th></tr></thead>
+          <tbody>${items.map(r => `<tr style="border-bottom:1px solid var(--steel-line);"><td>${escHtml(r.name)}</td><td>${r.qty}</td><td>₺${formatMoney(r.amount || 0)}</td><td>${escHtml(r.customer || '')}</td></tr>`).join('')}</tbody>
+        </table></div>` : '';
+    return `<div class="tag" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; ${editing ? 'border:1px solid #F59E0B;' : ''}">
+      <div>
+        <div class="tag-title">📅 ${escHtml(aiSalesFmtDate(rep.date || d))} ${editing ? '<span style="font-size:11px; color:#F59E0B;">(ekranda düzenleniyor)</span>' : ''}</div>
+        <div style="font-size:12px; margin-top:4px;">${items.length} satır | Toplam: <strong style="color:var(--success);">₺${formatMoney(rep.total || 0)}</strong></div>
+        ${groups.length ? `<div style="font-size:11px; color:var(--info); margin-top:3px;">👤 ${groups.map(g => escHtml(g.name) + ' ₺' + formatMoney(g.total)).join(' • ')}</div>` : ''}
+        ${rep.createdBy ? `<div style="font-size:10px; color:var(--info); margin-top:2px;">📱 ${escHtml(rep.createdBy)}${rep.updatedBy ? ` • son düzenleme: ${escHtml(rep.updatedBy)}${rep.updatedAt ? ' (' + escHtml(rep.updatedAt) + ')' : ''}` : ''}</div>` : ''}
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button class="btn btn-sm" onclick="toggleAiSalesDetail('${d}')" style="width:auto;">${open ? '🔼 Gizle' : '👁️ Detay'}</button>
+        <button class="btn btn-sm" onclick="loadAiSalesReport('${d}')" style="width:auto;">✏️ Düzenle</button>
+        <button class="btn btn-success btn-sm" onclick="downloadAiSalesExcel('${d}')" style="width:auto;">📊 Excel</button>
+        ${isAdmin ? `<button class="btn btn-sm" onclick="deleteAiSalesReport('${d}')" style="width:auto;">🗑️</button>` : ''}
+      </div>
+      ${detail}
+    </div>`;
+  }).join('') : '<p style="color:var(--steel);font-size:13px;">Henüz kayıtlı AI satış raporu yok.</p>';
+}
+
+// ---- Müşteri defteri: tüm raporlardaki "müşteri adına alınanlar" isim altında toplanır ----
+function aiSalesLedgerData() {
+  const map = {};
+  Object.keys(globalAiSalesReports).sort().reverse().forEach(d => {
+    const rep = globalAiSalesReports[d] || {};
+    (rep.items || []).forEach(r => {
+      const cn = String(r.customer || '').trim(); if (!cn) return;
+      const key = (typeof normCust === 'function' ? normCust(cn) : cn.toLowerCase()) || cn.toLowerCase();
+      if (!map[key]) map[key] = { key, name: cn, total: 0, count: 0, lines: [] };
+      map[key].total += parseFloat(r.amount) || 0;
+      map[key].count++;
+      map[key].lines.push({ date: d, name: r.name, qty: r.qty, amount: r.amount });
+    });
+  });
+  return Object.values(map).sort((a, b) => b.total - a.total);
+}
+
+function renderAiSalesLedger() {
+  const box = document.getElementById('ai-sales-customer-ledger');
+  if (!box) return;
+  const q = ((document.getElementById('ai-sales-ledger-search') || {}).value || '');
+  const nq = (typeof normCust === 'function') ? normCust(q) : q.toLowerCase();
+  const data = aiSalesLedgerData().filter(c => !nq || (typeof normCust === 'function' ? normCust(c.name) : c.name.toLowerCase()).includes(nq));
+  const out = document.getElementById('ai-sales-ledger-list');
+  if (!out) return;
+  out.innerHTML = data.length ? data.map(c => {
+    const open = !!aiSalesLedgerOpen[c.key];
+    return `<div class="tag" style="margin-bottom:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+        <div><div class="tag-title">👤 ${escHtml(c.name)}</div>
+        <div style="font-size:12px; margin-top:3px;">${c.count} kalem | Toplam: <strong style="color:var(--success);">₺${formatMoney(c.total)}</strong></div></div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-sm" onclick="toggleAiSalesLedger('${c.key}')" style="width:auto;">${open ? '🔼 Gizle' : '👁️ Kalemler'}</button>
+          <button class="btn btn-success btn-sm" onclick="downloadAiSalesCustomerExcel('${c.key}')" style="width:auto;">📊 Excel</button>
+        </div>
+      </div>
+      ${open ? `<div style="overflow-x:auto; margin-top:6px;"><table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <thead><tr style="text-align:left; border-bottom:1px solid var(--steel-line);"><th>Tarih</th><th>Malzeme</th><th>Adet</th><th>Tutar</th><th></th></tr></thead>
+        <tbody>${c.lines.map(l => `<tr style="border-bottom:1px solid var(--steel-line);"><td>${escHtml(aiSalesFmtDate(l.date))}</td><td>${escHtml(l.name)}</td><td>${l.qty}</td><td>₺${formatMoney(l.amount || 0)}</td><td><button class="btn btn-sm" onclick="loadAiSalesReport('${l.date}')" style="width:auto;" title="O günün raporunu düzenle">✏️</button></td></tr>`).join('')}</tbody>
+      </table></div>` : ''}
+    </div>`;
+  }).join('') : '<p style="color:var(--steel);font-size:13px;">Henüz müşteri adına kaydedilmiş ürün yok. Rapor satırlarındaki "Müşteri Adına" kutusuna isim yazıp raporu kaydedin.</p>';
+}
+
+function toggleAiSalesLedger(key) { aiSalesLedgerOpen[key] = !aiSalesLedgerOpen[key]; renderAiSalesLedger(); }
+
+async function downloadAiSalesCustomerExcel(key) {
+  const c = aiSalesLedgerData().find(x => x.key === key); if (!c) return;
+  const aoa = [['Tarih', 'Malzeme', 'Adet', 'Tutar (₺)']];
+  c.lines.forEach(l => aoa.push([l.date, l.name, l.qty, l.amount]));
+  aoa.push(['', '', '', '']);
+  aoa.push(['TOPLAM', '', '', c.total]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), c.name.replace(/[\\\/?*\[\]:]/g, ' ').slice(0, 31) || 'Müşteri');
+  await saveExcelFile(wb, `Reyhani_Musteri_Alimlari_${c.name.replace(/[^\w\u00C0-\u024F]+/g, '_')}.xlsx`);
 }
 
 dbAiSalesReports.on('value', (snapshot) => {
   globalAiSalesReports = snapshot.val() || {};
-  const list = document.getElementById('ai-sales-saved-list');
-  if (list) {
-    const keys = Object.keys(globalAiSalesReports).sort().reverse();
-    list.innerHTML = keys.length ? keys.map(d => {
-      const rep = globalAiSalesReports[d];
-      return `<div class="tag" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-        <div>
-          <div class="tag-title">📅 ${escHtml(rep.date || d)}</div>
-          <div style="font-size:12px; margin-top:4px;">${(rep.items || []).length} satır | Toplam: <strong style="color:var(--success);">₺${formatMoney(rep.total || 0)}</strong></div>
-          ${rep.createdBy ? `<div style="font-size:10px; color:var(--info); margin-top:2px;">📱 ${escHtml(rep.createdBy)}</div>` : ''}
-        </div>
-        <div style="display:flex; gap:6px;">
-          <button class="btn btn-sm" onclick="loadAiSalesReport('${d}')" style="width:auto;">✏️ Düzenle</button>
-          <button class="btn btn-success btn-sm" onclick="downloadAiSalesExcel('${d}')" style="width:auto;">📊 Excel</button>
-        </div>
-      </div>`;
-    }).join('') : '<p style="color:var(--steel);font-size:13px;">Henüz kayıtlı AI satış raporu yok.</p>';
-  }
+  renderAiSalesSavedList();
+  renderAiSalesLedger();
   // Ekran boşsa ve kullanıcı henüz bir şey yapmadıysa bugünün kaydını göster
-  const today = globalAiSalesReports[aiSalesToday()];
+  const t = aiSalesToday();
+  const today = globalAiSalesReports[t];
   if (today && !aiSalesRows.length && !aiSalesDirty) {
-    aiSalesRows = (today.items || []).map(r => ({ name: r.name, qty: r.qty, amount: r.amount }));
+    aiSalesRows = (today.items || []).map(r => ({ name: r.name, qty: r.qty, amount: r.amount, customer: r.customer || '' }));
+    aiSalesEditingDate = t; aiSalesDate = t;
     renderAiSalesReview();
   }
 });
+
+// Müşteri listesi değişirse (yeni müşteri eklendi vb.) öneri listesini yenile
+if (typeof dbCustomers !== 'undefined') dbCustomers.on('value', () => { aiSalesRefreshCustomerDatalist(); });
 
 function loadAiSalesReport(dateStr) {
   const rep = globalAiSalesReports[dateStr];
   if (!rep) return;
   if (aiSalesRows.length && aiSalesDirty && !confirm('Ekrandaki kaydedilmemiş satırlar silinip bu rapor yüklensin mi?')) return;
-  aiSalesRows = (rep.items || []).map(r => ({ name: r.name, qty: r.qty, amount: r.amount }));
+  aiSalesRows = (rep.items || []).map(r => ({ name: r.name, qty: r.qty, amount: r.amount, customer: r.customer || '' }));
   aiSalesDeclaredTotals = [];
+  aiSalesEditingDate = dateStr;
+  aiSalesDate = dateStr;
   aiSalesDirty = false;
   renderAiSalesReview();
-  showToast(dateStr === aiSalesToday() ? 'Bugünün raporu yüklendi.' : `${dateStr} raporu yüklendi (tekrar kaydederseniz bugünün raporu olur).`);
+  aiSalesSetStatus('');
+  const rv = document.getElementById('ai-sales-review');
+  if (rv) rv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  showToast(`${aiSalesFmtDate(dateStr)} raporu düzenleme için yüklendi.`);
 }
 // Initialize
 checkDeviceAuthorizationLink();
