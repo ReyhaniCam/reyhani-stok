@@ -28,6 +28,33 @@ const dbBarcodeCache = dbRoot.child('barcode_cache');
 const dbCustomerDebts = dbRoot.child('customer_debts');
 const dbCustomers = dbRoot.child('customers');
 const dbSenetler = dbRoot.child('senetler');
+
+// ============================================================
+// GOOGLE (GEMINI) API ANAHTARI — TÜM CİHAZLARDA ORTAK
+// Anahtar artık sadece tarayıcıda (localStorage) değil, Firebase'de de saklanır.
+// Bir cihazda bir kez girilince tüm cihazlara otomatik gelir, tekrar sorulmaz.
+// ============================================================
+const dbGeminiKey = dbRoot.child('app_settings/gemini_api_key');
+
+function saveGeminiApiKey(key) {
+  key = (key || '').trim();
+  if (!key) return;
+  try { localStorage.setItem('gemini_api_key', key); } catch (e) {}
+  dbGeminiKey.set(key).catch(e => console.warn('API anahtarı Firebase\'e kaydedilemedi:', e));
+}
+
+dbGeminiKey.on('value', snap => {
+  const remote = snap.val();
+  if (remote && typeof remote === 'string') {
+    // Firebase'deki anahtar bu cihaza yansıtılır (başka cihazdan girilmiş olabilir)
+    try { if (localStorage.getItem('gemini_api_key') !== remote) localStorage.setItem('gemini_api_key', remote); } catch (e) {}
+  } else {
+    // Firebase'de henüz yok ama bu cihazda kayıtlı: bir defalık yukarı taşı (mevcut anahtar kaybolmasın)
+    let local = '';
+    try { local = localStorage.getItem('gemini_api_key') || ''; } catch (e) {}
+    if (local) dbGeminiKey.set(local).catch(() => {});
+  }
+}, err => console.warn('API anahtarı okunamadı:', err));
 const dbCatalogPdfs = dbRoot.child('catalog_pdfs');
 const dbCatalogMeta = dbRoot.child('catalog_meta');
 const dbPipeTypes = dbRoot.child('pipe_types');
@@ -416,7 +443,7 @@ async function submitIssueReportToAI() {
   if (!apiKey) {
     apiKey = prompt("Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:");
     if (!apiKey) return;
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   document.getElementById('issue-report-step-1').style.display = 'none';
@@ -1623,7 +1650,7 @@ async function processBorcCartPhoto(event) {
   if (!apiKey) {
     apiKey = prompt("Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:");
     if (!apiKey) { event.target.value = ''; return; }
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   const statusEl = document.getElementById('borc-cart-photo-status');
