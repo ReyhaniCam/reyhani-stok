@@ -925,6 +925,24 @@
         <button class="btn btn-success" onclick="generateDailyZReport()">Bugünün Z Raporunu Oluştur &amp; Arşivle</button>
       </div>
 
+      <!-- AI GÜNLÜK SATIŞ RAPORU (BAŞLANGIÇ) -->
+      <div class="report-box" style="margin-top:16px;">
+        <h3>🤖 AI GÜNLÜK SATIŞ RAPORU</h3>
+        <p>Gün içinde satılan malzemelerin ve tutarların yazılı olduğu kağıdın/defterin fotoğrafını yükleyin. Yapay zeka satırları okuyup günlük toplam satış raporunu çıkarsın. Birden fazla fotoğraf yükleyebilirsiniz; satırlar alt alta eklenir. Kaydetmeden önce okunan değerleri kontrol edip düzeltin.</p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+          <label class="btn btn-dark" style="cursor:pointer; margin:0;">📷 Fotoğraf Yükle
+            <input type="file" id="ai-sales-photo-input" accept="image/*" multiple style="display:none;" onchange="processAiSalesPhotos(event)">
+          </label>
+          <button class="btn btn-sm" onclick="promptGeminiApiKey()" style="width:auto;">🔑 API Key Gir</button>
+          <button class="btn btn-sm" onclick="addAiSalesRow()" style="width:auto;">➕ Satır Ekle</button>
+        </div>
+        <div id="ai-sales-status" style="display:none; font-size:12px; margin-bottom:8px;"></div>
+        <div id="ai-sales-review" style="display:none;"></div>
+        <h4 style="font-family:'Oswald'; margin:18px 0 6px;">Kayıtlı AI Satış Raporları</h4>
+        <div id="ai-sales-saved-list"></div>
+      </div>
+      <!-- AI GÜNLÜK SATIŞ RAPORU (BİTİŞ) -->
+
       <h3 style="font-family:'Oswald'; margin-top:24px; border-bottom:1px solid var(--steel-line); padding-bottom:5px;">Geçmiş Z Raporları (Gün Gün Arşiv)</h3>
       <div id="past-z-reports-list"></div>
     </div>
@@ -1910,6 +1928,6 @@
 
 <script src="app-core.js?v=22"></script>
 <script src="app-operations.js?v=26"></script>
-<script src="app-inventory.js?v=32"></script>
+<script src="app-inventory.js?v=33"></script>
 </body>
 </html>
