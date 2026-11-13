@@ -2782,7 +2782,7 @@ async function processAiSalesPhotos(event) {
   if (!apiKey) {
     apiKey = prompt('Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:');
     if (!apiKey) return;
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   const prompt1 = "Görsel, bir hırdavat/nalburiye/cam mağazasında gün içinde yapılan satışların EL YAZISI veya BASILI listesidir (malzeme adı ve satış tutarı). Her satış satırını tespit et: name (malzeme adı, ölçüsüyle birlikte), qty (adet; yazmıyorsa 1), amount (o satırın TL cinsinden TOPLAM tutarı, sadece sayı; birim fiyat ve adet ayrı yazıyorsa adet x birim fiyatı hesapla). Kağıtta bir GENEL TOPLAM yazıyorsa onu total alanına sayı olarak yaz, yoksa 0 yaz. Okunamayan/belirsiz tutarı UYDURMA: o satırın amount değerini 0 yap. Satır olmayan başlık/tarih/imza gibi yazıları satır sayma. SADECE geçerli bir JSON nesnesi döndür, başka açıklama veya markdown ekleme. Örnek: {\"items\":[{\"name\":\"Dirsek 50\",\"qty\":3,\"amount\":150},{\"name\":\"Silikon Beyaz\",\"qty\":1,\"amount\":85.5}],\"total\":235.5}";
@@ -2930,7 +2930,7 @@ function promptGeminiApiKey() {
   const currentKey = getGeminiApiKey();
   const newKey = prompt("Google'dan aldığınız API Anahtarını yapıştırın:", currentKey);
   if (newKey !== null && newKey !== "") {
-    localStorage.setItem('gemini_api_key', newKey.trim());
+    saveGeminiApiKey(newKey);
     alert("API Anahtarı kaydedildi!");
   }
 }
@@ -3083,7 +3083,7 @@ async function processReceiptWithAI(event) {
       event.target.value = ''; 
       return; 
     }
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   const statusMsg = document.getElementById('ai-status-msg');
@@ -3223,7 +3223,7 @@ async function processDebtReceiptWithAI(event) {
       event.target.value = '';
       return;
     }
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   const statusMsg = document.getElementById('ai-debt-status-msg');
@@ -3363,7 +3363,7 @@ async function processBulkStockPhoto(event) {
   if (!apiKey) {
     apiKey = prompt("Ürün listesini okuyabilmek için Google API Anahtarınızı girmelisiniz:");
     if (!apiKey) { event.target.value = ''; return; }
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   const statusMsg = document.getElementById('bulk-ai-stock-status');
@@ -3749,7 +3749,7 @@ async function sendAIChatMessage() {
   if (!apiKey) {
     apiKey = prompt("Sohbet asistanını kullanmak için Google API Anahtarınızı girin:");
     if (!apiKey) return;
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   // Kullanıcı mesajını göster
@@ -4044,7 +4044,7 @@ async function sendPanelAIMessage(panelKey) {
   if (!key) {
     key = prompt("Bu asistanı kullanmak için Google API Anahtarınızı girin:");
     if (!key) return;
-    localStorage.setItem('gemini_api_key', key.trim());
+    saveGeminiApiKey(key);
   }
 
   if (!panelAIHistory[panelKey]) panelAIHistory[panelKey] = [];
