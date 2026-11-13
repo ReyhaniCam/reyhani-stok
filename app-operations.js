@@ -1944,7 +1944,7 @@ async function processCartPhoto(event) {
   if (!apiKey) {
     apiKey = prompt("Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:");
     if (!apiKey) { event.target.value = ''; return; }
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   const statusEl = document.getElementById('cart-photo-status');
@@ -5306,7 +5306,7 @@ async function readCatalogPdfWithAI(brandKey, pdfId) {
   if (!apiKey) {
     apiKey = prompt("Kataloğu okuyabilmek için Google API Anahtarınızı girmelisiniz:");
     if (!apiKey) return;
-    localStorage.setItem('gemini_api_key', apiKey.trim());
+    saveGeminiApiKey(apiKey);
   }
 
   const card = document.getElementById('katalog-ai-result-card');
