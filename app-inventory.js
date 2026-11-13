@@ -2680,6 +2680,231 @@ async function downloadZReportByDate(dateStr) {
   
   await saveExcelFile(wb, `Reyhani_Z_Raporu_${dateStr}.xlsx`);
 }
+
+// ============================================================
+// AI GÜNLÜK SATIŞ RAPORU (Raporlar sekmesi)
+// Fotoğraftaki satış satırlarını (ürün, adet, tutar) Gemini ile okur,
+// düzenlenebilir tabloya döker, günlük toplamı hesaplar ve Firebase'e kaydeder.
+// ============================================================
+const dbAiSalesReports = dbRoot.child('ai_sales_reports');
+let aiSalesRows = [];          // {name, qty, amount}
+let aiSalesDeclaredTotals = []; // kağıtta yazan genel toplamlar (varsa) — kontrol için
+let aiSalesDirty = false;
+let globalAiSalesReports = {};
+
+function aiSalesToday() { return new Date().toISOString().slice(0, 10); }
+
+function aiSalesParseNum(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  let s = String(v == null ? '' : v).replace(/[^\d.,-]/g, '');
+  if (!s) return 0;
+  if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, '').replace(',', '.');
+  else if (s.includes(',')) s = s.replace(',', '.');
+  const n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+function aiSalesTotal() {
+  return aiSalesRows.reduce((t, r) => t + (parseFloat(r.amount) || 0), 0);
+}
+
+function renderAiSalesReview() {
+  const box = document.getElementById('ai-sales-review');
+  if (!box) return;
+  if (!aiSalesRows.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  const rowsHtml = aiSalesRows.map((r, i) => `
+    <tr>
+      <td style="padding:3px;"><input type="text" value="${escHtml(r.name)}" onchange="updateAiSalesRow(${i}, 'name', this.value)" style="width:100%; min-width:140px;"></td>
+      <td style="padding:3px;"><input type="number" step="any" value="${r.qty}" onchange="updateAiSalesRow(${i}, 'qty', this.value)" style="width:70px;"></td>
+      <td style="padding:3px;"><input type="number" step="any" value="${r.amount}" onchange="updateAiSalesRow(${i}, 'amount', this.value)" style="width:100px;"></td>
+      <td style="padding:3px;"><button class="btn btn-sm" onclick="removeAiSalesRow(${i})" style="width:auto;">🗑️</button></td>
+    </tr>`).join('');
+  const total = aiSalesTotal();
+  let warn = '';
+  const declared = aiSalesDeclaredTotals.filter(t => t > 0);
+  if (declared.length) {
+    const dsum = declared.reduce((a, b) => a + b, 0);
+    if (Math.abs(dsum - total) > 0.5) {
+      warn = `<div style="font-size:12px; color:var(--rust); margin-top:6px;">⚠️ Kağıtta yazan genel toplam (₺${formatMoney(dsum)}) ile okunan satırların toplamı (₺${formatMoney(total)}) farklı. Satırları kontrol edin.</div>`;
+    } else {
+      warn = `<div style="font-size:12px; color:var(--success); margin-top:6px;">✅ Satır toplamı kağıttaki genel toplamla uyuşuyor.</div>`;
+    }
+  }
+  box.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead><tr style="text-align:left; border-bottom:1px solid var(--steel-line);"><th>Malzeme</th><th>Adet</th><th>Tutar (₺)</th><th></th></tr></thead>
+        <tbody>${rowsHtml}</tbody>
+      </table>
+    </div>
+    <div style="font-family:'Oswald'; font-size:18px; margin-top:10px;">📊 Gün İçi Toplam Satış: <span style="color:var(--success);">₺${formatMoney(total)}</span> <span style="font-size:12px; color:var(--steel);">(${aiSalesRows.length} satır)</span></div>
+    ${warn}
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+      <button class="btn btn-success" onclick="saveAiSalesReport()">💾 Bugünün Raporu Olarak Kaydet</button>
+      <button class="btn btn-dark" onclick="downloadAiSalesExcel(null)">📊 Excel İndir</button>
+      <button class="btn btn-sm" onclick="clearAiSalesRows()" style="width:auto;">Temizle</button>
+    </div>`;
+}
+
+function aiSalesSetStatus(msg, color) {
+  const el = document.getElementById('ai-sales-status');
+  if (!el) return;
+  if (!msg) { el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  el.style.color = color || '#F59E0B';
+  el.innerHTML = msg;
+}
+
+function updateAiSalesRow(i, field, val) {
+  const r = aiSalesRows[i]; if (!r) return;
+  if (field === 'name') r.name = String(val || '').trim();
+  else r[field] = aiSalesParseNum(val);
+  aiSalesDirty = true;
+  renderAiSalesReview();
+}
+function removeAiSalesRow(i) { aiSalesRows.splice(i, 1); aiSalesDirty = true; renderAiSalesReview(); }
+function addAiSalesRow() { aiSalesRows.push({ name: '', qty: 1, amount: 0 }); aiSalesDirty = true; renderAiSalesReview(); }
+function clearAiSalesRows() {
+  if (aiSalesRows.length && !confirm('Ekrandaki satırlar temizlensin mi? (Kayıtlı rapor silinmez.)')) return;
+  aiSalesRows = []; aiSalesDeclaredTotals = []; aiSalesDirty = false;
+  aiSalesSetStatus('');
+  renderAiSalesReview();
+}
+
+async function processAiSalesPhotos(event) {
+  const files = Array.from(event.target.files || []);
+  event.target.value = '';
+  if (!files.length) return;
+  if (currentRole !== 'admin' && currentRole !== 'staff') { alert('Bu işlem için yetkiniz yok.'); return; }
+
+  let apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    apiKey = prompt('Bu özelliği kullanabilmek için Google API Anahtarınızı girmelisiniz:');
+    if (!apiKey) return;
+    localStorage.setItem('gemini_api_key', apiKey.trim());
+  }
+
+  const prompt1 = "Görsel, bir hırdavat/nalburiye/cam mağazasında gün içinde yapılan satışların EL YAZISI veya BASILI listesidir (malzeme adı ve satış tutarı). Her satış satırını tespit et: name (malzeme adı, ölçüsüyle birlikte), qty (adet; yazmıyorsa 1), amount (o satırın TL cinsinden TOPLAM tutarı, sadece sayı; birim fiyat ve adet ayrı yazıyorsa adet x birim fiyatı hesapla). Kağıtta bir GENEL TOPLAM yazıyorsa onu total alanına sayı olarak yaz, yoksa 0 yaz. Okunamayan/belirsiz tutarı UYDURMA: o satırın amount değerini 0 yap. Satır olmayan başlık/tarih/imza gibi yazıları satır sayma. SADECE geçerli bir JSON nesnesi döndür, başka açıklama veya markdown ekleme. Örnek: {\"items\":[{\"name\":\"Dirsek 50\",\"qty\":3,\"amount\":150},{\"name\":\"Silikon Beyaz\",\"qty\":1,\"amount\":85.5}],\"total\":235.5}";
+
+  let added = 0, failed = 0;
+  for (let n = 0; n < files.length; n++) {
+    aiSalesSetStatus(`⏳ Fotoğraf okunuyor (${n + 1}/${files.length})...`);
+    try {
+      const dataUrl = await compressImageFile(files[n], 1600, 0.8);
+      const pureBase64 = dataUrl.split(',')[1];
+      const apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=" + encodeURIComponent(apiKey.trim());
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt1 }, { inlineData: { mimeType: 'image/jpeg', data: pureBase64 } }] }] })
+      });
+      const data = await response.json();
+      if (data.error) throw new Error(data.error.message);
+      const txt = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0] && data.candidates[0].content.parts[0].text;
+      if (!txt) throw new Error('Yapay zeka görselden veri okuyamadı.');
+      const parsed = JSON.parse(txt.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim());
+      const items = Array.isArray(parsed) ? parsed : (parsed.items || []);
+      items.forEach(it => {
+        const name = String(it.name || '').trim();
+        if (!name) return;
+        aiSalesRows.push({ name, qty: aiSalesParseNum(it.qty) || 1, amount: aiSalesParseNum(it.amount) });
+        added++;
+      });
+      if (parsed && parsed.total) aiSalesDeclaredTotals.push(aiSalesParseNum(parsed.total));
+      aiSalesDirty = true;
+    } catch (err) {
+      failed++;
+      console.error('AI satış fotoğrafı okunamadı:', err);
+      aiSalesSetStatus('❌ Okunamadı: ' + (typeof friendlyAIErrorMessage === 'function' ? friendlyAIErrorMessage(err) : err.message), '#EF4444');
+    }
+  }
+  renderAiSalesReview();
+  if (added) {
+    const zeroCount = aiSalesRows.filter(r => !r.amount).length;
+    aiSalesSetStatus(`✅ ${added} satır okundu.${zeroCount ? ` ⚠️ ${zeroCount} satırın tutarı 0 — kontrol edin.` : ''}${failed ? ` (${failed} fotoğraf okunamadı)` : ''} Kaydetmeden önce değerleri kontrol edin.`, '#10B981');
+  } else if (!failed) {
+    aiSalesSetStatus('⚠️ Fotoğrafta satış satırı bulunamadı.', '#F59E0B');
+  }
+}
+
+function saveAiSalesReport() {
+  if (!aiSalesRows.length) { alert('Kaydedilecek satır yok.'); return; }
+  const clean = aiSalesRows.filter(r => r.name).map(r => ({ name: r.name, qty: r.qty || 0, amount: r.amount || 0 }));
+  const dateStr = aiSalesToday();
+  const existing = globalAiSalesReports[dateStr];
+  if (existing && !confirm(`Bugün için kayıtlı bir AI satış raporu var (₺${formatMoney(existing.total || 0)}). Ekrandaki satırlarla DEĞİŞTİRİLSİN mi?`)) return;
+  const report = {
+    date: dateStr,
+    time: new Date().toLocaleTimeString('tr-TR'),
+    items: clean,
+    total: clean.reduce((t, r) => t + r.amount, 0),
+    createdBy: getActorLabel()
+  };
+  dbAiSalesReports.child(dateStr).set(report, (err) => {
+    if (err) { alert('Rapor kaydedilemedi: ' + (err.message || err)); return; }
+    aiSalesDirty = false;
+    showToast('AI satış raporu kaydedildi!');
+  });
+}
+
+async function downloadAiSalesExcel(dateStr) {
+  let rows, total, label;
+  if (dateStr) {
+    const rep = globalAiSalesReports[dateStr];
+    if (!rep) { alert('Rapor bulunamadı.'); return; }
+    rows = rep.items || []; total = rep.total || 0; label = dateStr;
+  } else {
+    rows = aiSalesRows; total = aiSalesTotal(); label = aiSalesToday();
+  }
+  const aoa = [['Malzeme', 'Adet', 'Tutar (₺)']];
+  rows.forEach(r => aoa.push([r.name, r.qty, r.amount]));
+  aoa.push(['', '', '']);
+  aoa.push(['GÜN İÇİ TOPLAM SATIŞ', '', total]);
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'AI Satış ' + label);
+  await saveExcelFile(wb, `Reyhani_AI_Satis_Raporu_${label}.xlsx`);
+}
+
+dbAiSalesReports.on('value', (snapshot) => {
+  globalAiSalesReports = snapshot.val() || {};
+  const list = document.getElementById('ai-sales-saved-list');
+  if (list) {
+    const keys = Object.keys(globalAiSalesReports).sort().reverse();
+    list.innerHTML = keys.length ? keys.map(d => {
+      const rep = globalAiSalesReports[d];
+      return `<div class="tag" style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+        <div>
+          <div class="tag-title">📅 ${escHtml(rep.date || d)}</div>
+          <div style="font-size:12px; margin-top:4px;">${(rep.items || []).length} satır | Toplam: <strong style="color:var(--success);">₺${formatMoney(rep.total || 0)}</strong></div>
+          ${rep.createdBy ? `<div style="font-size:10px; color:var(--info); margin-top:2px;">📱 ${escHtml(rep.createdBy)}</div>` : ''}
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-sm" onclick="loadAiSalesReport('${d}')" style="width:auto;">✏️ Düzenle</button>
+          <button class="btn btn-success btn-sm" onclick="downloadAiSalesExcel('${d}')" style="width:auto;">📊 Excel</button>
+        </div>
+      </div>`;
+    }).join('') : '<p style="color:var(--steel);font-size:13px;">Henüz kayıtlı AI satış raporu yok.</p>';
+  }
+  // Ekran boşsa ve kullanıcı henüz bir şey yapmadıysa bugünün kaydını göster
+  const today = globalAiSalesReports[aiSalesToday()];
+  if (today && !aiSalesRows.length && !aiSalesDirty) {
+    aiSalesRows = (today.items || []).map(r => ({ name: r.name, qty: r.qty, amount: r.amount }));
+    renderAiSalesReview();
+  }
+});
+
+function loadAiSalesReport(dateStr) {
+  const rep = globalAiSalesReports[dateStr];
+  if (!rep) return;
+  if (aiSalesRows.length && aiSalesDirty && !confirm('Ekrandaki kaydedilmemiş satırlar silinip bu rapor yüklensin mi?')) return;
+  aiSalesRows = (rep.items || []).map(r => ({ name: r.name, qty: r.qty, amount: r.amount }));
+  aiSalesDeclaredTotals = [];
+  aiSalesDirty = false;
+  renderAiSalesReview();
+  showToast(dateStr === aiSalesToday() ? 'Bugünün raporu yüklendi.' : `${dateStr} raporu yüklendi (tekrar kaydederseniz bugünün raporu olur).`);
+}
 // Initialize
 checkDeviceAuthorizationLink();
 updateAuthUI();
