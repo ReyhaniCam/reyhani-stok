@@ -4383,3 +4383,6 @@ async function sendPanelAIMessage(panelKey) {
     panelAIBusy[panelKey] = false;
   }
 }
+
+// Tüm betikler yüklendi: bekleyen Firebase dinleyicilerini şimdi çalıştır
+if (typeof flushReadyQueue === 'function') flushReadyQueue();
