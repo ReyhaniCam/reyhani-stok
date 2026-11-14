@@ -649,28 +649,58 @@ function closeImageModal() {
   document.getElementById('image-modal').style.display = 'none';
 }
 
-function compressImageFile(file, maxDim, quality) {
-  maxDim = maxDim || 360;
-  quality = quality || 0.55;
-  return new Promise((resolve, reject) => {
+// Dosyadan görsel yükler. Önce createImageBitmap (az bellek, EXIF yönünü uygular), olmazsa blob URL, o da olmazsa FileReader.
+// Android'de 12-50 MP kamera fotoğraflarını base64'e çevirip Image'e vermek bellek yüzünden sık sık patlıyordu.
+async function loadImageSource(file) {
+  if (typeof createImageBitmap === 'function') {
+    try {
+      let bmp;
+      try { bmp = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+      catch (e1) { bmp = await createImageBitmap(file); }
+      return { src: bmp, width: bmp.width, height: bmp.height, cleanup: () => { try { bmp.close(); } catch (e) {} } };
+    } catch (e) { /* aşağıdaki yöntemlere düş */ }
+  }
+  const loadImg = (url) => new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Görsel yüklenemedi"));
+    img.src = url;
+  });
+  try {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await loadImg(url);
+      return { src: img, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, cleanup: () => URL.revokeObjectURL(url) };
+    } catch (e) { URL.revokeObjectURL(url); }
+  } catch (e) { /* FileReader'a düş */ }
+  const dataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error("Dosya okunamadı"));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("Görsel yüklenemedi"));
-      img.onload = () => {
-        let { width, height } = img;
-        if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
-        else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
-        const canvas = document.createElement('canvas');
-        canvas.width = width; canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
-      };
-      img.src = reader.result;
-    };
+    reader.onload = () => resolve(reader.result);
     reader.readAsDataURL(file);
   });
+  const img = await loadImg(dataUrl);
+  return { src: img, width: img.naturalWidth || img.width, height: img.naturalHeight || img.height, cleanup: () => {} };
+}
+
+async function compressImageFile(file, maxDim, quality) {
+  maxDim = maxDim || 360;
+  quality = quality || 0.55;
+  const loaded = await loadImageSource(file);
+  try {
+    let width = loaded.width, height = loaded.height;
+    if (!width || !height) throw new Error("Görsel boyutu okunamadı");
+    if (width > height && width > maxDim) { height = Math.round(height * maxDim / width); width = maxDim; }
+    else if (height > maxDim) { width = Math.round(width * maxDim / height); height = maxDim; }
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, width, height);   // şeffaf PNG siyah çıkmasın
+    ctx.drawImage(loaded.src, 0, 0, width, height);
+    return canvas.toDataURL('image/jpeg', quality);
+  } finally {
+    loaded.cleanup();
+  }
 }
 
 function setEditPhotoPreview(dataUrl) {
@@ -685,8 +715,9 @@ function setEditPhotoPreview(dataUrl) {
   }
 }
 
-document.getElementById('edit-photo-file').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
+async function handleEditPhotoInput(e) {
+  const input = e.target;
+  const file = input.files && input.files[0];
   if (!file) return;
   const code = document.getElementById('edit-code').value;
   const statusEl = document.getElementById('edit-photo-status');
@@ -696,15 +727,22 @@ document.getElementById('edit-photo-file').addEventListener('change', async (e) 
     pendingImageDataUrl = dataUrl;
     setEditPhotoPreview(dataUrl);
     dbProductImages.child(code).set(dataUrl, (err) => {
-      if (err) { statusEl.textContent = "Yükleme başarısız."; return; }
+      if (err) { statusEl.textContent = "Yükleme başarısız: " + (err.message || err); return; }
       imageCache[code] = dataUrl;
       statusEl.textContent = "Fotoğraf kaydedildi (~" + Math.round(dataUrl.length / 1024) + " KB).";
       refreshCardPhoto(code);
     });
   } catch (err) {
-    statusEl.textContent = "Fotoğraf işlenemedi, tekrar deneyin.";
+    statusEl.textContent = "Fotoğraf işlenemedi (" + ((err && err.message) || 'bilinmeyen hata') + "). Tekrar deneyin veya \"Galeriden Seç\" yolunu kullanın.";
     console.error(err);
+  } finally {
+    input.value = '';   // aynı fotoğrafı tekrar seçince de tetiklensin
   }
+}
+// Hem "Fotoğraf Çek" (kamera) hem "Galeriden Seç" girişi aynı işleyiciyi kullanır
+['edit-photo-file', 'edit-photo-camera'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener('change', handleEditPhotoInput);
 });
 
 function removeProductImage() {
