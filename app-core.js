@@ -13,6 +13,7 @@ firebase.initializeApp(firebaseConfig);
 const dbRoot = firebase.database().ref();
 const db = dbRoot.child('products');
 const dbMovements = dbRoot.child('daily_movements');
+const dbProductHistory = dbRoot.child('product_history'); // ürün başına düzenleme geçmişi (fiyat, ad, miktar vb. eski → yeni)
 const dbWholesalers = dbRoot.child('wholesalers');
 const dbGoodsReceipts = dbRoot.child('goods_receipts');
 const dbOrders = dbRoot.child('orders');
@@ -1078,6 +1079,36 @@ function logMovement(code, name, change, type) {
   autoUpdateStockExcel();
 }
 
+// Ürün düzenlemesini (hangi alan eski değerden yeni değere) ürünün geçmişine yazar.
+// changes: [{f:'price', from:10, to:12}, ...]
+function logProductChange(code, name, changes) {
+  if (!code || !changes || !changes.length) return;
+  const clean = changes.map(c => ({
+    f: String(c.f),
+    from: (c.from === undefined || c.from === '') ? null : c.from,
+    to: (c.to === undefined || c.to === '') ? null : c.to
+  }));
+  dbProductHistory.child(code).push({
+    at: new Date().toISOString(),
+    by: getActorLabel(),
+    name: name || '',
+    changes: clean
+  }).catch(e => console.warn('Ürün geçmişi yazılamadı:', e));
+}
+
+// Eski ürün ile yeni alan değerlerini karşılaştırıp değişenleri döndürür
+function diffProductFields(oldP, upd) {
+  const fields = ['name', 'qty', 'unit', 'category', 'barcode', 'brand', 'price', 'vat', 'targetProfit', 'costPrice', 'location'];
+  const norm = v => (v === undefined || v === null || v === '') ? null : v;
+  const out = [];
+  fields.forEach(f => {
+    if (!(f in upd)) return;
+    const a = norm(oldP && oldP[f]), b = norm(upd[f]);
+    if (String(a) !== String(b)) out.push({ f, from: a, to: b });
+  });
+  return out;
+}
+
 let autoStockUpdateEnabled = false;
 
 // Kullanıcı bir kez klasör seçtiğinde, o andan itibaren her stok hareketinde
@@ -1208,27 +1239,8 @@ function renderDashboard() {
     }
   }
 
-  // Son güncellenen 5 ürünü göster
-  const recentContainer = document.getElementById('dash-recent-products');
-  if (recentContainer) {
-    const sorted = allProducts
-      .filter(p => p.lastPriceUpdate)
-      .sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate))
-      .slice(0, 5);
-
-    if (sorted.length === 0) {
-      recentContainer.innerHTML = `<p style="color:#94A3B8; font-size:14px;">Henüz güncellenmiş ürün yok.</p>`;
-    } else {
-      recentContainer.innerHTML = sorted.map(p => {
-        const date = new Date(p.lastPriceUpdate);
-        const timeStr = date.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-        return `<div class="recent-item">
-                  <span class="name">${p.name}</span>
-                  <span class="meta">${timeStr} · ${p.lastUpdatedBy || '-'}</span>
-                </div>`;
-      }).join('');
-    }
-  }
+  // Son güncellenen ürünler (açılır/kapanır, ürün geçmişiyle) — app-operations.js
+  if (typeof renderRecentDashboard === 'function') renderRecentDashboard(allProducts);
 
   // Hızlı erişim kartlarını yetkiye göre göster/gizle ve tıklama olaylarını ata
   document.querySelectorAll('.action-card[data-tab]').forEach(card => {
