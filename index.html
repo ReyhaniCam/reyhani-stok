@@ -1941,8 +1941,31 @@
   </div>
 </div>
 
-<script src="app-core.js?v=25"></script>
-<script src="app-operations.js?v=29"></script>
-<script src="app-inventory.js?v=35"></script>
+<script>
+// Emniyet: uygulama betikleri bir sebeple çalışmazsa yükleme ekranı sonsuza kadar kalmasın,
+// ve nedeni ekranda görünsün (ekran görüntüsü alıp iletebilirsiniz).
+(function () {
+  var errs = [];
+  window.addEventListener('error', function (e) {
+    var t = e.target;
+    if (t && t.tagName === 'SCRIPT') errs.push('Dosya yüklenemedi: ' + String(t.src || '').split('/').pop());
+    else errs.push((e.message || 'Hata') + ' (' + String(e.filename || '').split('/').pop().split('?')[0] + ':' + (e.lineno || '?') + ')');
+  }, true);
+  setTimeout(function () {
+    var s = document.getElementById('splash-screen');
+    if (s) s.classList.add('hidden');
+    if (!window.__appReady) {
+      var b = document.createElement('div');
+      b.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:100000;background:#B91C1C;color:#fff;padding:10px 14px;font:12px/1.4 monospace;cursor:pointer;';
+      b.textContent = 'Sayfa tam yüklenemedi. ' + (errs.length ? errs.slice(0, 3).join(' | ') : 'Sayfayı yenileyin (Ctrl+F5).') + '  [kapatmak için dokunun]';
+      b.onclick = function () { b.remove(); };
+      document.body.appendChild(b);
+    }
+  }, 7000);
+})();
+</script>
+<script src="app-core.js?v=26"></script>
+<script src="app-operations.js?v=30"></script>
+<script src="app-inventory.js?v=36"></script>
 </body>
 </html>
