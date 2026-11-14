@@ -1637,7 +1637,12 @@
       <div class="edit-photo-preview" id="edit-photo-preview"><span class="photo-placeholder">📷</span></div>
       <div style="flex:1;">
         <label style="margin-bottom:6px;">Ürün Fotoğrafı</label>
-        <input type="file" accept="image/*" id="edit-photo-file" style="padding:4px; font-size:11px;">
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="document.getElementById('edit-photo-camera').click()">📷 Fotoğraf Çek</button>
+          <button type="button" class="btn btn-sm" style="width:auto;" onclick="document.getElementById('edit-photo-file').click()">🖼️ Galeriden Seç</button>
+        </div>
+        <input type="file" accept="image/*" capture="environment" id="edit-photo-camera" style="display:none;">
+        <input type="file" accept="image/*" id="edit-photo-file" style="display:none;">
         <div style="display:flex; gap:8px; margin-top:6px;">
           <button class="sm-btn" id="edit-photo-remove-btn" onclick="removeProductImage()" style="display:none; color:var(--rust);">Fotoğrafı Kaldır</button>
         </div>
@@ -1932,7 +1937,7 @@
   </div>
 </div>
 
-<script src="app-core.js?v=23"></script>
+<script src="app-core.js?v=24"></script>
 <script src="app-operations.js?v=27"></script>
 <script src="app-inventory.js?v=34"></script>
 </body>
