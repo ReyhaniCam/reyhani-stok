@@ -1410,8 +1410,12 @@ function updatePrice(code) {
   if (newPrice === null) return;
   const parsed = parseFloat(newPrice);
   if (!isNaN(parsed) && parsed >= 0) {
+    const oldPrice = p.price;
     db.child(code).update({ price: parsed, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: getActorLabel() }, (err) => {
-      if (!err) showToast("Fiyat güncellendi!");
+      if (!err) {
+        showToast("Fiyat güncellendi!");
+        logProductChange(code, p.name, [{ f: 'price', from: oldPrice, to: parsed }]);
+      }
     });
   }
 }
@@ -1569,6 +1573,9 @@ async function saveEditProduct() {
   if (stand && slot) updates.location = `${stand}-${slot}`;
   else updates.location = null;
 
+  const editChanges = diffProductFields(p, updates);
+  if (codeChanged) editChanges.unshift({ f: 'code', from: oldCode, to: newCode });
+
   if (codeChanged) {
     const fullData = Object.assign({}, p, updates, { code: newCode });
     try {
@@ -1587,6 +1594,12 @@ async function saveEditProduct() {
         dbBarcodeCache.child(newCode).set({ name: updates.name, source: 'manuel', savedAt: new Date().toISOString() });
       }
 
+      // Eski koda ait geçmişi yeni koda taşı, sonra bu düzenlemeyi ekle
+      try {
+        const hs = await dbProductHistory.child(oldCode).once('value');
+        if (hs.exists()) { await dbProductHistory.child(newCode).update(hs.val()); await dbProductHistory.child(oldCode).remove(); }
+      } catch (e) { /* geçmiş yoksa sorun değil */ }
+      logProductChange(newCode, updates.name, editChanges);
       showToast("Ürün güncellendi ve kod/barkod değiştirildi!");
       closeEditModal();
       if (pendingImageDataUrl) { refreshCardPhoto(newCode); pendingImageDataUrl = null; }
@@ -1598,6 +1611,7 @@ async function saveEditProduct() {
 
   db.child(oldCode).update(updates, (err) => {
     if (!err) {
+      logProductChange(oldCode, updates.name, editChanges);
       showToast("Ürün güncellendi!");
       closeEditModal();
       if (pendingImageDataUrl) { refreshCardPhoto(oldCode); pendingImageDataUrl = null; }
@@ -4214,8 +4228,9 @@ function handleAIChatConfirmAction(parsed) {
   } else if (parsed.action === 'update_price') {
     const ok = confirm(`${p.name} (${parsed.code})\nMevcut fiyat: ₺${p.price}\nYeni fiyat: ₺${parsed.price}\n\nOnaylıyor musunuz?`);
     if (ok) {
+      const aiOldPrice = p.price;
       db.child(parsed.code).update({ price: parseFloat(parsed.price), lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: 'AI Asistan' }, (err) => {
-        if (!err) addAIChatBubble('bot', '✅ Fiyat güncellendi: ' + p.name);
+        if (!err) { addAIChatBubble('bot', '✅ Fiyat güncellendi: ' + p.name); logProductChange(parsed.code, p.name, [{ f: 'price', from: aiOldPrice, to: parseFloat(parsed.price) }]); }
         else addAIChatBubble('bot', '❌ Fiyat güncellenemedi: ' + err.message, 'error');
       });
     } else {
