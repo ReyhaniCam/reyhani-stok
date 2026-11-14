@@ -1404,7 +1404,14 @@ function updateAuthUI() {
   const importCleanupBtn = document.getElementById('import-cleanup-btn');
   if(importCleanupBtn) importCleanupBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   const wsFilterBtn = document.getElementById('ws-filter-btn');
-  if(wsFilterBtn) wsFilterBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
+  // Toptancıya Göre filtre: yönetici + çalışan (panelde borç/bakiye yok, sadece toptancı adı ve ürün sayısı)
+  const canWsFilter = (currentRole === 'admin' || currentRole === 'staff');
+  if(wsFilterBtn) wsFilterBtn.style.display = canWsFilter ? 'inline-block' : 'none';
+  if(!canWsFilter) {
+    const wsPanel = document.getElementById('ws-filter-panel');
+    if(wsPanel) wsPanel.style.display = 'none';
+    try { if (typeof selectedWsFilter !== 'undefined' && Object.keys(selectedWsFilter).length) { selectedWsFilter = {}; if (typeof updateWsFilterButton === 'function') updateWsFilterButton(); if (typeof renderGrid === 'function') renderGrid(); } } catch (e) {}
+  }
   const devicesBtn = document.getElementById('devices-btn');
   if(devicesBtn) devicesBtn.style.display = (currentRole === 'admin') ? 'inline-block' : 'none';
   updateDeviceBadge();
