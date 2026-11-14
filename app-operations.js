@@ -1254,46 +1254,196 @@ function applySuggestedPrice(prefix) {
   showToast("Birim fiyat ₺" + val + " olarak dolduruldu.");
 }
 
+// ============================================================
+// SON GÜNCELLENEN ÜRÜNLER — açılır/kapanır bölüm + ürün başına işlem geçmişi
+// Her ürün satırına tıklayınca o ürünün önceki işlemleri açılır:
+//  • ürün düzenlemeleri (alan: eski → yeni, kim, ne zaman)  — product_history
+//  • stok hareketleri (giriş/çıkış/satış)                    — daily_movements
+//  • marka bazlı toplu fiyat güncellemeleri                  — brand_price_history
+// ============================================================
+const ruState = { limit: { dash: 5, card: 25 }, open: {}, rows: { dash: [], card: [] } };
+const RU_FIELD = { name: 'Ad', qty: 'Miktar', unit: 'Birim', category: 'Kategori', barcode: 'Barkod', brand: 'Marka', price: 'Satış fiyatı', vat: 'KDV %', targetProfit: 'Hedef kâr %', costPrice: 'Geliş fiyatı', location: 'Konum', code: 'Kod' };
+const RU_MONEY = { price: 1, costPrice: 1 };
+
+function ruCollapsed(id) { try { return localStorage.getItem('ru_collapsed_' + id) === '1'; } catch (e) { return false; } }
+function ruApplyCollapse(id) {
+  const body = document.getElementById('ru-body-' + id), arr = document.getElementById('ru-arrow-' + id);
+  const c = ruCollapsed(id);
+  if (body) body.style.display = c ? 'none' : '';
+  if (arr) arr.textContent = c ? '▸' : '▾';
+}
+function ruToggleSection(id) {
+  try { localStorage.setItem('ru_collapsed_' + id, ruCollapsed(id) ? '0' : '1'); } catch (e) {}
+  ruApplyCollapse(id);
+}
+
+function ruFmtTime(ts) {
+  const d = new Date(ts);
+  return isNaN(d) ? '' : d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function ruVal(f, v) {
+  if (v === null || v === undefined || v === '') return '—';
+  if (RU_MONEY[f]) return '₺' + formatMoney(v);
+  return escHtml(v);
+}
+
+async function ruCollectHistory(code) {
+  const ev = [];
+  try {
+    const snap = await dbProductHistory.child(code).once('value');
+    Object.values(snap.val() || {}).forEach(h => {
+      if (!h) return;
+      ev.push({ ts: new Date(h.at).getTime(), kind: 'edit', by: h.by, changes: h.changes || [] });
+    });
+  } catch (e) { console.warn('Ürün geçmişi okunamadı:', e); }
+  Object.keys(movementsData || {}).forEach(date => {
+    Object.values(movementsData[date] || {}).forEach(m => {
+      if (!m || m.code !== code) return;
+      let ts = new Date(`${date}T${m.time || '00:00:00'}`).getTime();
+      if (isNaN(ts)) ts = new Date(date).getTime();
+      ev.push({ ts, kind: 'move', by: m.by, change: m.change, type: m.type });
+    });
+  });
+  Object.values(brandPriceHistoryData || {}).forEach(h => {
+    const it = h && h.items && h.items[code];
+    if (!it) return;
+    ev.push({ ts: new Date(h.at).getTime(), kind: 'brand', by: h.by, brand: h.brand, op: it.op, np: it.np, undone: !!h.undone });
+  });
+  ev.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return ev;
+}
+
+function ruEventHtml(e) {
+  const t = ruFmtTime(e.ts), by = e.by ? ' · ' + escHtml(e.by) : '';
+  let text;
+  if (e.kind === 'move') {
+    const ch = Number(e.change) || 0;
+    text = `${ch >= 0 ? '📥' : '📤'} <b>${escHtml(e.type || 'Stok hareketi')}</b>: <span class="${ch >= 0 ? 'ru-pos' : 'ru-neg'}">${ch > 0 ? '+' : ''}${ch}</span>`;
+  } else if (e.kind === 'brand') {
+    text = `💲 <b>Marka toplu fiyat güncelleme${e.brand ? ' (' + escHtml(e.brand) + ')' : ''}</b>: ₺${formatMoney(e.op || 0)} → ₺${formatMoney(e.np || 0)}${e.undone ? ' <i>(geri alındı)</i>' : ''}`;
+  } else {
+    text = '✏️ <b>Ürün düzenlendi</b>: ' + (e.changes || []).map(c => `${RU_FIELD[c.f] || escHtml(c.f)} ${ruVal(c.f, c.from)} → <b>${ruVal(c.f, c.to)}</b>`).join('; ');
+  }
+  return `<div class="ru-ev"><div class="ru-ev-time">${t}${by}</div><div>${text}</div></div>`;
+}
+
+async function ruRenderRowHistory(ctx, i) {
+  const code = ruState.rows[ctx][i];
+  const box = document.getElementById(`ruh-${ctx}-${i}`);
+  const arrow = document.getElementById(`rua-${ctx}-${i}`);
+  if (!box || !code) return;
+  const open = !!ruState.open[ctx + '|' + code];
+  if (arrow) arrow.textContent = open ? '▾' : '▸';
+  if (!open) { box.style.display = 'none'; return; }
+  box.style.display = 'block';
+  box.innerHTML = '<div class="ru-ev-empty">Geçmiş yükleniyor...</div>';
+  const ev = await ruCollectHistory(code);
+  if (!document.body.contains(box) || !ruState.open[ctx + '|' + code]) return;
+  const p = productsData[code] || {};
+  const MAX = 40;
+  let html = `<div style="margin-bottom:4px;"><button class="sm-btn" onclick="ruEditProduct('${ctx}', ${i})">✏️ Ürünü Düzenle</button></div>`;
+  if (!ev.length) {
+    html += `<div class="ru-ev-empty">Bu ürün için kayıtlı işlem geçmişi yok.${p.lastPriceUpdate ? ` Son güncelleme: ${ruFmtTime(p.lastPriceUpdate)}${p.lastUpdatedBy ? ' · ' + escHtml(p.lastUpdatedBy) : ''}.` : ''}</div>`;
+  } else {
+    html += ev.slice(0, MAX).map(ruEventHtml).join('');
+    if (ev.length > MAX) html += `<div class="ru-ev-empty">… ve ${ev.length - MAX} eski kayıt daha</div>`;
+  }
+  html += `<div class="ru-ev-foot">Düzenleme ayrıntıları (eski → yeni değer) bu özellikten itibaren kaydedilir; öncesi için stok hareketleri ve toplu fiyat güncellemeleri gösterilir.</div>`;
+  box.innerHTML = html;
+}
+
+function ruToggleRow(ctx, i) {
+  const code = ruState.rows[ctx][i];
+  if (!code) return;
+  const key = ctx + '|' + code;
+  ruState.open[key] = !ruState.open[key];
+  ruRenderRowHistory(ctx, i);
+}
+function ruEditProduct(ctx, i) {
+  const code = ruState.rows[ctx][i];
+  if (code && typeof openEditModal === 'function') openEditModal(code);
+}
+function ruMore(ctx, step) {
+  ruState.limit[ctx] = Math.max(ctx === 'dash' ? 5 : 25, ruState.limit[ctx] + step);
+  if (ctx === 'dash') { if (typeof renderDashboard === 'function') renderDashboard(); }
+  else renderRecentUpdates();
+}
+function ruMoreButtons(ctx, shown, total, step, base) {
+  let h = '';
+  if (shown < total) h += `<button class="sm-btn" onclick="ruMore('${ctx}', ${step})">▼ Daha fazla göster (+${step})</button> `;
+  if (ruState.limit[ctx] > base) h += `<button class="sm-btn" onclick="ruMore('${ctx}', ${-(ruState.limit[ctx] - base)})">▲ Azalt</button>`;
+  return h ? `<div style="margin-top:6px; text-align:center;">${h}</div>` : '';
+}
+
+// Ana sayfadaki kutu (koyu/açık tema)
+function renderRecentDashboard(allProducts) {
+  const c = document.getElementById('dash-recent-products');
+  if (!c) return;
+  ruApplyCollapse('dash');
+  const sorted = (allProducts || []).filter(p => p.lastPriceUpdate)
+    .sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate));
+  if (!sorted.length) {
+    ruState.rows.dash = [];
+    c.innerHTML = `<p style="color:#94A3B8; font-size:14px;">Henüz güncellenmiş ürün yok.</p>`;
+    return;
+  }
+  const list = sorted.slice(0, ruState.limit.dash);
+  ruState.rows.dash = list.map(p => p.code);
+  c.innerHTML = list.map((p, i) => {
+    const timeStr = new Date(p.lastPriceUpdate).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return `<div class="recent-wrap">
+      <div class="recent-item ru-clickable" onclick="ruToggleRow('dash', ${i})" title="Önceki işlemleri göster/gizle">
+        <span class="name"><span class="ru-arrow" id="rua-dash-${i}">▸</span>${escHtml(p.name)}</span>
+        <span class="meta">${timeStr} · ${escHtml(p.lastUpdatedBy || '-')}</span>
+      </div>
+      <div class="ru-hist" id="ruh-dash-${i}" style="display:none;"></div>
+    </div>`;
+  }).join('') + ruMoreButtons('dash', list.length, sorted.length, 10, 5);
+  list.forEach((p, i) => { if (ruState.open['dash|' + p.code]) ruRenderRowHistory('dash', i); });
+}
+
+// Ürün Ekle sekmesindeki liste (yönetici)
 function renderRecentUpdates() {
   const box = document.getElementById('recent-updates-list');
   if (!box) return;
+  ruApplyCollapse('card');
   const all = Object.values(productsData);
   const withDate = all.filter(p => p.lastPriceUpdate).sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate));
-  const withoutDate = all.filter(p => !p.lastPriceUpdate).sort((a, b) => (a.name || '').localeCompare(b.name || '', 'tr'));
-  const list = withDate.slice(0, 25);
+  const withoutDate = all.filter(p => !p.lastPriceUpdate);
   const extraCount = withoutDate.length;
+  const list = withDate.slice(0, ruState.limit.card);
+  ruState.rows.card = list.map(p => p.code);
 
   if (list.length === 0 && extraCount === 0) {
     box.innerHTML = `<p style="font-size:12px; color:var(--steel); text-align:center; padding:10px 0;">Henüz hiç ürün yok.</p>`;
     return;
   }
 
-  let html = list.map(p => {
-    const d = new Date(p.lastPriceUpdate);
-    const dateStr = d.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-    return `
-      <div class="recent-update-row">
+  let html = list.map((p, i) => `
+    <div class="recent-wrap">
+      <div class="recent-update-row ru-clickable" onclick="ruToggleRow('card', ${i})" title="Önceki işlemleri göster/gizle">
         <div>
-          <div>${p.name} <span style="color:var(--steel); font-size:10px;">(${p.code})</span></div>
-          <div class="ru-time">${dateStr}${p.lastUpdatedBy ? ' · ' + p.lastUpdatedBy : ''}</div>
+          <div><span class="ru-arrow" id="rua-card-${i}">▸</span>${escHtml(p.name)} <span style="color:var(--steel); font-size:10px;">(${escHtml(p.code)})</span></div>
+          <div class="ru-time">${ruFmtTime(p.lastPriceUpdate)}${p.lastUpdatedBy ? ' · ' + escHtml(p.lastUpdatedBy) : ''}</div>
         </div>
         <div style="text-align:right;">
           <div>Satış: <b>₺${formatMoney(p.price || 0)}</b></div>
           ${p.costPrice != null ? `<div style="color:var(--steel);">Geliş: ₺${formatMoney(p.costPrice)}</div>` : ''}
         </div>
       </div>
-    `;
-  }).join('');
+      <div class="ru-hist" id="ruh-card-${i}" style="display:none;"></div>
+    </div>`).join('');
+
+  html += ruMoreButtons('card', list.length, withDate.length, 25, 25);
 
   if (extraCount > 0) {
     html += `
       <div class="recent-update-row" style="color:var(--steel); font-style:italic;">
         <div>${extraCount} üründe henüz güncelleme tarihi yok (bu özellik eklenmeden önce oluşturulmuş — bir kez düzenleyip kaydedince tarih başlayacak).</div>
-      </div>
-    `;
+      </div>`;
   }
-
   box.innerHTML = html;
+  list.forEach((p, i) => { if (ruState.open['card|' + p.code]) ruRenderRowHistory('card', i); });
 }
 
 function switchTab(tabName) {
