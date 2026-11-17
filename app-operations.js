@@ -2370,21 +2370,12 @@ async function completeOrder() {
   let grandTotal = 0;
   cart.forEach(i => grandTotal += i.total);
   
-  cart.forEach(item => {
-    if(!productsData[item.code]) return;
-    let appliedChange = 0;
-    db.child(item.code).child('qty').transaction((currentQty) => {
-      const cur = Number(currentQty || 0);
-      const next = Math.max(0, cur - item.qty);
-      appliedChange = next - cur;
-      return next;
-    }, (error, committed) => {
-      if (error) { console.error(error); return; }
-      if (committed && appliedChange !== 0) {
-        logMovement(item.code, item.name, appliedChange, 'SATIŞ YAPILDI (SEPET)');
-      }
-    });
-  });
+  // Çakışma korumalı stok düşümü: yetersiz stokta satış İPTAL edilir, hiçbir stok değişmez.
+  const stockRes = await adjustStockBatch(
+    cart.filter(i => productsData[i.code]).map(i => ({ code: i.code, name: i.name, delta: -Number(i.qty) })),
+    { strict: true, reason: 'SATIŞ YAPILDI (SEPET)' }
+  );
+  if (!stockRes.ok) { alert(stockRes.message); return; }
 
   const orderData = { time: timeStr, items: cart, total: grandTotal, processedBy: getActorLabel() };
   
@@ -3718,7 +3709,8 @@ async function executeBulkMerge() {
         const dupCodes = g.codes.filter(c => c !== g.canonical && productsData[c]);
         const addedQty = dupCodes.reduce((s, c) => s + (Number(productsData[c].qty) || 0), 0);
         const newTotal = (Number(canonical.qty) || 0) + addedQty;
-        await db.child(g.canonical).update({ qty: newTotal, lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: getActorLabel() + ' (Toplu Ürün Birleştirme)' });
+        await db.child(g.canonical).update({ lastPriceUpdate: new Date().toISOString(), lastUpdatedBy: getActorLabel() + ' (Toplu Ürün Birleştirme)' });
+        await adjustStockTx(g.canonical, addedQty, { strict: false }).done; // üzerine yazmak yerine transaction ile ekle
         productsData[g.canonical].qty = newTotal;
         await Promise.all(dupCodes.map(async c => {
           await db.child(c).remove();
