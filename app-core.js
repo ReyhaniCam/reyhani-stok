@@ -69,6 +69,185 @@ const dbCustomers = dbRoot.child('customers');
 const dbSenetler = dbRoot.child('senetler');
 
 // ============================================================
+// ÇEVRİMDIŞI DAYANIKLILIK + BAĞLANTI DURUMU + STOK TRANSACTION YARDIMCILARI
+// (Firebase Realtime Database v8 web SDK için)
+// NOT: keepSynced() yalnızca Android/iOS SDK'sında vardır; web SDK'sındaki eşdeğeri,
+// kritik düğümlerde SÜREKLİ AÇIK bir dinleyici tutmaktır (veri önbellekte taze kalır, çevrimdışı
+// okuma/yazma bu önbellekten yapılır, bağlantı gelince bekleyen yazmalar otomatik gönderilir).
+// ============================================================
+window.__fbConnected = (typeof navigator === 'undefined') ? true : navigator.onLine !== false;
+window.__pendingStockOps = 0;
+window.__connSeenOnce = false;
+
+function renderConnBadge() {
+  const el = document.getElementById('conn-badge');
+  if (!el) return;
+  const on = window.__fbConnected !== false;
+  const pend = window.__pendingStockOps || 0;
+  el.className = 'conn-badge ' + (on ? 'online' : 'offline');
+  if (on) {
+    el.textContent = pend > 0 ? '🟢 Çevrimiçi · eşitleniyor (' + pend + ')' : '🟢 Çevrimiçi';
+    el.title = 'Bulutla bağlantı var.';
+  } else {
+    el.textContent = '🔴 Çevrimdışı - Yerel Mod' + (pend > 0 ? ' (' + pend + ' bekleyen stok işlemi)' : '');
+    el.title = 'İnternet yok. İşlemler bu cihazda tutuluyor, bağlantı gelince otomatik eşitlenecek. Bu sırada sayfayı kapatmayın/yenilemeyin.';
+  }
+}
+
+// 1) keepSynced eşdeğeri: kritik düğümlerde kalıcı dinleyici (products/orders/customers/wholesalers zaten dinleniyor)
+['products', 'orders', 'customer_debts', 'customers', 'wholesalers'].forEach(function (node) {
+  try { dbRoot.child(node).on('value', function () {}, function (e) { console.warn('keepSynced hatası (' + node + '):', e && e.message); }); }
+  catch (e) { console.warn('keepSynced kurulamadı:', node, e); }
+});
+
+// 2) Bağlantı durumu göstergesi (.info/connected)
+firebase.database().ref('.info/connected').on('value', function (snap) {
+  const was = window.__fbConnected;
+  const now = snap.val() === true;
+  if (now) window.__connSeenOnce = true;
+  window.__fbConnected = now;
+  renderConnBadge();
+  if (window.__connSeenOnce && was !== now && typeof showToast === 'function') {
+    showToast(now
+      ? '🟢 Bağlantı geldi — bekleyen işlemler bulutla eşitleniyor.'
+      : '🔴 İnternet koptu — Yerel Mod: işlemler cihazda tutuluyor, bağlantı gelince otomatik eşitlenecek. Sayfayı kapatmayın/yenilemeyin.');
+  }
+});
+window.addEventListener('offline', function () { window.__fbConnected = false; renderConnBadge(); });
+window.addEventListener('load', renderConnBadge);
+// Çevrimdışıyken bekleyen işlem varsa sekme kapatılırken uyar (web SDK'sı bekleyen yazmaları diske kaydetmez)
+window.addEventListener('beforeunload', function (e) {
+  if (window.__fbConnected === false && (window.__pendingStockOps || 0) > 0) {
+    e.preventDefault(); e.returnValue = ''; return '';
+  }
+});
+
+// 3) Çevrimdışıyken set/update/remove "tamamlandı" geri çağrısı sunucu onayını beklemez.
+//    (Web SDK'sında onComplete ancak bulut onayından sonra çağrılır; internet yokken ekranlar
+//    "takılı" kalır ve satış başarısız sanılırdı.) Veri yine yerel önbelleğe yazılır ve bağlantı
+//    gelince bulutla eşitlenir. Çevrimiçiyken davranış AYNEN eskisi gibidir.
+(function () {
+  let owner = dbRoot;
+  while (owner && !Object.prototype.hasOwnProperty.call(owner, 'set')) owner = Object.getPrototypeOf(owner);
+  if (!owner) return;
+  ['set', 'update', 'remove'].forEach(function (m) {
+    const orig = owner[m];
+    if (typeof orig !== 'function') return;
+    owner[m] = function () {
+      if (window.__fbConnected !== false) return orig.apply(this, arguments);
+      const args = Array.prototype.slice.call(arguments);
+      const ci = args.length - 1;
+      const cb = (ci >= 0 && typeof args[ci] === 'function') ? args[ci] : null;
+      if (cb) {
+        let fired = false;
+        args[ci] = function (err) {
+          if (!fired) { fired = true; return cb.apply(this, arguments); }
+          if (err) { console.error('Bulut yazması sonradan reddedildi:', err); if (typeof showToast === 'function') showToast('⚠️ Çevrimdışı yapılan bir kayıt bulutta reddedildi: ' + (err.message || err)); }
+        };
+        const r = orig.apply(this, args);
+        setTimeout(function () { if (!fired) { fired = true; cb(null); } }, 0);
+        return r;
+      }
+      const p = orig.apply(this, args);
+      if (p && typeof p.catch === 'function') p.catch(function (e) { console.error('Bulut yazması sonradan reddedildi:', e); });
+      return Promise.resolve();
+    };
+  });
+})();
+
+// 4) Stok miktarını DOĞRUDAN ÜZERİNE YAZMADAN, transaction ile (v8: ref.transaction) değiştirir.
+//    delta<0 ve strict=true iken stok yetmiyorsa işlem GÜVENLE İPTAL edilir (veri değişmez).
+//    Fonksiyon önbellekteki güncel değerle senkron çalışır; iki cihaz aynı anda satış yaparsa
+//    Firebase sunucudaki güncel değerle fonksiyonu yeniden çalıştırır → düşüm doğru hesaplanır.
+function adjustStockTx(code, delta, opts) {
+  opts = opts || {};
+  const d = Number(delta) || 0;
+  const strict = (opts.strict !== false) && d < 0;
+  const st = { code: code, delta: d, applied: 0, aborted: false, available: null, committed: false, error: null, done: null };
+  window.__pendingStockOps = (window.__pendingStockOps || 0) + 1;
+  renderConnBadge();
+  st.done = new Promise(function (resolve) {
+    db.child(code).child('qty').transaction(function (cur) {
+      st.aborted = false;
+      if (cur === null) {
+        // Önbellekte/sunucuda değer yok. Strict düşümde ürün biliniyorsa tahmini 0 döndür:
+        // gerçek değer farklıysa Firebase fonksiyonu GÜNCEL değerle yeniden çalıştırır.
+        if (d >= 0) { st.applied = d; st.available = 0; return d; }
+        const known = (typeof productsData !== 'undefined') ? productsData[code] : null;
+        if (strict) {
+          if (known && Number(known.qty) > 0) { st.applied = 0; return 0; }
+          st.aborted = true; st.available = 0; return; // abort
+        }
+        st.applied = 0; st.available = 0; return 0;
+      }
+      const before = Number(cur) || 0;
+      let next = before + d;
+      if (next < 0) {
+        if (strict) { st.aborted = true; st.available = before; return; } // transaction iptal
+        next = 0;
+      }
+      st.applied = next - before; st.available = before;
+      return next;
+    }, function (error, committed) {
+      window.__pendingStockOps = Math.max(0, (window.__pendingStockOps || 1) - 1);
+      renderConnBadge();
+      st.error = error || null;
+      st.committed = !!committed && !error;
+      resolve(st);
+    }, true);
+  });
+  return st;
+}
+
+// list: [{code, name, delta}]  opts: {strict:true, reason:'SATIŞ ...'}
+// Dönüş: { ok, message, failed[], pending } — herhangi biri başarısızsa diğerleri GERİ ALINIR (hepsi ya da hiçbiri).
+async function adjustStockBatch(list, opts) {
+  opts = opts || {};
+  const strict = opts.strict !== false;
+  const reason = opts.reason || 'STOK İŞLEMİ';
+  list = (list || []).filter(function (x) { return x && x.code && Number(x.delta); });
+  const txs = list.map(function (it) { return { it: it, tx: adjustStockTx(it.code, it.delta, { strict: strict }) }; });
+
+  // Çevrimiçiyken sunucu onayını (en çok 6 sn) bekle; çevrimdışıyken yerel karar yeterli.
+  if (window.__fbConnected !== false && txs.length) {
+    await Promise.race([
+      Promise.all(txs.map(function (t) { return t.tx.done; })),
+      new Promise(function (r) { setTimeout(r, 6000); })
+    ]);
+  }
+
+  const failed = txs.filter(function (t) { return t.tx.aborted || t.tx.error; });
+  if (failed.length) {
+    // Hepsi ya da hiçbiri: uygulanmış olanları geri al
+    txs.forEach(function (t) {
+      if (!(t.tx.aborted || t.tx.error) && t.tx.applied) adjustStockTx(t.it.code, -t.tx.applied, { strict: false });
+    });
+    const lines = failed.map(function (t) {
+      if (t.tx.error) return '• ' + (t.it.name || t.it.code) + ' (hata: ' + (t.tx.error.message || t.tx.error) + ')';
+      return '• ' + (t.it.name || t.it.code) + ' (Mevcut: ' + t.tx.available + ', İstenen: ' + Math.abs(Number(t.it.delta)) + ')';
+    });
+    return {
+      ok: false, pending: false,
+      failed: failed.map(function (t) { return { code: t.it.code, name: t.it.name, available: t.tx.available, needed: Math.abs(Number(t.it.delta)) }; }),
+      message: '⚠️ Yetersiz stok veya stok güncellenemedi — işlem İPTAL edildi, stok değişmedi:\n\n' + lines.join('\n') +
+               '\n\nGerçek stok farklıysa Kataloglar ekranından stoğu düzeltip tekrar deneyin.'
+    };
+  }
+
+  // Başarılı: hareket kaydı yaz; çevrimdışıyken bulut sonradan reddederse kullanıcıyı uyar
+  txs.forEach(function (t) {
+    t.tx.done.then(function (s) {
+      if (s.aborted) {
+        alert('⚠️ Bağlantı geldiğinde "' + (t.it.name || t.it.code) + '" için stok yetersiz çıktı (aynı anda başka cihazdan satılmış olabilir). Bu kalemin stok düşümü UYGULANMADI — lütfen ilgili satışı/fişi kontrol edin.');
+      } else if (s.committed && s.applied) {
+        if (typeof logMovement === 'function') logMovement(t.it.code, t.it.name || t.it.code, s.applied, reason);
+      }
+    });
+  });
+  return { ok: true, failed: [], pending: window.__fbConnected === false, message: '' };
+}
+
+// ============================================================
 // GOOGLE (GEMINI) API ANAHTARI — TÜM CİHAZLARDA ORTAK
 // Anahtar artık sadece tarayıcıda (localStorage) değil, Firebase'de de saklanır.
 // Bir cihazda bir kez girilince tüm cihazlara otomatik gelir, tekrar sorulmaz.
@@ -2070,7 +2249,7 @@ function clearBorcCart() {
   showToast("Sepet temizlendi.");
 }
 
-function completeBorcSale() {
+async function completeBorcSale() {
   if (currentRole !== 'admin') {
     alert("Bu işlem için yönetici yetkisi gerekir!");
     return;
@@ -2114,17 +2293,13 @@ function completeBorcSale() {
     if (!proceed) return;
   }
   
-  borcCart.forEach(item => {
-    db.child(item.code).child('qty').transaction((currentQty) => {
-      const cur = Number(currentQty || 0);
-      return Math.max(0, cur - item.qty);
-    }, (error, committed) => {
-      if (error) { console.error(error); return; }
-      if (committed) {
-        logMovement(item.code, item.name, -item.qty, 'BORÇ SATIŞI: ' + customer);
-      }
-    });
-  });
+  // Çakışma korumalı stok düşümü (transaction). Kullanıcı yukarıda "yine de devam" dediyse
+  // (sayım yapılmamış stok) 0'a kadar düşmeye izin verilir; aksi halde yetersiz stokta işlem iptal edilir.
+  const __stockRes = await adjustStockBatch(
+    borcCart.filter(i => productsData[i.code]).map(i => ({ code: i.code, name: i.name, delta: -Number(i.qty) })),
+    { strict: insufficientItems.length === 0, reason: 'BORÇ SATIŞI: ' + customer }
+  );
+  if (!__stockRes.ok) { alert(__stockRes.message); return; }
   
   const now = new Date();
   const dateStr = now.toISOString().slice(0, 10);
@@ -2527,20 +2702,21 @@ function saveBorcEdit() {
   borcEditItems.forEach(item => grandTotal += (item.total || item.price * item.qty));
 
   // Stok güncellemeleri: önce eski ürünleri geri ekle, sonra yenileri düş
-  dbCustomerDebts.child(borcEditKey).once('value', (snap) => {
+  dbCustomerDebts.child(borcEditKey).once('value', async (snap) => {
     const oldData = snap.val();
     if (!oldData) return;
     const oldItems = oldData.items || [];
 
-    // Eski ürünleri stoklara geri ekle
-    oldItems.forEach(item => {
-      db.child(item.code).child('qty').transaction(cur => Number(cur || 0) + Number(item.qty));
-    });
-
-    // Yeni ürünleri stoktan düş
-    borcEditItems.forEach(item => {
-      db.child(item.code).child('qty').transaction(cur => Math.max(0, Number(cur || 0) - Number(item.qty)));
-    });
+    // Eski kalemleri geri ekleyip yenileri düşmek yerine ürün başına NET fark tek transaction ile uygulanır.
+    // Yetersiz stok varsa hiçbir stok değişmez, borç kaydı da güncellenmez.
+    const __net = {}, __names = {};
+    oldItems.forEach(it => { __net[it.code] = (__net[it.code] || 0) + Number(it.qty || 0); __names[it.code] = it.name; });
+    borcEditItems.forEach(it => { __net[it.code] = (__net[it.code] || 0) - Number(it.qty || 0); __names[it.code] = it.name; });
+    const __res = await adjustStockBatch(
+      Object.keys(__net).filter(c => __net[c] !== 0 && productsData[c]).map(c => ({ code: c, name: __names[c], delta: __net[c] })),
+      { strict: true, reason: 'BORÇ DÜZENLEME: ' + customer }
+    );
+    if (!__res.ok) { alert(__res.message); return; }
 
     // Borç kaydını güncelle
     const dueDate = oldData.dueDate || null;
@@ -3171,7 +3347,7 @@ function clearLedgerCart() {
 
 // Açık Hesap sayfasından girilen işlemi, Müşteri Borç bölümüyle AYNI kaydı (dbCustomerDebts)
 // kullanarak kaydeder — böylece iki bölüm arasında ayrı ayrı işlem girmeye gerek kalmaz.
-function saveLedgerTransaction() {
+async function saveLedgerTransaction() {
   if (currentRole !== 'admin') { alert("Bu işlem için yönetici yetkisi gerekir!"); return; }
 
   const c = customersData[ahLedgerCustomerKey];
@@ -3209,11 +3385,11 @@ function saveLedgerTransaction() {
   const grandTotal = hasCart ? ahLedgerCart.reduce((s, i) => s + i.total, 0) : manualAmount;
 
   if (hasCart) {
-    ahLedgerCart.forEach(item => {
-      db.child(item.code).child('qty').transaction((currentQty) => Math.max(0, Number(currentQty || 0) - item.qty), (error, committed) => {
-        if (!error && committed) logMovement(item.code, item.name, -item.qty, 'AÇIK HESAP BORÇ: ' + c.name);
-      });
-    });
+    const __res = await adjustStockBatch(
+      ahLedgerCart.filter(i => productsData[i.code]).map(i => ({ code: i.code, name: i.name, delta: -Number(i.qty) })),
+      { strict: true, reason: 'AÇIK HESAP BORÇ: ' + c.name }
+    );
+    if (!__res.ok) { alert(__res.message); return; }
   }
 
   const now = new Date();
