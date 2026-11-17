@@ -26,6 +26,9 @@ firebase.initializeApp(firebaseConfig);
 // Oturum yalnızca bellekte tutulur (sayfa yenilenince şifre ekranı zaten yeniden istenir).
 // ------------------------------------------------------------
 const AUTH_EMAILS = { admin: 'yonetici@reyhani-stok.app', staff: 'calisan@reyhani-stok.app' };
+// Firebase en az 6 karakterli şifre ister; giriş ekranındaki kısa şifrelerin sonuna bu ek eklenir.
+// Örn. ekranda 5358 yazılırsa Firebase hesabının şifresi 535877 olmalıdır.
+const AUTH_PASSWORD_SUFFIX = '77';
 window.__authInfo = { ready: false, uid: null, email: null, anonymous: null };
 let fbAuthReady = Promise.resolve();
 (function () {
@@ -42,7 +45,7 @@ async function fbSignInForRole(role, password) {
   if (typeof firebase.auth !== 'function' || !AUTH_EMAILS[role]) return false;
   try {
     await fbAuthReady;
-    await firebase.auth().signInWithEmailAndPassword(AUTH_EMAILS[role], password);
+    await firebase.auth().signInWithEmailAndPassword(AUTH_EMAILS[role], String(password) + AUTH_PASSWORD_SUFFIX);
     return true;
   } catch (e) {
     console.warn('[Auth] ' + role + ' için Firebase girişi yapılamadı:', e && e.code);
