@@ -1379,6 +1379,7 @@ function ruMoreButtons(ctx, shown, total, step, base) {
 function renderRecentDashboard(allProducts) {
   const c = document.getElementById('dash-recent-products');
   if (!c) return;
+  if (currentRole === 'guest') { c.innerHTML = ''; return; } // ziyaretçiye gösterilmez
   ruApplyCollapse('dash');
   const sorted = (allProducts || []).filter(p => p.lastPriceUpdate)
     .sort((a, b) => new Date(b.lastPriceUpdate) - new Date(a.lastPriceUpdate));
