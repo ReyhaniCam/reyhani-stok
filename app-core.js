@@ -7,8 +7,53 @@ setTimeout(() => {
 }, 3000);
 
 // FIREBASE BAĞLANTISI
-const firebaseConfig = { databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/" };
+const firebaseConfig = {
+  apiKey: "AIzaSyChcpjpU1eA3lKV5m_yXAu8q83VJ4wwwHI",
+  authDomain: "reyhani-stok.firebaseapp.com",
+  databaseURL: "https://reyhani-stok-default-rtdb.firebaseio.com/",
+  projectId: "reyhani-stok",
+  storageBucket: "reyhani-stok.firebasestorage.app",
+  messagingSenderId: "812778812909",
+  appId: "1:812778812909:web:237f14ba56b05d9d5563e4"
+};
 firebase.initializeApp(firebaseConfig);
+
+// ------------------------------------------------------------
+// FIREBASE KİMLİK DOĞRULAMA — AŞAMA 1 (veritabanı kuralları henüz DEĞİŞMEDİ, sistem eskisi gibi çalışır)
+// Kullanıcı yine mevcut şifre ekranından giriş yapar; arka planda aynı şifreyle Firebase e-posta/şifre
+// girişi yapılır. Ziyaretçi anonim kimlik alır. Firebase tarafı hazır değilse (hesap yok / yöntem kapalı)
+// bu kısım sessizce atlanır ve uygulama bugünkü gibi çalışmaya devam eder.
+// Oturum yalnızca bellekte tutulur (sayfa yenilenince şifre ekranı zaten yeniden istenir).
+// ------------------------------------------------------------
+const AUTH_EMAILS = { admin: 'yonetici@reyhani-stok.app', staff: 'calisan@reyhani-stok.app' };
+window.__authInfo = { ready: false, uid: null, email: null, anonymous: null };
+let fbAuthReady = Promise.resolve();
+(function () {
+  if (typeof firebase.auth !== 'function') { console.warn('[Auth] firebase-auth.js yüklenmedi, kimlik doğrulama atlandı.'); return; }
+  const auth = firebase.auth();
+  auth.onAuthStateChanged(function (u) {
+    window.__authInfo = { ready: true, uid: u ? u.uid : null, email: u ? u.email : null, anonymous: u ? u.isAnonymous : null };
+  });
+  fbAuthReady = auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
+    .then(function () { return auth.signInAnonymously(); })
+    .catch(function (e) { console.warn('[Auth] Anonim giriş kurulamadı (Firebase\'de "Anonim" yöntemi kapalı olabilir):', e && e.code); });
+})();
+async function fbSignInForRole(role, password) {
+  if (typeof firebase.auth !== 'function' || !AUTH_EMAILS[role]) return false;
+  try {
+    await fbAuthReady;
+    await firebase.auth().signInWithEmailAndPassword(AUTH_EMAILS[role], password);
+    return true;
+  } catch (e) {
+    console.warn('[Auth] ' + role + ' için Firebase girişi yapılamadı:', e && e.code);
+    return false;
+  }
+}
+async function fbSignOutToGuest() {
+  if (typeof firebase.auth !== 'function') return;
+  try { await firebase.auth().signOut(); await firebase.auth().signInAnonymously(); }
+  catch (e) { console.warn('[Auth] Çıkış/anonim geçiş hatası:', e && e.code); }
+}
 
 const dbRoot = firebase.database().ref();
 
@@ -1390,9 +1435,15 @@ async function toggleAuth() {
     if(hash === ADMIN_HASH && getDeviceAuthLevel() === 'admin') { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
     else if(hash === STAFF_HASH) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
     else { alert("Hatalı Şifre!"); return; }
+    // Aşama 1: arka planda Firebase kimliği al (başarısız olsa bile giriş normal devam eder)
+    const __role = currentRole;
+    fbSignInForRole(__role, p).then(ok => {
+      if (!ok && __role === 'admin') console.info('[Auth] Yönetici Firebase hesabı henüz kurulmamış olabilir; sistem normal çalışıyor.');
+    });
     await ensureDeviceNamed();
   } else {
     currentRole = 'guest'; showToast("Çıkış yapıldı.");
+    fbSignOutToGuest();
     updateDeviceBadge();
   }
   updateAuthUI();
