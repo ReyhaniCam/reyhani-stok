@@ -47,6 +47,7 @@
     </div>
     <div class="auth-status">
       <button class="cmdk-trigger-btn" onclick="openCommandPalette()" title="Hızlı Arama">🔎 Ara <span class="cmdk-trigger-kbd">Ctrl+K</span></button>
+      <span id="conn-badge" class="conn-badge online" title="Bağlantı durumu">🟢 Çevrimiçi</span>
       <span class="admin-badge role-guest" id="admin-status">Ziyaretçi Modu</span>
       <span id="device-badge" style="display:none; align-items:center; gap:4px; font-size:11px; color:var(--steel); cursor:pointer; padding:4px 8px; border:1px dashed var(--steel-line); border-radius:12px;" onclick="renameCurrentDevice()" title="Bu cihazın adını değiştirmek için tıklayın">📱 <span id="device-badge-name"></span> ✏️</span>
       <button class="btn btn-warning btn-sm" id="issue-report-btn" style="display:none; width:auto;" onclick="openIssueReportModal()" title="Bir sorun mu yaşadınız? Yapay zeka yardımıyla bildirin">🚨 Sorun Bildir</button>
