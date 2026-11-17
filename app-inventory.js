@@ -1389,16 +1389,14 @@ function updateQty(code, change) {
   if (actionCooldowns[code] && now - actionCooldowns[code] < 500) return;
   actionCooldowns[code] = now;
 
-  db.child(code).child('qty').transaction((currentQty) => {
-    const cur = Number(currentQty || 0);
-    const next = cur + change;
-    return next < 0 ? 0 : next;
-  }, (error, committed, snapshot) => {
-    if (error) { alert("Hata: " + error.message); return; }
-    if (committed) {
-      const p = productsData[code];
-      if (p) logMovement(code, p.name, change, change > 0 ? 'STOK EKLENDİ' : 'STOK DÜŞÜLDÜ');
-    }
+  const p = productsData[code];
+  const tx = adjustStockTx(code, change, { strict: true });
+  const warn = (s) => alert('⚠️ Stok 0\'ın altına düşemez — işlem iptal edildi.' + (p ? '\n\n' + p.name : '') + '\nMevcut: ' + s.available + ', düşülmek istenen: ' + Math.abs(change));
+  if (tx.aborted) { warn(tx); return; }
+  tx.done.then((s) => {
+    if (s.error) { alert("Hata: " + (s.error.message || s.error)); return; }
+    if (s.aborted) { warn(s); return; }
+    if (s.committed && s.applied && p) logMovement(code, p.name, s.applied, change > 0 ? 'STOK EKLENDİ' : 'STOK DÜŞÜLDÜ');
   });
 }
 
