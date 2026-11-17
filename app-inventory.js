@@ -3920,11 +3920,17 @@ function buildReceiptsContextForAI(queryText) {
   matches.slice(0, 40).concat(list.slice(0, 40)).forEach(x => { if (!ids.has(x.id) && picked.length < 70) { ids.add(x.id); picked.push(x); } });
   picked.sort((a, b) => (b.date + ' ' + b.time).localeCompare(a.date + ' ' + a.time));
 
-  const out = picked.map(x => ({
-    fisId: x.id, tarih: x.date, saat: x.time, toptanci: x.r.wholesalerName || '-', fisNo: x.r.fisNo || null,
-    borcaIslendi: !!x.r.addedToDebt, toplam: x.r.total, not: x.r.note || null, giren: x.r.processedBy || null,
-    kalemler: (x.r.items || []).slice(0, 40).map(i => `${i.name} x${i.qty} ${i.unit || 'Adet'}` + (i.cost ? ` (alış ${i.cost})` : ''))
-  }));
+  // Tutar / alış fiyatı / borç bilgisi SADECE yöneticiye verilir; çalışan fişin tarih, toptancı ve kalemlerini (adet) görür.
+  const showMoney = (currentRole === 'admin');
+  const out = picked.map(x => {
+    const row = {
+      fisId: x.id, tarih: x.date, saat: x.time, toptanci: x.r.wholesalerName || '-', fisNo: x.r.fisNo || null,
+      not: x.r.note || null, giren: x.r.processedBy || null,
+      kalemler: (x.r.items || []).slice(0, 40).map(i => `${i.name} x${i.qty} ${i.unit || 'Adet'}` + (showMoney && i.cost ? ` (alış ${i.cost})` : ''))
+    };
+    if (showMoney) { row.borcaIslendi = !!x.r.addedToDebt; row.toplam = x.r.total; }
+    return row;
+  });
   let txt = JSON.stringify(out);
   if (txt.length > 30000) txt = txt.slice(0, 30000) + '...(kısaltıldı)';
   return txt + `\n(Not: Toplam ${list.length} fiş var, en yeni/eşleşen ${picked.length} tanesi gösterildi.)`;
@@ -4047,7 +4053,7 @@ async function sendAIChatMessage() {
   // Rol bilgisi
   let roleInfo = '';
   if (currentRole === 'admin') roleInfo = 'Yönetici yetkisine sahipsin. Tüm modülleri kullanabilirsin: Borç, Toptancılar, Satış Sepeti, Malzeme Fişi, Yeni Ürün Ekle / AI ile Toplu Ürün Yükle, Raporlar, Yerleşim, Görevler, Stok.';
-  else if (currentRole === 'staff') roleInfo = 'Çalışan yetkisine sahipsin. Modüller: Satış Sepeti, Malzeme Fişi, Yerleşim, Raporlar, Görevler, Stok. (Yeni Ürün Ekle ve Toptancılar sadece yöneticiye açıktır.)';
+  else if (currentRole === 'staff') roleInfo = 'Çalışan yetkisine sahipsin. Modüller: Satış Sepeti, Yerleşim, Raporlar, Görevler, Stok. (Yeni Ürün Ekle, Toptancılar, Borç ve Malzeme Fişi ekranı sadece yöneticiye açıktır.) Malzeme fişlerindeki tutar, toplam, alış/geliş fiyatı ve borç bilgileri çalışanlarla PAYLAŞILMAZ; sorulursa bu bilginin sadece yöneticide olduğunu söyle.';
   else roleInfo = 'Ziyaretçi yetkisine sahipsin. Sadece stok sorgulama yapabilirsin, işlem yapamazsın.';
 
   const inventoryContext = buildInventoryContextForAI(userMessage);
@@ -4170,8 +4176,8 @@ ${inventoryContext}${extraContext}`;
       if (tabName) {
         // switchTab() zaten kendi içinde yetki kontrolü yapıp alert() ile uyarıyor,
         // ama sohbette daha yumuşak bir bildirim vermek için burada da kontrol ediyoruz.
-        const adminOnlyTabs = ['ekle', 'toptanci', 'borc', 'acikhesap'];
-        const staffTabs = ['siparis', 'raporlar', 'gorevler', 'yerlesim', 'fis'];
+        const adminOnlyTabs = ['ekle', 'toptanci', 'borc', 'acikhesap', 'fis'];
+        const staffTabs = ['siparis', 'raporlar', 'gorevler', 'yerlesim'];
         let blocked = false;
         if (adminOnlyTabs.includes(tabName) && currentRole !== 'admin') blocked = true;
         if (staffTabs.includes(tabName) && currentRole !== 'admin' && currentRole !== 'staff') blocked = true;
