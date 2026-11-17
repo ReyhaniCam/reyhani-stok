@@ -19,16 +19,13 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 // ------------------------------------------------------------
-// FIREBASE KİMLİK DOĞRULAMA — AŞAMA 1 (veritabanı kuralları henüz DEĞİŞMEDİ, sistem eskisi gibi çalışır)
-// Kullanıcı yine mevcut şifre ekranından giriş yapar; arka planda aynı şifreyle Firebase e-posta/şifre
-// girişi yapılır. Ziyaretçi anonim kimlik alır. Firebase tarafı hazır değilse (hesap yok / yöntem kapalı)
-// bu kısım sessizce atlanır ve uygulama bugünkü gibi çalışmaya devam eder.
-// Oturum yalnızca bellekte tutulur (sayfa yenilenince şifre ekranı zaten yeniden istenir).
+// FIREBASE KİMLİK DOĞRULAMA
+// Giriş gerçek e-posta + şifre ile yapılır (Firebase Authentication). Kodda e-posta, şifre, PIN veya hash YOKTUR.
+// Rol (yönetici / çalışan) istemci tarafından belirlenmez; sunucudan gelir: Realtime Database'de
+// roles/<uid> = "admin" | "staff" (yalnızca Firebase Console'dan yazılır). Veri erişimini asıl kısıtlayan
+// şey veritabanı kurallarıdır (bkz. database.rules.json). Ziyaretçi anonim kimlik alır.
+// Oturum yalnızca bellekte tutulur (sayfa yenilenince giriş yeniden istenir).
 // ------------------------------------------------------------
-const AUTH_EMAILS = { admin: 'yonetici@reyhani-stok.app', staff: 'calisan@reyhani-stok.app' };
-// Firebase en az 6 karakterli şifre ister; giriş ekranındaki kısa şifrelerin sonuna bu ek eklenir.
-// Örn. ekranda 5358 yazılırsa Firebase hesabının şifresi 535877 olmalıdır.
-const AUTH_PASSWORD_SUFFIX = '77';
 window.__authInfo = { ready: false, uid: null, email: null, anonymous: null };
 let fbAuthReady = Promise.resolve();
 (function () {
@@ -41,15 +38,31 @@ let fbAuthReady = Promise.resolve();
     .then(function () { return auth.signInAnonymously(); })
     .catch(function (e) { console.warn('[Auth] Anonim giriş kurulamadı (Firebase\'de "Anonim" yöntemi kapalı olabilir):', e && e.code); });
 })();
-async function fbSignInForRole(role, password) {
-  if (typeof firebase.auth !== 'function' || !AUTH_EMAILS[role]) return false;
+
+// E-posta + şifre ile giriş yapar, rolü sunucudan (roles/<uid>) okur. Döner: { ok, role } veya { ok:false, error }
+async function fbSignInWithPassword(email, password) {
+  if (typeof firebase.auth !== 'function') return { ok: false, error: 'Kimlik doğrulama bileşeni yüklenemedi.' };
   try {
     await fbAuthReady;
-    await firebase.auth().signInWithEmailAndPassword(AUTH_EMAILS[role], String(password) + AUTH_PASSWORD_SUFFIX);
-    return true;
+    const cred = await firebase.auth().signInWithEmailAndPassword(String(email || '').trim(), String(password || ''));
+    let role = null;
+    try {
+      const snap = await firebase.database().ref('roles').child(cred.user.uid).once('value');
+      role = snap.val();
+    } catch (e) { console.warn('[Auth] Rol okunamadı:', e && (e.code || e.message)); }
+    if (role !== 'admin' && role !== 'staff') {
+      await fbSignOutToGuest();
+      return { ok: false, error: 'Bu hesabın panele erişim yetkisi yok.' };
+    }
+    return { ok: true, role: role };
   } catch (e) {
-    console.warn('[Auth] ' + role + ' için Firebase girişi yapılamadı:', e && e.code);
-    return false;
+    const c = e && e.code;
+    console.warn('[Auth] Giriş başarısız:', c);
+    if (c === 'auth/too-many-requests') return { ok: false, error: 'Çok fazla hatalı deneme. Bir süre bekleyip tekrar deneyin.' };
+    if (c === 'auth/network-request-failed') return { ok: false, error: 'İnternet bağlantısı yok.' };
+    if (c === 'auth/user-disabled') return { ok: false, error: 'Bu hesap devre dışı bırakılmış.' };
+    // Hangi alanın yanlış olduğu bilerek söylenmez (hesap tespitini zorlaştırır)
+    return { ok: false, error: 'E-posta veya şifre hatalı.' };
   }
 }
 async function fbSignOutToGuest() {
@@ -125,7 +138,7 @@ setTimeout(() => window.flushReadyQueue && window.flushReadyQueue(), 12000);
 // Firebase oturumu belli olduktan sonra firebase.auth().onAuthStateChanged içinde kurulur:
 //   user == null              → hiçbir dinleyici başlatılmaz (signInAnonymously bekleniyor)
 //   anonim (ziyaretçi)        → sadece 'public' katman (products, product_images, store_layout, brand_settings, barcode_cache)
-//   yönetici / çalışan        → önce tüm dinleyiciler .off() ile temizlenir, sonra 'public' + 'private' katmanların tamamı yeniden başlatılır
+//   e-posta ile giriş (yönetici/çalışan) → önce tüm dinleyiciler .off() ile temizlenir, sonra 'public' + 'private' katmanların tamamı yeniden başlatılır
 // Böylece auth == null iken permission_denied alıp kalıcı olarak iptal olan dinleyici kalmaz.
 // ------------------------------------------------------------
 const __dbListenerRegistry = []; // { tier: 'public'|'private', ref, cb, errCb, attached }
@@ -172,10 +185,11 @@ window.registerDbListener = registerDbListener; // app-inventory.js / app-operat
 if (typeof firebase.auth === 'function') {
   firebase.auth().onAuthStateChanged((user) => {
     let mode = 'none';
-    if (user) {
-      const email = String(user.email || '').toLowerCase();
-      const isStaffAccount = !user.isAnonymous && (email === AUTH_EMAILS.admin || email === AUTH_EMAILS.staff);
-      mode = isStaffAccount ? 'full' : 'public';
+    if (user) mode = user.isAnonymous ? 'public' : 'full'; // e-posta ile girmiş hesap: erişimi veritabanı kuralları (roles/<uid>) belirler
+    // Oturum sunucu tarafında düştüyse (anonim/null) arayüz de ziyaretçiye dönsün
+    if ((!user || user.isAnonymous) && typeof currentRole !== 'undefined' && currentRole !== 'guest') {
+      currentRole = 'guest';
+      try { if (typeof updateAuthUI === 'function') updateAuthUI(); } catch (e) {}
     }
     const uid = user ? user.uid : null;
     if (mode === __dbListenerMode && uid === __dbListenerUid) return; // değişiklik yok
@@ -462,74 +476,22 @@ let lastGridSearch = null;
 const GRID_PAGE_SIZE = 60;
 const actionCooldowns = {};
 
-const ADMIN_HASH = "50e65b1455800c98b480cec56db88524fabd630ddd992df1a58faf5a6edd2430";
-const STAFF_HASH = "2b084c9efd9150fb848e4efb0b5f03f455470f68b153814944e14a6204ec5b9a";
-
 // ============================================================
-// CİHAZ YETKİLENDİRME (Device Authorization)
-// Bu statik sitede sunucu tarafı IP/cihaz kısıtlaması yapılamaz — bunun yerine
-// tarayıcının kalıcı hafızasına (localStorage) bir "yetkili cihaz" damgası
-// yazılır. Bu damga olmayan bir cihazda, yönetici/çalışan şifresi doğru
-// girilse bile giriş denemesi başlamadan reddedilir; sadece ziyaretçi
-// paneli görünür kalır. Yeni bir cihazı yetkilendirmek için, o cihazda
-// siteyi bir defaya mahsus "?authorize_device=GİZLİ_KOD" bağlantısıyla açmak
-// yeterlidir — bağlantı doğrulandığında damga kalıcı olarak kaydedilir.
+// CİHAZ YETKİLENDİRME — KALDIRILDI
+// Eski sistem tarayıcı hafızasındaki (localStorage) bir damgaya ve koddaki hash'lere dayanıyordu; her ikisi de
+// istemci tarafında olduğu için gerçek bir koruma sağlamıyordu. Erişim artık yalnızca Firebase hesabı + roles/<uid>
+// ile belirlenir. Aşağıdaki fonksiyonlar, diğer dosyalardaki çağrılar bozulmasın diye boş/uyumlu bırakıldı.
 // ============================================================
-const DEVICE_AUTH_HASH = "12a7d32afcd5140951fe6ea7b2c8ed7a9c2b196333190f28f899aaf85699c7e6";
-const DEVICE_AUTH_STORAGE_KEY = 'reyhani_device_authorized_v1';
-// Çalışan cihaz bağlantısı: bu kodla açılan cihaz SADECE çalışan paneline girebilir.
-// Depolama değeri: 'true' = yönetici+çalışan yetkili cihaz, 'staff' = yalnızca çalışan.
-const STAFF_DEVICE_AUTH_HASH = "5ba805ecb97573c1ea6ee102459f8510b3567c781a78c301b69bb3a7ff945ad0";
-
-function getDeviceAuthLevel() {
-  try {
-    const v = localStorage.getItem(DEVICE_AUTH_STORAGE_KEY);
-    if (v === 'true') return 'admin';
-    if (v === 'staff') return 'staff';
-    return null;
-  } catch (e) { return null; }
-}
-
-function isDeviceAuthorized() {
-  return getDeviceAuthLevel() !== null;
-}
-
-// Cihaz yönetici seviyesinde yetkili değilse, rol hiçbir şekilde 'admin' olarak kalamaz.
-function enforceDeviceRole() {
-  if (currentRole === 'admin' && getDeviceAuthLevel() !== 'admin') currentRole = 'staff';
-}
-
+function getDeviceAuthLevel() { return currentRole === 'admin' ? 'admin' : (currentRole === 'staff' ? 'staff' : null); }
+function isDeviceAuthorized() { return true; }
+function enforceDeviceRole() { /* rol artık sunucudan gelir */ }
 async function checkDeviceAuthorizationLink() {
+  // Eski bağlantı parametresini adres çubuğundan temizle ve eski yerel damgayı sil.
+  try { localStorage.removeItem('reyhani_device_authorized_v1'); } catch (e) {}
   const params = new URLSearchParams(window.location.search);
-  const code = params.get('authorize_device');
-  if (!code) return;
-
-  // URL'den kodu hemen temizle ki adres çubuğunda / geçmişte uzun süre görünmesin.
+  if (!params.has('authorize_device')) return;
   params.delete('authorize_device');
-  const cleanUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
-  window.history.replaceState({}, document.title, cleanUrl);
-
-  try {
-    const hash = await sha256Hex(code);
-    if (hash === DEVICE_AUTH_HASH) {
-      localStorage.setItem(DEVICE_AUTH_STORAGE_KEY, 'true');
-      alert("✅ Bu cihaz yönetici paneli için kalıcı olarak yetkilendirildi. Artık bu tarayıcıdan normal şekilde giriş yapabilirsiniz.");
-    } else if (hash === STAFF_DEVICE_AUTH_HASH) {
-      // Çalışan linkini açan cihaz HER DURUMDA sadece çalışan seviyesine alınır
-      // (daha önce yönetici yetkisi olsa bile). Yönetici erişimi için yönetici linki gerekir.
-      localStorage.setItem(DEVICE_AUTH_STORAGE_KEY, 'staff');
-      if (currentRole !== 'staff') {
-        currentRole = 'staff';
-        await ensureDeviceNamed();
-      }
-      updateAuthUI();
-      showToast("Çalışan girişi başarılı!");
-    } else {
-      alert("⚠️ Cihaz yetkilendirme kodu geçersiz.");
-    }
-  } catch (e) {
-    alert("Cihaz yetkilendirmesi bu bağlantıda çalışamadı. Sitenin https:// ile açıldığından emin olun.");
-  }
+  window.history.replaceState({}, document.title, window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash);
 }
 
 async function sha256Hex(text) {
@@ -1516,30 +1478,65 @@ async function autoUpdateStockExcel() {
   }
 }
 
-async function toggleAuth() {
-  if(currentRole === 'guest') {
-    if (!isDeviceAuthorized()) {
-      alert("Bu cihazda giriş aktif değil.");
-      return;
-    }
-    const p = prompt("Giriş Şifresini Giriniz:");
-    if (p === null) return;
-    let hash;
-    try {
-      hash = await sha256Hex(p);
-    } catch (e) {
-      alert("Şifre doğrulaması bu bağlantıda çalışamadı. Sitenin https:// ile açıldığından emin olun.");
-      return;
-    }
-    // Sadece çalışan bağlantısıyla yetkilendirilmiş cihazlarda yönetici şifresi KABUL EDİLMEZ.
-    if(hash === ADMIN_HASH && getDeviceAuthLevel() === 'admin') { currentRole = 'admin'; showToast("Yönetici girişi başarılı!"); }
-    else if(hash === STAFF_HASH) { currentRole = 'staff'; showToast("Çalışan girişi başarılı!"); }
-    else { alert("Hatalı Şifre!"); return; }
-    // Aşama 1: arka planda Firebase kimliği al (başarısız olsa bile giriş normal devam eder)
-    const __role = currentRole;
-    fbSignInForRole(__role, p).then(ok => {
-      if (!ok && __role === 'admin') console.info('[Auth] Yönetici Firebase hesabı henüz kurulmamış olabilir; sistem normal çalışıyor.');
+// Giriş penceresi: e-posta + şifre (şifre alanı gizli, tarayıcı/parola yöneticisi ile uyumlu).
+// Başarılı girişte { role } döner; iptal edilirse null.
+function openLoginModal() {
+  return new Promise(function (resolve) {
+    const old = document.getElementById('login-modal-overlay');
+    if (old) old.remove();
+    const ov = document.createElement('div');
+    ov.id = 'login-modal-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000;padding:16px;';
+    ov.innerHTML =
+      '<form id="login-form" style="background:var(--white,#fff);color:var(--charcoal,#222);border-radius:12px;padding:22px;width:100%;max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.4);">' +
+        '<div style="font-weight:700;font-size:17px;margin-bottom:14px;">🔐 Giriş Yap</div>' +
+        '<label style="font-size:12px;display:block;margin-bottom:4px;">E-posta</label>' +
+        '<input id="login-email" type="email" name="username" autocomplete="username" required style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #bbb;border-radius:8px;font-size:15px;box-sizing:border-box;">' +
+        '<label style="font-size:12px;display:block;margin-bottom:4px;">Şifre</label>' +
+        '<input id="login-password" type="password" name="password" autocomplete="current-password" required style="width:100%;padding:10px;margin-bottom:10px;border:1px solid #bbb;border-radius:8px;font-size:15px;box-sizing:border-box;">' +
+        '<div id="login-error" style="color:#b3261e;font-size:12px;min-height:16px;margin-bottom:8px;"></div>' +
+        '<div style="display:flex;gap:8px;">' +
+          '<button type="submit" id="login-submit" class="btn btn-primary" style="flex:1;">Giriş</button>' +
+          '<button type="button" id="login-cancel" class="btn" style="flex:1;">İptal</button>' +
+        '</div>' +
+      '</form>';
+    document.body.appendChild(ov);
+
+    const form = ov.querySelector('#login-form');
+    const emailEl = ov.querySelector('#login-email');
+    const passEl = ov.querySelector('#login-password');
+    const errEl = ov.querySelector('#login-error');
+    const submitEl = ov.querySelector('#login-submit');
+    try { emailEl.value = localStorage.getItem('reyhani_last_email') || ''; } catch (e) {}
+    (emailEl.value ? passEl : emailEl).focus();
+
+    function close(result) { passEl.value = ''; ov.remove(); resolve(result); }
+    ov.querySelector('#login-cancel').onclick = function () { close(null); };
+    ov.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(null); });
+
+    form.addEventListener('submit', async function (ev) {
+      ev.preventDefault();
+      errEl.textContent = '';
+      submitEl.disabled = true; submitEl.textContent = 'Giriş yapılıyor...';
+      const r = await fbSignInWithPassword(emailEl.value, passEl.value);
+      if (r.ok) {
+        try { localStorage.setItem('reyhani_last_email', emailEl.value.trim()); } catch (e) {}
+        close({ role: r.role });
+      } else {
+        errEl.textContent = r.error;
+        passEl.value = ''; passEl.focus();
+        submitEl.disabled = false; submitEl.textContent = 'Giriş';
+      }
     });
+  });
+}
+
+async function toggleAuth() {
+  if (currentRole === 'guest') {
+    const res = await openLoginModal();
+    if (!res) return;
+    currentRole = res.role; // rol sunucudan (roles/<uid>) geldi
+    showToast(res.role === 'admin' ? 'Yönetici girişi başarılı!' : 'Çalışan girişi başarılı!');
     await ensureDeviceNamed();
   } else {
     currentRole = 'guest'; showToast("Çıkış yapıldı.");
