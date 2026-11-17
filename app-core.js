@@ -1457,7 +1457,11 @@ function renderDashboard() {
   }
 
   // Son güncellenen ürünler (açılır/kapanır, ürün geçmişiyle) — app-operations.js
-  if (typeof renderRecentDashboard === 'function') renderRecentDashboard(allProducts);
+  // Ziyaretçi modunda bölüm tamamen gizlenir (veri de çizilmez); yönetici ve çalışan görmeye devam eder.
+  const recentSection = document.getElementById('dash-recent-section');
+  if (recentSection) recentSection.style.display = (currentRole === 'guest') ? 'none' : '';
+  if (currentRole !== 'guest' && typeof renderRecentDashboard === 'function') renderRecentDashboard(allProducts);
+  else { const rc = document.getElementById('dash-recent-products'); if (rc && currentRole === 'guest') rc.innerHTML = ''; }
 
   // Hızlı erişim kartlarını yetkiye göre göster/gizle ve tıklama olaylarını ata
   document.querySelectorAll('.action-card[data-tab]').forEach(card => {
