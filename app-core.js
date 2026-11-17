@@ -79,24 +79,121 @@ window.flushReadyQueue = function () {
   });
 };
 (function () {
-  let owner = dbRoot;
-  while (owner && !Object.prototype.hasOwnProperty.call(owner, 'on')) owner = Object.getPrototypeOf(owner);
+  function findOwner(name) {
+    let o = dbRoot;
+    while (o && !Object.prototype.hasOwnProperty.call(o, name)) o = Object.getPrototypeOf(o);
+    return o;
+  }
+  const owner = findOwner('on');
   if (!owner) return;
   const origOn = owner.on;
   owner.on = function (evt, cb, a, b) {
-    if (typeof cb !== 'function' || window.__appReady) return origOn.call(this, evt, cb, a, b);
+    if (typeof cb !== 'function' || window.__appReady) {
+      if (typeof cb === 'function') cb.__qw = null; // doğrudan bağlandı: eski sarmalayıcı kaydı geçersiz
+      return origOn.call(this, evt, cb, a, b);
+    }
     const wrapped = function () {
       if (window.__appReady) return cb.apply(this, arguments);
       wrapped.__pending = arguments; wrapped.__ctx = this;
       if (!wrapped.__queued) { wrapped.__queued = true; window.__readyQueue.push(wrapped); }
     };
+    cb.__qw = wrapped; // .off(cb) çağrısının gerçek (sarmalanmış) dinleyiciyi bulabilmesi için
     origOn.call(this, evt, wrapped, a, b);
     return cb;
   };
+  // .off(evt, cb): hazır-kuyruğunda sarmalanmış dinleyiciler için orijinal cb yerine sarmalayıcıyı kaldırır
+  const offOwner = findOwner('off');
+  if (offOwner && typeof offOwner.off === 'function') {
+    const origOff = offOwner.off;
+    offOwner.off = function (evt, cb, ctx) {
+      if (typeof cb === 'function' && cb.__qw) {
+        const w = cb.__qw; cb.__qw = null;
+        w.__pending = null; // kuyrukta bekleyen eski veri kaldırılmış dinleyiciyi tetiklemesin
+        return origOff.call(this, evt, w, ctx);
+      }
+      return origOff.call(this, evt, cb, ctx);
+    };
+  }
 })();
 // Emniyet: son betik bir sebeple yarım kalsa bile sayfa tamamen yüklenince / en geç 12 sn sonra bekleyenleri çalıştır
 window.addEventListener('load', () => setTimeout(window.flushReadyQueue, 300));
 setTimeout(() => window.flushReadyQueue && window.flushReadyQueue(), 12000);
+// ------------------------------------------------------------
+// VERİTABANI DİNLEYİCİ YÖNETİCİSİ (Auth'a bağlı)
+// Sayfa açılışında hiçbir .on('value') / keepSynced eşdeğeri doğrudan çalışmaz. Dosyadaki tüm dinleyiciler
+// registerDbListener(katman, ref, cb, errCb) ile bu listeye KAYDEDİLİR; gerçek bağlantı yalnızca
+// Firebase oturumu belli olduktan sonra firebase.auth().onAuthStateChanged içinde kurulur:
+//   user == null              → hiçbir dinleyici başlatılmaz (signInAnonymously bekleniyor)
+//   anonim (ziyaretçi)        → sadece 'public' katman (products, product_images, store_layout, brand_settings, barcode_cache)
+//   yönetici / çalışan        → önce tüm dinleyiciler .off() ile temizlenir, sonra 'public' + 'private' katmanların tamamı yeniden başlatılır
+// Böylece auth == null iken permission_denied alıp kalıcı olarak iptal olan dinleyici kalmaz.
+// ------------------------------------------------------------
+const __dbListenerRegistry = []; // { tier: 'public'|'private', ref, cb, errCb, attached }
+let __dbListenerMode = 'none';   // 'none' | 'public' | 'full'
+let __dbListenerUid = null;
+
+function __dbListenerLabel(ref) {
+  try { return String(ref).replace(/^https?:\/\/[^\/]+\/?/, '') || '/'; } catch (e) { return '?'; }
+}
+function __dbTierAllowed(tier) {
+  return __dbListenerMode === 'full' || (__dbListenerMode === 'public' && tier === 'public');
+}
+function __attachDbListener(entry) {
+  if (entry.attached) return;
+  entry.attached = true;
+  try {
+    entry.ref.on('value', entry.cb, function (err) {
+      // izin/bağlantı hatası: Firebase dinleyiciyi kalıcı iptal eder; bir sonraki oturum değişiminde yeniden denenir
+      entry.attached = false;
+      console.warn('[DB] Dinleyici iptal edildi (' + __dbListenerLabel(entry.ref) + '):', err && (err.code || err.message));
+      if (typeof entry.errCb === 'function') { try { entry.errCb(err); } catch (x) { console.error(x); } }
+    });
+  } catch (e) {
+    entry.attached = false;
+    console.warn('[DB] Dinleyici kurulamadı (' + __dbListenerLabel(entry.ref) + '):', e);
+  }
+}
+function __detachAllDbListeners() {
+  __dbListenerRegistry.forEach(function (entry) {
+    if (!entry.attached) return;
+    try { entry.ref.off('value', entry.cb); } catch (e) { console.warn('[DB] .off hatası:', e); }
+    entry.attached = false;
+  });
+}
+// Dinleyiciyi kaydeder. Oturum durumu o katmana zaten izin veriyorsa (geç kayıt) hemen bağlar.
+function registerDbListener(tier, ref, cb, errCb) {
+  const entry = { tier: tier, ref: ref, cb: cb, errCb: errCb, attached: false };
+  __dbListenerRegistry.push(entry);
+  if (__dbTierAllowed(tier)) __attachDbListener(entry);
+  return entry;
+}
+window.registerDbListener = registerDbListener; // app-inventory.js / app-operations.js de kullanabilsin
+
+if (typeof firebase.auth === 'function') {
+  firebase.auth().onAuthStateChanged((user) => {
+    let mode = 'none';
+    if (user) {
+      const email = String(user.email || '').toLowerCase();
+      const isStaffAccount = !user.isAnonymous && (email === AUTH_EMAILS.admin || email === AUTH_EMAILS.staff);
+      mode = isStaffAccount ? 'full' : 'public';
+    }
+    const uid = user ? user.uid : null;
+    if (mode === __dbListenerMode && uid === __dbListenerUid) return; // değişiklik yok
+    // Oturum değişti: önceki tüm dinleyicileri temizle
+    __detachAllDbListeners();
+    __dbListenerMode = mode;
+    __dbListenerUid = uid;
+    if (mode === 'none') return; // user == null → anonim giriş tamamlanana kadar hiçbir şey başlatma
+    // anonim: yalnızca 'public' düğümler; yönetici/çalışan: tüm düğümler
+    __dbListenerRegistry.forEach(function (entry) {
+      if (__dbTierAllowed(entry.tier)) __attachDbListener(entry);
+    });
+  });
+} else {
+  // firebase-auth.js yüklenmediyse eski davranış: kimlik doğrulaması olmadan hepsini bağla
+  __dbListenerMode = 'full';
+}
+
 const db = dbRoot.child('products');
 const dbMovements = dbRoot.child('daily_movements');
 const dbProductHistory = dbRoot.child('product_history'); // ürün başına düzenleme geçmişi (fiyat, ad, miktar vb. eski → yeni)
@@ -142,10 +239,10 @@ function renderConnBadge() {
   }
 }
 
-// 1) keepSynced eşdeğeri: kritik düğümlerde kalıcı dinleyici (products/orders/customers/wholesalers zaten dinleniyor)
-['products', 'orders', 'customer_debts', 'customers', 'wholesalers'].forEach(function (node) {
-  try { dbRoot.child(node).on('value', function () {}, function (e) { console.warn('keepSynced hatası (' + node + '):', e && e.message); }); }
-  catch (e) { console.warn('keepSynced kurulamadı:', node, e); }
+// 1) keepSynced eşdeğeri: kritik düğümlerde kalıcı dinleyici. Sayfa açılışında ÇALIŞMAZ; oturum belli olunca
+//    (bkz. VERİTABANI DİNLEYİCİ YÖNETİCİSİ) kurulur. 'products' herkese açık; diğerleri yalnızca yönetici/çalışan oturumunda.
+[['public', 'products'], ['private', 'orders'], ['private', 'customer_debts'], ['private', 'customers'], ['private', 'wholesalers']].forEach(function (p) {
+  registerDbListener(p[0], dbRoot.child(p[1]), function () {}, function (e) { console.warn('keepSynced hatası (' + p[1] + '):', e && e.message); });
 });
 
 // 2) Bağlantı durumu göstergesi (.info/connected)
@@ -309,7 +406,7 @@ function saveGeminiApiKey(key) {
   dbGeminiKey.set(key).catch(e => console.warn('API anahtarı Firebase\'e kaydedilemedi:', e));
 }
 
-dbGeminiKey.on('value', snap => {
+registerDbListener('private', dbGeminiKey, snap => {
   const remote = snap.val();
   if (remote && typeof remote === 'string') {
     // Firebase'deki anahtar bu cihaza yansıtılır (başka cihazdan girilmiş olabilir)
@@ -1062,7 +1159,7 @@ function toggleQR(code) {
 const urlParams = new URLSearchParams(window.location.search);
 const targetCode = urlParams.get('item');
 
-db.on('value', (snapshot) => {
+registerDbListener('public', db, (snapshot) => {
   productsData = snapshot.val() || {};
   // Bozuk kayıtlara karşı koruma: obje olmayan kayıtları at, "code" alanı eksik olanlara Firebase anahtarını yaz
   Object.keys(productsData).forEach(k => {
@@ -1084,7 +1181,7 @@ db.on('value', (snapshot) => {
   }
 });
 
-dbWholesalers.on('value', (snapshot) => {
+registerDbListener('private', dbWholesalers, (snapshot) => {
   wholesalersData = snapshot.val() || {};
   if(currentRole === 'admin') renderWholesalers();
   renderFisWholesalerOptions();
@@ -1092,12 +1189,12 @@ dbWholesalers.on('value', (snapshot) => {
 });
 
 // Stok Listesi "Toptancıya Göre" filtresi için: tüm fişlerden ürün→toptancı eşleşmesi çıkarılır
-dbGoodsReceipts.on('value', snapshot => {
+registerDbListener('private', dbGoodsReceipts, snapshot => {
   allGoodsReceiptsRaw = snapshot.val() || {};
   if (typeof rebuildProductWholesalerMap === 'function') rebuildProductWholesalerMap();
 });
 
-dbGoodsReceipts.on('value', snapshot => {
+registerDbListener('private', dbGoodsReceipts, snapshot => {
   const data = snapshot.val() || {};
   const listDiv = document.getElementById('past-receipts-list');
   if(!listDiv) return;
@@ -1150,21 +1247,21 @@ dbGoodsReceipts.on('value', snapshot => {
   if(typeof renderDuplicateReceiptsBox === 'function') renderDuplicateReceiptsBox();
 });
 
-dbMovements.on('value', (snapshot) => {
+registerDbListener('private', dbMovements, (snapshot) => {
   movementsData = snapshot.val() || {};
 });
 
-dbNotifications.on('value', (snapshot) => {
+registerDbListener('private', dbNotifications, (snapshot) => {
   notificationsData = snapshot.val() || {};
   if(currentRole === 'admin') renderNotifications();
 });
 
-dbTasks.on('value', (snapshot) => {
+registerDbListener('private', dbTasks, (snapshot) => {
   tasksData = snapshot.val() || {};
   renderTasks();
 });
 
-dbLayout.on('value', (snapshot) => {
+registerDbListener('public', dbLayout, (snapshot) => {
   layoutData = snapshot.val() || { stands: {}, plans: {} };
   if (!layoutData.stands) layoutData.stands = {};
   if (!layoutData.plans) layoutData.plans = {};
@@ -1177,7 +1274,7 @@ dbLayout.on('value', (snapshot) => {
   }
 });
 
-dbBrandSettings.on('value', (snapshot) => {
+registerDbListener('public', dbBrandSettings, (snapshot) => {
   brandSettingsData = snapshot.val() || {};
   renderBrandSettings();
   const fBrandSel = document.getElementById('f-brand');
@@ -1192,37 +1289,37 @@ dbBrandSettings.on('value', (snapshot) => {
   }
 });
 
-dbCatalogPdfs.on('value', (snapshot) => {
+registerDbListener('private', dbCatalogPdfs, (snapshot) => {
   catalogPdfsData = snapshot.val() || {};
   if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderBrandCatalogList === 'function') renderBrandCatalogList();
 });
 
-dbCatalogMeta.on('value', (snapshot) => {
+registerDbListener('private', dbCatalogMeta, (snapshot) => {
   catalogMetaData = snapshot.val() || {};
   if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderSingleReceipts === 'function') renderSingleReceipts();
 });
 
-dbPipeTypes.on('value', (snapshot) => {
+registerDbListener('private', dbPipeTypes, (snapshot) => {
   pipeTypesData = snapshot.val() || {};
   if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderPipeTypesList === 'function') renderPipeTypesList();
 });
 
-dbCatalogAiHistory.on('value', (snapshot) => {
+registerDbListener('private', dbCatalogAiHistory, (snapshot) => {
   catalogAiHistoryData = snapshot.val() || {};
   if (document.getElementById('tab-katalog')?.classList.contains('active') && typeof renderAiHistoryList === 'function') renderAiHistoryList();
 });
 
-dbDevices.on('value', (snapshot) => {
+registerDbListener('private', dbDevices, (snapshot) => {
   devicesData = snapshot.val() || {};
   syncCurrentDeviceNameFromDb();
   if (typeof renderDevicesList === 'function') renderDevicesList();
 });
 
-dbBarcodeCache.on('value', (snapshot) => {
+registerDbListener('public', dbBarcodeCache, (snapshot) => {
   barcodeCacheData = snapshot.val() || {};
 });
 
-dbIssueReports.on('value', (snapshot) => {
+registerDbListener('private', dbIssueReports, (snapshot) => {
   issueReportsData = snapshot.val() || {};
   issueReportsLoaded = true;
   if (typeof renderIssueAdminList === 'function') renderIssueAdminList();
@@ -1237,7 +1334,7 @@ dbIssueReports.on('value', (snapshot) => {
   if (box) box.innerHTML = `<p style="font-size:12px; color:var(--rust); text-align:center; padding:10px 0;">⚠️ Bildirimler yüklenemedi: ${err.message || err}</p>`;
 });
 
-dbZReports.on('value', (snapshot) => {
+registerDbListener('private', dbZReports, (snapshot) => {
   const data = snapshot.val() || {};
   const listDiv = document.getElementById('past-z-reports-list');
   if(!listDiv) return;
@@ -1272,7 +1369,7 @@ dbZReports.on('value', (snapshot) => {
   listDiv.innerHTML = hasReports ? __zReportParts.join('') : '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
 });
 
-dbOrders.on('value', snapshot => {
+registerDbListener('private', dbOrders, snapshot => {
   const data = snapshot.val() || {};
   const listDiv = document.getElementById('past-orders-list');
   if(!listDiv) return;
@@ -2922,7 +3019,7 @@ function exportCustomerDebts() {
 
 let customersData = {};
 
-dbCustomers.on('value', (snapshot) => {
+registerDbListener('private', dbCustomers, (snapshot) => {
   customersData = snapshot.val() || {};
   refreshCustomerDatalist();
   const tab = document.getElementById('tab-acikhesap');
