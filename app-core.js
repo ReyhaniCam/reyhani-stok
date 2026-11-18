@@ -45,14 +45,18 @@ async function fbSignInWithPassword(email, password) {
   try {
     await fbAuthReady;
     const cred = await firebase.auth().signInWithEmailAndPassword(String(email || '').trim(), String(password || ''));
-    let role = null;
+    let role = null, roleReadError = null;
     try {
       const snap = await firebase.database().ref('roles').child(cred.user.uid).once('value');
       role = snap.val();
-    } catch (e) { console.warn('[Auth] Rol okunamadı:', e && (e.code || e.message)); }
+    } catch (e) { roleReadError = e; console.warn('[Auth] Rol okunamadı:', e && (e.code || e.message)); }
     if (role !== 'admin' && role !== 'staff') {
+      const uid = cred.user.uid;
       await fbSignOutToGuest();
-      return { ok: false, error: 'Bu hesabın panele erişim yetkisi yok.' };
+      if (roleReadError) {
+        return { ok: false, error: 'Giriş doğru ancak rol okunamadı (veritabanı izni: roles/' + uid + '). Kurallar roles düğümünü okumaya izin vermeli.' };
+      }
+      return { ok: false, error: 'Giriş doğru ancak rol tanımlı değil. Firebase > Realtime Database > roles > ' + uid + ' = "admin" olarak eklenmeli.' };
     }
     return { ok: true, role: role };
   } catch (e) {
