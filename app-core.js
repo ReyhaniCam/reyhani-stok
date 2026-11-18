@@ -1,4 +1,4 @@
-var APP_BUILD_CORE = '23';
+var APP_BUILD_CORE = '24';
 var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // SPLASH SCREEN SÜRESİ
 setTimeout(() => {
@@ -337,14 +337,46 @@ function renderConnBadge() {
   const on = window.__fbConnected !== false;
   const pend = window.__pendingStockOps || 0;
   el.className = 'conn-badge ' + (on ? 'online' : 'offline');
-  if (on) {
+  el.style.cursor = 'pointer'; // rozet aynı zamanda bir düğmedir: tıklayınca çevrimdışı mod açılıp kapanır
+  if (window.__manualOffline) {
+    el.textContent = '🔴 Çevrimdışı (elle)' + (pend > 0 ? ' (' + pend + ' bekleyen stok işlemi)' : '');
+    el.title = 'Çevrimdışı moda elle geçildi. Tekrar bağlanmak için tıklayın. Bu sırada sayfayı kapatmayın/yenilemeyin.';
+  } else if (on) {
     el.textContent = pend > 0 ? '🟢 Çevrimiçi · eşitleniyor (' + pend + ')' : '🟢 Çevrimiçi';
-    el.title = 'Bulutla bağlantı var.';
+    el.title = 'Bulutla bağlantı var. Çevrimdışı moda geçmek için tıklayın.';
   } else {
     el.textContent = '🔴 Çevrimdışı - Yerel Mod' + (pend > 0 ? ' (' + pend + ' bekleyen stok işlemi)' : '');
     el.title = 'İnternet yok. İşlemler bu cihazda tutuluyor, bağlantı gelince otomatik eşitlenecek. Bu sırada sayfayı kapatmayın/yenilemeyin.';
   }
 }
+
+// Rozete tıklayınca çevrimdışı mod açılır/kapanır (yalnızca giriş yapmış kullanıcı).
+// goOffline(): bulut bağlantısını keser, işlemler cihazda tutulur; goOnline(): yeniden bağlanır, bekleyen işlemler eşitlenir.
+window.__manualOffline = false;
+function toggleManualOffline() {
+  if (typeof currentRole !== 'undefined' && currentRole === 'guest') {
+    if (typeof showToast === 'function') showToast('Çevrimdışı mod için önce giriş yapmalısınız.');
+    return;
+  }
+  try {
+    if (!window.__manualOffline) {
+      if (!confirm('Çevrimdışı moda geçilsin mi?\n\nBu sırada yapılan işlemler yalnızca bu cihazda tutulur. Tekrar bağlanana kadar sayfayı kapatmayın/yenilemeyin.')) return;
+      window.__manualOffline = true;
+      window.__fbConnected = false;
+      firebase.database().goOffline();
+      if (typeof showToast === 'function') showToast('🔴 Çevrimdışı moda geçildi. Tekrar bağlanmak için rozete tıklayın.');
+    } else {
+      window.__manualOffline = false;
+      firebase.database().goOnline();
+      if (typeof showToast === 'function') showToast('🟢 Bağlanılıyor — bekleyen işlemler bulutla eşitlenecek.');
+    }
+  } catch (e) { console.warn('[Bağlantı] mod değiştirilemedi:', e); }
+  renderConnBadge();
+}
+window.addEventListener('load', function () {
+  const el = document.getElementById('conn-badge');
+  if (el) el.addEventListener('click', toggleManualOffline);
+});
 
 // 1) keepSynced eşdeğeri: kritik düğümlerde kalıcı dinleyici. Sayfa açılışında ÇALIŞMAZ; oturum belli olunca
 //    (bkz. VERİTABANI DİNLEYİCİ YÖNETİCİSİ) kurulur. 'products' herkese açık; diğerleri yalnızca yönetici/çalışan oturumunda.
@@ -361,7 +393,7 @@ firebase.database().ref('.info/connected').on('value', function (snap) {
   if (now) window.__connSeenOnce = true;
   window.__fbConnected = now;
   renderConnBadge();
-  if (window.__connSeenOnce && was !== now && typeof showToast === 'function') {
+  if (window.__connSeenOnce && was !== now && !window.__manualOffline && typeof showToast === 'function') {
     showToast(now
       ? '🟢 Bağlantı geldi — bekleyen işlemler bulutla eşitleniyor.'
       : '🔴 İnternet koptu — Yerel Mod: işlemler cihazda tutuluyor, bağlantı gelince otomatik eşitlenecek. Sayfayı kapatmayın/yenilemeyin.');
