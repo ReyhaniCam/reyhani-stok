@@ -24,9 +24,31 @@ firebase.initializeApp(firebaseConfig);
 // Rol (yönetici / çalışan) istemci tarafından belirlenmez; sunucudan gelir: Realtime Database'de
 // roles/<uid> = "admin" | "staff" (yalnızca Firebase Console'dan yazılır). Veri erişimini asıl kısıtlayan
 // şey veritabanı kurallarıdır (bkz. database.rules.json). Ziyaretçi anonim kimlik alır.
-// Oturum yalnızca bellekte tutulur (sayfa yenilenince giriş yeniden istenir).
+// Oturum, girişten itibaren SESSION_MAX_HOURS saat boyunca sayfa yenilense/kapatılıp açılsa da korunur;
+// süre dolunca otomatik çıkış yapılır. Şifre hiçbir yerde saklanmaz (yalnızca Firebase'in oturum belirteci + giriş zamanı).
 // ------------------------------------------------------------
 window.__authInfo = { ready: false, uid: null, email: null, anonymous: null };
+
+// Oturum süresi (saat). Giriş anından itibaren bu süre sonunda otomatik çıkış yapılır.
+const SESSION_MAX_HOURS = 8;
+const SESSION_MAX_MS = SESSION_MAX_HOURS * 60 * 60 * 1000;
+const SESSION_KEY = 'reyhani_login_at_v1';
+function sessionLoginAt() { try { return Number(localStorage.getItem(SESSION_KEY)) || 0; } catch (e) { return 0; } }
+function sessionMarkLogin() { try { localStorage.setItem(SESSION_KEY, String(Date.now())); } catch (e) {} }
+function sessionClear() { try { localStorage.removeItem(SESSION_KEY); } catch (e) {} }
+function sessionValid() { const at = sessionLoginAt(); return at > 0 && (Date.now() - at) < SESSION_MAX_MS; }
+
+// Tüm betikler (app-inventory.js sonu: flushReadyQueue) yüklenene kadar bekler; arayüz fonksiyonları hazır olsun diye.
+function whenAppReady(maxMs) {
+  return new Promise(function (resolve) {
+    const t0 = Date.now();
+    (function poll() {
+      if (window.__appReady || Date.now() - t0 > (maxMs || 15000)) return resolve();
+      setTimeout(poll, 50);
+    })();
+  });
+}
+
 let fbAuthReady = Promise.resolve();
 (function () {
   if (typeof firebase.auth !== 'function') { console.warn('[Auth] firebase-auth.js yüklenmedi, kimlik doğrulama atlandı.'); return; }
@@ -34,34 +56,94 @@ let fbAuthReady = Promise.resolve();
   auth.onAuthStateChanged(function (u) {
     window.__authInfo = { ready: true, uid: u ? u.uid : null, email: u ? u.email : null, anonymous: u ? u.isAnonymous : null };
   });
-  fbAuthReady = auth.setPersistence(firebase.auth.Auth.Persistence.NONE)
-    .then(function () { return auth.signInAnonymously(); })
-    .catch(function (e) { console.warn('[Auth] Anonim giriş kurulamadı (Firebase\'de "Anonim" yöntemi kapalı olabilir):', e && e.code); });
+  // Kalıcı oturum: tarayıcı kapanıp açılsa da korunur. İlk durumu bekle: kayıtlı geçerli oturum varsa geri yükle, yoksa anonim giriş yap.
+  fbAuthReady = auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+    .then(function () {
+      return new Promise(function (resolve) {
+        const unsub = auth.onAuthStateChanged(function (u) { unsub(); resolve(u); });
+      });
+    })
+    .then(async function (u) {
+      if (u && !u.isAnonymous) {
+        if (sessionValid()) { await fbRestoreSession(u); return; }
+        sessionClear();
+        await auth.signOut(); // süre dolmuş
+      }
+      if (!auth.currentUser) await auth.signInAnonymously();
+    })
+    .catch(function (e) { console.warn('[Auth] Oturum kurulamadı (Firebase\'de "Anonim" yöntemi kapalı olabilir):', e && e.code); });
+
+  // Sayfa uzun süre açık kalırsa süre dolunca otomatik çıkış
+  setInterval(function () {
+    if (typeof currentRole === 'undefined' || currentRole === 'guest') return;
+    if (sessionValid()) return;
+    currentRole = 'guest';
+    sessionClear();
+    fbSignOutToGuest();
+    try { updateDeviceBadge(); updateAuthUI(); showToast('Oturum süreniz doldu, lütfen tekrar giriş yapın.'); } catch (e) {}
+  }, 60000);
 })();
+
+// Kayıtlı Firebase oturumunu geri yükler: rolü sunucudan (roles/<uid>) okuyup arayüzü giriş yapılmış hâle getirir.
+async function fbRestoreSession(user) {
+  try {
+    await whenAppReady();
+    const snap = await withTimeout(firebase.database().ref('roles').child(user.uid).once('value'), 12000, 'oturum rolü');
+    const role = snap.val();
+    if (role !== 'admin' && role !== 'staff') { await fbSignOutToGuest(); return; }
+    currentRole = role;
+    await ensureDeviceNamed();
+    updateAuthUI();
+    showToast('Oturumunuz devam ediyor.');
+  } catch (e) {
+    console.warn('[Auth] Oturum geri yüklenemedi, ziyaretçi moduna dönülüyor:', e && (e.code || e.message));
+    await fbSignOutToGuest();
+  }
+}
+
+// Bir işlem belirtilen sürede bitmezse reddeder (giriş akışının sonsuza kadar beklemesini önler)
+function withTimeout(promise, ms, label) {
+  return new Promise(function (resolve, reject) {
+    const t = setTimeout(function () { const e = new Error('timeout:' + label); e.code = 'timeout'; reject(e); }, ms);
+    Promise.resolve(promise).then(function (v) { clearTimeout(t); resolve(v); }, function (e) { clearTimeout(t); reject(e); });
+  });
+}
 
 // E-posta + şifre ile giriş yapar, rolü sunucudan (roles/<uid>) okur. Döner: { ok, role } veya { ok:false, error }
 async function fbSignInWithPassword(email, password) {
   if (typeof firebase.auth !== 'function') return { ok: false, error: 'Kimlik doğrulama bileşeni yüklenemedi.' };
+  let step = 'başlangıç';
   try {
-    await fbAuthReady;
-    const cred = await firebase.auth().signInWithEmailAndPassword(String(email || '').trim(), String(password || ''));
+    step = 'anonim oturum bekleniyor';
+    try { await withTimeout(fbAuthReady, 8000, step); } catch (e) { console.warn('[Auth] ' + step + ' zaman aşımı, devam ediliyor'); }
+    step = 'e-posta/şifre doğrulaması';
+    console.info('[Auth] adım:', step);
+    const cred = await withTimeout(firebase.auth().signInWithEmailAndPassword(String(email || '').trim(), String(password || '')), 20000, step);
+    step = 'rol okuma (roles/' + cred.user.uid + ')';
+    console.info('[Auth] adım:', step);
     let role = null, roleReadError = null;
     try {
-      const snap = await firebase.database().ref('roles').child(cred.user.uid).once('value');
+      const snap = await withTimeout(firebase.database().ref('roles').child(cred.user.uid).once('value'), 12000, step);
       role = snap.val();
     } catch (e) { roleReadError = e; console.warn('[Auth] Rol okunamadı:', e && (e.code || e.message)); }
     if (role !== 'admin' && role !== 'staff') {
       const uid = cred.user.uid;
       await fbSignOutToGuest();
+      if (roleReadError && roleReadError.code === 'timeout') {
+        return { ok: false, error: 'Giriş doğru ancak rol okuma zaman aşımına uğradı. İnternet bağlantısını kontrol edip tekrar deneyin.' };
+      }
       if (roleReadError) {
         return { ok: false, error: 'Giriş doğru ancak rol okunamadı (veritabanı izni: roles/' + uid + '). Kurallar roles düğümünü okumaya izin vermeli.' };
       }
       return { ok: false, error: 'Giriş doğru ancak rol tanımlı değil. Firebase > Realtime Database > roles > ' + uid + ' = "admin" olarak eklenmeli.' };
     }
+    console.info('[Auth] giriş tamam, rol:', role);
+    sessionMarkLogin();
     return { ok: true, role: role };
   } catch (e) {
     const c = e && e.code;
-    console.warn('[Auth] Giriş başarısız:', c);
+    console.warn('[Auth] Giriş başarısız (' + step + '):', c, e && e.message);
+    if (c === 'timeout') return { ok: false, error: 'Sunucudan yanıt gelmedi (' + step + '). İnternet bağlantısını kontrol edip tekrar deneyin.' };
     if (c === 'auth/too-many-requests') return { ok: false, error: 'Çok fazla hatalı deneme. Bir süre bekleyip tekrar deneyin.' };
     if (c === 'auth/network-request-failed') return { ok: false, error: 'İnternet bağlantısı yok.' };
     if (c === 'auth/user-disabled') return { ok: false, error: 'Bu hesap devre dışı bırakılmış.' };
@@ -71,6 +153,7 @@ async function fbSignInWithPassword(email, password) {
 }
 async function fbSignOutToGuest() {
   if (typeof firebase.auth !== 'function') return;
+  sessionClear();
   try { await firebase.auth().signOut(); await firebase.auth().signInAnonymously(); }
   catch (e) { console.warn('[Auth] Çıkış/anonim geçiş hatası:', e && e.code); }
 }
@@ -615,7 +698,7 @@ async function ensureDeviceNamed() {
   // sistemde gerçek bir ad varsa o geçerlidir (yönetici listeden değiştirmiş olabilir).
   let dbRecord = null;
   try {
-    const snap = await dbDevices.child(currentDeviceId).once('value');
+    const snap = await withTimeout(dbDevices.child(currentDeviceId).once('value'), 6000, 'cihaz kaydı');
     dbRecord = snap.val();
   } catch (e) { /* çevrimdışı olabilir, yerel adla devam */ }
   const dbName = dbRecord && dbRecord.name ? String(dbRecord.name).trim() : '';
