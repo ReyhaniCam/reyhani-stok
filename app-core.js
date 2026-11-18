@@ -1,4 +1,4 @@
-var APP_BUILD_CORE = '22';
+var APP_BUILD_CORE = '23';
 var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // SPLASH SCREEN SÜRESİ
 setTimeout(() => {
@@ -88,7 +88,7 @@ let fbAuthReady = Promise.resolve();
 async function fbRestoreSession(user) {
   try {
     await whenAppReady();
-    const snap = await withTimeout(firebase.database().ref('roles').child(user.uid).once('value'), 12000, 'oturum rolü');
+    const snap = await withTimeout(firebase.database().ref('roles').child(user.uid).once('value'), 30000, 'oturum rolü');
     const role = snap.val();
     if (role !== 'admin' && role !== 'staff') { await fbSignOutToGuest(); return; }
     currentRole = role;
@@ -123,7 +123,7 @@ async function fbSignInWithPassword(email, password) {
     console.info('[Auth] adım:', step);
     let role = null, roleReadError = null;
     try {
-      const snap = await withTimeout(firebase.database().ref('roles').child(cred.user.uid).once('value'), 12000, step);
+      const snap = await withTimeout(firebase.database().ref('roles').child(cred.user.uid).once('value'), 30000, step);
       role = snap.val();
     } catch (e) { roleReadError = e; console.warn('[Auth] Rol okunamadı:', e && (e.code || e.message)); }
     if (role !== 'admin' && role !== 'staff') {
@@ -285,10 +285,16 @@ if (typeof firebase.auth === 'function') {
     __dbListenerMode = mode;
     __dbListenerUid = uid;
     if (mode === 'none') return; // user == null → anonim giriş tamamlanana kadar hiçbir şey başlatma
-    // anonim: yalnızca 'public' düğümler; yönetici/çalışan: tüm düğümler
-    __dbListenerRegistry.forEach(function (entry) {
-      if (__dbTierAllowed(entry.tier)) __attachDbListener(entry);
-    });
+    // anonim: yalnızca 'public' düğümler; yönetici/çalışan: tüm düğümler.
+    // Giriş sırasında roles/<uid> okuması büyük veri indirmelerinin arkasında kalıp zaman aşımına uğramasın diye
+    // tam erişimde dinleyiciler kısa gecikmeyle bağlanır (rol isteği önce gönderilir).
+    const doAttach = function () {
+      if (__dbListenerMode !== mode || __dbListenerUid !== uid) return; // bu arada oturum değiştiyse vazgeç
+      __dbListenerRegistry.forEach(function (entry) {
+        if (__dbTierAllowed(entry.tier)) __attachDbListener(entry);
+      });
+    };
+    if (mode === 'full') setTimeout(doAttach, 1500); else doAttach();
   });
 } else {
   // firebase-auth.js yüklenmediyse eski davranış: kimlik doğrulaması olmadan hepsini bağla
