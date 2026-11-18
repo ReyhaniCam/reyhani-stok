@@ -1,4 +1,4 @@
-var APP_BUILD_CORE = '21';
+var APP_BUILD_CORE = '22';
 var fisUndoStack; if (typeof fisUndoStack === 'undefined' || !fisUndoStack) fisUndoStack = []; // geri alma geçmişi (her dosyada güvenli tanım)
 // SPLASH SCREEN SÜRESİ
 setTimeout(() => {
@@ -342,7 +342,9 @@ function renderConnBadge() {
 
 // 1) keepSynced eşdeğeri: kritik düğümlerde kalıcı dinleyici. Sayfa açılışında ÇALIŞMAZ; oturum belli olunca
 //    (bkz. VERİTABANI DİNLEYİCİ YÖNETİCİSİ) kurulur. 'products' herkese açık; diğerleri yalnızca yönetici/çalışan oturumunda.
-[['public', 'products'], ['private', 'orders'], ['private', 'customer_debts'], ['private', 'customers'], ['private', 'wholesalers']].forEach(function (p) {
+// (products / wholesalers / customers zaten kendi gerçek dinleyicilerine sahip; 'orders' ise tüm satış geçmişini
+//  gereksiz yere indirip yavaşlattığı için buradan çıkarıldı — aşağıda yalnızca son 40 günlük sorgu dinlenir.)
+[['private', 'customer_debts']].forEach(function (p) {
   registerDbListener(p[0], dbRoot.child(p[1]), function () {}, function (e) { console.warn('keepSynced hatası (' + p[1] + '):', e && e.message); });
 });
 
@@ -1216,18 +1218,23 @@ registerDbListener('public', db, (snapshot) => {
     if (!p || typeof p !== 'object') { delete productsData[k]; return; }
     if (!p.code) p.code = k;
   });
-  renderGrid();
-  updateOrderProductList();
-  updateBorcOrderProductList();
-  updateAhLedgerProductList();
-  renderLayoutGrid();
-  if (typeof renderCart === 'function') renderCart(); // localStorage'dan geri yüklenen sepeti göster
-  if (typeof renderDashboard === 'function') renderDashboard();
-  if(currentRole === 'admin') renderRecentUpdates();
-  if (targetCode && productsData[targetCode]) {
-    document.getElementById('search').value = targetCode;
+  // Art arda gelen ürün değişimlerinde (ör. çok kalemli satış) ağır çizimler her seferinde değil, tek seferde yapılır
+  if (window.__prodRenderTimer) clearTimeout(window.__prodRenderTimer);
+  window.__prodRenderTimer = setTimeout(function () {
+    window.__prodRenderTimer = null;
     renderGrid();
-  }
+    updateOrderProductList();
+    updateBorcOrderProductList();
+    updateAhLedgerProductList();
+    renderLayoutGrid();
+    if (typeof renderCart === 'function') renderCart(); // localStorage'dan geri yüklenen sepeti göster
+    if (typeof renderDashboard === 'function') renderDashboard();
+    if(currentRole === 'admin') renderRecentUpdates();
+    if (targetCode && productsData[targetCode]) {
+      document.getElementById('search').value = targetCode;
+      renderGrid();
+    }
+  }, 150);
 });
 
 registerDbListener('private', dbWholesalers, (snapshot) => {
@@ -1418,7 +1425,9 @@ registerDbListener('private', dbZReports, (snapshot) => {
   listDiv.innerHTML = hasReports ? __zReportParts.join('') : '<p style="color:var(--steel);font-size:13px;text-align:center;">Henüz arşivlenmiş Z Raporu bulunmuyor.</p>';
 });
 
-registerDbListener('private', dbOrders, snapshot => {
+const __ordersCutoffDate = new Date(); __ordersCutoffDate.setDate(__ordersCutoffDate.getDate() - 40);
+const dbOrdersRecent = dbOrders.orderByKey().startAt(__ordersCutoffDate.toISOString().slice(0, 10)); // eski satış günleri hiç indirilmez
+registerDbListener('private', dbOrdersRecent, snapshot => {
   const data = snapshot.val() || {};
   const listDiv = document.getElementById('past-orders-list');
   if(!listDiv) return;
