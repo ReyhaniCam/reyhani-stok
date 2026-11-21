@@ -1081,8 +1081,9 @@ async function lookupFisBarcode() {
   statusEl.textContent = "Aranıyor...";
   setFisPendingBarcode('');
 
-  if (productsData[code]) {
-    const p = productsData[code];
+  const __foundP = (typeof fisFindProductByBarcode === 'function') ? fisFindProductByBarcode(code) : productsData[code];
+  if (__foundP) {
+    const p = __foundP;
     document.getElementById('fis-product').value = `${p.code} - ${p.name}`;
     checkFisProductMatch();
     statusEl.innerHTML = `<span style="color:var(--success); font-weight:600;">✅ Bu barkod sistemde kayıtlı: "${p.name}" (stok: ${p.qty ?? 0}).</span> Malzeme alanına otomatik seçildi, miktar/fiyat girip fişe ekleyin.`;
