@@ -1913,6 +1913,29 @@ function renderFisWholesalerOptions() {
 // güvenilir çalışmadığı için) "Ürün bulunamadı" hatası veriyordu. Bu fonksiyon
 // tek bir yerden dört farklı yolla ürünü bulmayı dener.
 // ============================================================
+// ---- MALZEME FİŞİ BARKOD YARDIMCILARI ----
+// Barkod okuyucular/klavyeler boşluk, satır sonu ya da görünmez karakter ekleyebilir; bunları temizler.
+function fisNormBarcode(v) { return String(v == null ? '' : v).replace(/[\s\u200B-\u200D\uFEFF\u00A0]+/g, ''); }
+// Firebase anahtarı olamayacak karakterler (ürün kodu olarak kullanılırsa kayıt sessizce/hata ile başarısız olur)
+function fisBarcodeHasBadChars(v) { return /[.#$\[\]\/]/.test(String(v || '')); }
+// Barkodu stoktaki ürünlerde arar: ürün kodu, ayrıca kayıtlı "barcode" alanı (RYH- kodlu ürünlerin gerçek barkodu).
+function fisFindProductByBarcode(raw) {
+  const c = fisNormBarcode(raw);
+  if (!c || c.length < 4) return null;
+  if (productsData[c]) return productsData[c];
+  if (productsData[c.toUpperCase()]) return productsData[c.toUpperCase()];
+  const strip = s => String(s).replace(/^0+/, '');
+  const numeric = /^\d+$/.test(c);
+  const list = Object.values(productsData);
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i]; if (!p) continue;
+    if (p.barcode && fisNormBarcode(p.barcode) === c) return p;
+    if (numeric && p.code && /^\d{6,}$/.test(String(p.code)) && strip(p.code) === strip(c)) return p;
+    if (numeric && p.barcode && /^\d{6,}$/.test(fisNormBarcode(p.barcode)) && strip(fisNormBarcode(p.barcode)) === strip(c)) return p;
+  }
+  return null;
+}
+
 function resolveProductInput(inputValRaw) {
   const inputVal = (inputValRaw || '').trim();
   if (!inputVal) return null;
@@ -2429,7 +2452,7 @@ let _fisMatchDebounce = null;
 function checkFisProductMatch() {
   const inputVal = document.getElementById('fis-product').value.trim();
   const possibleCode = inputVal.split(' - ')[0].trim();
-  const p = productsData[possibleCode];
+  const p = productsData[possibleCode] || fisFindProductByBarcode(possibleCode);
   const exists = !!p;
 
   const newFields = document.getElementById('fis-new-fields');
@@ -2518,6 +2541,7 @@ async function createNewProductRecord(item, sourceLabel, extraUsedCodes) {
     name: item.name, qty: 0, price: item.price || 0, unit: item.unit,
     category: item.category || 'Diğer', productType: item.productType || null, brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0,
     targetProfit: item.targetProfit || null, code, lastPriceUpdate: new Date().toISOString(),
+    barcode: code.startsWith('RYH-') ? null : code,
     lastUpdatedBy: sourceLabel
   });
 
@@ -2553,7 +2577,21 @@ async function addToGoodsReceiptCore() {
   }
 
   const possibleCode = inputVal.split(' - ')[0].trim();
-  const p = productsData[possibleCode];
+  // Barkod: "Barkod Tanımla" kutusu, gizli alan ya da üstteki barkod arama kutusu (Bul'a basılmamış olsa bile) — hangisine yazıldıysa
+  const typedBarcode = fisNormBarcode(document.getElementById('fis-barcode-pending-code')?.value)
+    || fisNormBarcode(document.getElementById('fis-new-barcode')?.value)
+    || fisNormBarcode(document.getElementById('fis-barcode-lookup')?.value);
+  let p = productsData[possibleCode] || fisFindProductByBarcode(possibleCode);
+  if (!p && typedBarcode) {
+    const byBc = fisFindProductByBarcode(typedBarcode);
+    if (byBc) { p = byBc; showToast(`Bu barkod zaten "${byBc.name}" ürününe ait — mevcut ürüne eklendi, yeni ürün açılmadı.`); }
+  }
+  // Mevcut ürünün gerçek barkodu yoksa (RYH- kodlu) girilen barkodu ürüne kalıcı kaydet
+  if (p && typedBarcode && !p.barcode && p.code !== typedBarcode && !fisBarcodeHasBadChars(typedBarcode) && !fisFindProductByBarcode(typedBarcode)) {
+    db.child(p.code).update({ barcode: typedBarcode });
+    p.barcode = typedBarcode;
+    showToast(`🔗 "${typedBarcode}" barkodu "${p.name}" ürününe kaydedildi.`);
+  }
 
   // Düzenleme modunda ürün adı değiştirildiyse (örn. AI'ın yanlış okuduğu adı düzeltme) bunu stoktaki ürüne işle.
   // Önceden ad kutusundaki değişiklik sessizce yok sayılıyordu.
@@ -2596,7 +2634,11 @@ async function addToGoodsReceiptCore() {
     const brand = document.getElementById('fis-brand').value || null;
     const vat = parseFloat(document.getElementById('fis-vat').value) || 0;
     const profit = parseFloat(document.getElementById('fis-profit').value) || 0;
-    const pendingBarcode = document.getElementById('fis-barcode-pending-code').value.trim();
+    const pendingBarcode = typedBarcode;
+    if (pendingBarcode && fisBarcodeHasBadChars(pendingBarcode)) {
+      alert('Barkodda ürün kodu olamayacak karakter var (. # $ [ ] /): ' + pendingBarcode + '\n\nBarkodu kontrol edin.');
+      return;
+    }
     item = { code: pendingBarcode || null, name: inputVal, unit: unit, category: category, brand: brand, price: salePrice, vat: vat, targetProfit: profit || null, qty: qty, cost: cost, isNew: true };
 
     const createNow = document.getElementById('fis-create-now').checked;
@@ -3126,6 +3168,12 @@ async function completeGoodsReceiptCore() {
   if(!wKey || !wholesalersData[wKey]) { alert("Lütfen fişin ait olduğu toptancıyı seçin."); return; }
   const wholesaler = wholesalersData[wKey];
 
+  const noBarcodeNew = goodsReceiptCart.filter(i => i.isNew && !i.code);
+  if (noBarcodeNew.length) {
+    const names = noBarcodeNew.slice(0, 8).map(i => '• ' + i.name).join('\n') + (noBarcodeNew.length > 8 ? '\n… ve ' + (noBarcodeNew.length - 8) + ' kalem daha' : '');
+    if (!confirm(`⚠️ ${noBarcodeNew.length} YENİ ürünün barkodu girilmemiş; sistem bunlara otomatik "RYH-" kodu atayacak:\n\n${names}\n\nBarkod girmek için İptal'e basıp kalemde ✏️ Düzenle → "Barkod Tanımla" alanını kullanın.\n\nBarkodsuz haliyle kaydedilsin mi?`)) return;
+  }
+
   const fisNo = document.getElementById('fis-no').value.trim();
   const note = document.getElementById('fis-note').value.trim();
   const addDebt = document.getElementById('fis-add-debt').checked;
@@ -3179,6 +3227,7 @@ async function completeGoodsReceiptCore() {
           name: item.name, qty: 0, price: item.price || 0, unit: item.unit,
           category: item.category || 'Diğer', brand: item.brand || null, costPrice: item.cost || 0, vat: item.vat || 0,
           targetProfit: item.targetProfit || null, code, lastPriceUpdate: new Date().toISOString(),
+          barcode: code.startsWith('RYH-') ? null : code,
           lastUpdatedBy: 'Malzeme Fişi (' + wholesaler.name + ')'
         });
         if(!code.startsWith('RYH-')) {
