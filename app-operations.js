@@ -483,10 +483,7 @@ function renderSlotPickerResults() {
   let list = Object.values(productsData).filter(p => p && p.code && p.location !== loc);
   let title;
   if (q) {
-    list = list.filter(p =>
-      String(p.name || '').toLocaleLowerCase('tr-TR').includes(q) ||
-      String(p.code || '').toLocaleLowerCase('tr-TR').includes(q) ||
-      (p.barcode && String(p.barcode).replace(/\s+/g, '').toLowerCase().includes(qNoSpace)));
+    list = list.filter(p => productMatchesQuery(p, q)).sort((a, b) => productSearchScore(b, q) - productSearchScore(a, q));
     title = list.length ? '' : '<div style="font-size:12px; color:var(--steel);">Eşleşen ürün yok.</div>';
   } else {
     list = list.filter(p => !p.location).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'tr'));
@@ -570,9 +567,7 @@ function findProductLocation() {
 
   if (!q) { resultBox.innerHTML = ''; return; }
 
-  const matches = Object.values(productsData).filter(p =>
-    (p.name && p.name.toLowerCase().includes(q)) || (p.code && p.code.toLowerCase().includes(q))
-  ).slice(0, 8);
+  const matches = searchProducts(q, 8);
 
   if (matches.length === 0) {
     resultBox.innerHTML = `<p style="font-size:12px; color:var(--steel); margin-top:8px;">Eşleşen ürün yok.</p>`;
@@ -1957,6 +1952,8 @@ function findSimilarProducts(inputName, limit) {
     const p = allProducts[idx];
     const meta = getProductMatchMeta(p);
     if (!meta.norm || meta.norm.length < 3) continue;
+    // Çok kelimeli arama: yazılan tüm kelimeler ürün adında (sırası/yeri önemsiz) geçiyorsa aday say
+    const tokenHit = inputTokens.length >= 2 && productMatchesQuery(p, inputName);
 
     // Cheap pre-filter before running Levenshtein: only bother comparing names
     // that already look at least loosely related (shared word, one contains the
@@ -1965,10 +1962,16 @@ function findSimilarProducts(inputName, limit) {
     let foldedOverlapCount = 0;
     foldInputTokens.forEach(t => { if (meta.tokens.has(t)) foldedOverlapCount++; });
     const lengthClose = Math.abs(meta.norm.length - norm.length) <= Math.max(4, Math.ceil(norm.length * 0.4));
-    if (!substringHit && foldedOverlapCount === 0 && !lengthClose) continue;
+    if (!substringHit && foldedOverlapCount === 0 && !lengthClose && !tokenHit) continue;
 
     let score = Math.max(similarityRatio(norm, meta.norm), similarityRatio(foldInput, meta.fold));
     if (substringHit || meta.norm.includes(norm) || norm.includes(meta.norm)) score = Math.max(score, 0.85);
+    if (tokenHit) {
+      // 0.85'in altında tutulur: otomatik "kesin eşleşme" sayılmasın, sadece öneri listesinde çıksın
+      const words = meta.fold.split(' ');
+      const starts = foldInput.split(' ').filter(t => t && words.some(w => w.startsWith(t))).length;
+      score = Math.max(score, 0.75 + 0.04 * (starts / Math.max(1, foldInput.split(' ').filter(Boolean).length)));
+    }
 
     const pnTokens = meta.norm.split(' ').filter(Boolean);
     if (inputTokens.length > 0 && pnTokens.length > 0) {
@@ -3610,7 +3613,7 @@ function renderMergeProductList() {
   if(!listBox) return;
   const term = (document.getElementById('merge-search').value || '').toLocaleLowerCase('tr-TR').trim();
   const all = Object.values(productsData)
-    .filter(p => !term || p.name.toLocaleLowerCase('tr-TR').includes(term) || (p.code||'').toLocaleLowerCase('tr-TR').includes(term))
+    .filter(p => !term || productMatchesQuery(p, term))
     .sort((a,b) => a.name.localeCompare(b.name, 'tr-TR'));
 
   if(all.length === 0) {
@@ -4351,7 +4354,7 @@ function toggleImportCleanupCode(code) {
 
 function toggleAllImportCleanup(select) {
   const term = (document.getElementById('import-cleanup-search').value || '').toLocaleLowerCase('tr-TR').trim();
-  const visible = detectBulkImportProducts().filter(p => !term || p.name.toLocaleLowerCase('tr-TR').includes(term) || (p.code||'').toLocaleLowerCase('tr-TR').includes(term));
+  const visible = detectBulkImportProducts().filter(p => !term || productMatchesQuery(p, term));
   visible.forEach(p => { if(select) importCleanupSelected.add(p.code); else importCleanupSelected.delete(p.code); });
   renderImportCleanupList();
 }
@@ -4374,7 +4377,7 @@ function renderImportCleanupList() {
 
   const term = (document.getElementById('import-cleanup-search').value || '').toLocaleLowerCase('tr-TR').trim();
   const all = detectBulkImportProducts()
-    .filter(p => !term || p.name.toLocaleLowerCase('tr-TR').includes(term) || (p.code||'').toLocaleLowerCase('tr-TR').includes(term))
+    .filter(p => !term || productMatchesQuery(p, term))
     .sort((a,b) => a.name.localeCompare(b.name, 'tr-TR'));
 
   if(all.length === 0) {
@@ -5254,7 +5257,7 @@ function renderGrid() {
     if (brandFilter && p.brand !== brandFilter) return;
     if (groupFilter && p.category !== groupFilter) return;
     if (!productPassesWholesalerFilter(p)) return;
-    if (pName.includes(search) || pCat.includes(search) || pCode.includes(search) || pLoc.includes(search) || pBrand.includes(search)) {
+    if (productMatchesQuery(p, search)) {
       count++;
       units += safeNum(p.qty);
       value += safeNum(p.qty) * getEffectiveCost(p);
