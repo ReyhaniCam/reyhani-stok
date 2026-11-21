@@ -1454,6 +1454,7 @@ function switchTab(tabName) {
   if(tabName === 'borc' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'acikhesap' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if(tabName === 'fis' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
+  if(tabName === 'fiyat' && currentRole !== 'admin') { alert("Yetkiniz yok!"); return; }
   if((tabName === 'siparis' || tabName === 'raporlar' || tabName === 'gorevler' || tabName === 'yerlesim' || tabName === 'katalog') && currentRole !== 'admin' && currentRole !== 'staff') { alert("Yetkiniz yok!"); return; }
 
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -1471,6 +1472,7 @@ function switchTab(tabName) {
   if(tabName === 'acikhesap' && typeof renderCustomerAccounts === 'function') renderCustomerAccounts();
   if(tabName === 'katalog' && typeof initKatalogTab === 'function') initKatalogTab();
   if(tabName === 'toptanci' && typeof initWholesalerDayView === 'function') initWholesalerDayView();
+  if(tabName === 'fiyat' && typeof initPriceCompareTab === 'function') initPriceCompareTab();
 }
 
 function showToast(msg) {
@@ -2840,6 +2842,7 @@ function renderGoodsReceiptCart() {
         <td style="padding:10px 0; line-height:1.3;">
           ${tickIcon} <strong>${item.name}</strong>${item.isNew ? ' <span style="color:var(--info); font-size:10px;">(YENİ ÜRÜN' + (item.category ? ' — ' + item.category : '') + ')</span>' : ''}${item.justCreated ? ' <span style="color:var(--success); font-size:10px;">(✅ STOĞA DÜŞTÜ)</span>' : ''}${isBeingEdited ? ' <span style="color:#B45309; font-size:10px; font-weight:700;">(DÜZENLENİYOR)</span>' : ''}${overrideLink}<br>
           <small style="color:var(--steel); font-family:'IBM Plex Mono';">${item.code ? ((item.isNew || item.justCreated) ? 'Kod: ' + item.code : item.code) : 'Kod otomatik atanacak'}</small>
+          ${typeof priceCmpCartBadge === 'function' ? priceCmpCartBadge(item) : ''}
           ${(item.price || item.newPrice) ? `<br><small style="color:var(--steel);">Satış Fiyatı: ₺${formatMoney(item.price || item.newPrice)}${item.vat !== undefined ? ' (KDV %' + item.vat + ')' : ''}${item.targetProfit !== undefined && item.targetProfit !== null ? ' · Kâr %' + item.targetProfit : ''}</small>` : ''}
         </td>
         <td>₺${formatMoney(item.cost)}${(item.listCost && Math.abs(item.listCost - item.cost) > 0.00001) ? `<br><small style="color:var(--steel); text-decoration:line-through;">₺${formatMoney(item.listCost)}</small> <small style="color:var(--success); font-weight:700;">-%${item.wsDiscount}</small>` : ''}</td>
