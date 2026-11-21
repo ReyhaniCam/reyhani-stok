@@ -83,6 +83,7 @@
     <button class="tab-btn" id="nav-gorevler-btn" onclick="switchTab('gorevler')" style="display:none;">📋 Günlük Görevler</button>
     <button class="tab-btn" id="nav-toptanci-btn" onclick="switchTab('toptanci')" style="display:none;">🤝 Toptancılar</button>
     <button class="tab-btn" id="nav-fis-btn" onclick="switchTab('fis')" style="display:none;">📥 Malzeme Fişi</button>
+    <button class="tab-btn" id="nav-fiyat-btn" onclick="switchTab('fiyat')" style="display:none;">💱 Fiyat Karşılaştırma</button>
     <button class="tab-btn" id="nav-siparis-btn" onclick="switchTab('siparis')" style="display:none;">🛒 Satış / Sepet</button>
     <button class="tab-btn" id="nav-yerlesim-btn" onclick="switchTab('yerlesim')" style="display:none;">🗺️ Yerleşim</button>
     <button class="tab-btn" id="nav-reports-btn" onclick="switchTab('raporlar')" style="display:none;">📊 Raporlar</button>
@@ -589,7 +590,7 @@
         <div class="form-row">
           <div>
             <label>Toptancı / Firma</label>
-            <select id="fis-wholesaler" onchange="onFisWholesalerChange()"><option value="">-- Toptancı Seçin --</option></select>
+            <select id="fis-wholesaler" onchange="onFisWholesalerChange(); window.priceCmpFisHint && priceCmpFisHint(); if (typeof renderGoodsReceiptCart === 'function') renderGoodsReceiptCart();"><option value="">-- Toptancı Seçin --</option></select>
           </div>
           <div><label>İrsaliye / Fiş No (Opsiyonel)</label><input type="text" id="fis-no" placeholder="Örn: İRS-00123"></div>
         </div>
@@ -624,17 +625,18 @@
         <div class="form-row" style="grid-template-columns: 2fr 1fr 1fr;">
           <div>
             <label>Malzeme Ara (Mevcut Ürün) veya Yeni Ad Yazın</label>
-            <input list="fis-product-list" id="fis-product" placeholder="Ürün kodu/adı yazın veya yeni malzeme adı girin..." oninput="checkFisProductMatch()">
+            <input list="fis-product-list" id="fis-product" placeholder="Ürün kodu/adı yazın veya yeni malzeme adı girin..." oninput="checkFisProductMatch(); window.priceCmpFisHint && priceCmpFisHint();">
             <datalist id="fis-product-list"></datalist>
             <div class="duplicate-warning-box" id="fis-duplicate-warning"></div>
           </div>
-          <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any"></div>
-          <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit(); updateCostCalc('fis', 'fis-cost');"></div>
+          <div><label>Miktar</label><input type="number" id="fis-qty" placeholder="1" value="1" min="0.1" step="any" oninput="window.priceCmpFisHint && priceCmpFisHint();"></div>
+          <div><label>Birim Alış Fiyatı / Geliş Fiyatı (₺)</label><input type="number" id="fis-cost" step="0.01" placeholder="0.00" oninput="updateFisProfit(); updateCostCalc('fis', 'fis-cost'); window.priceCmpFisHint && priceCmpFisHint();"></div>
         </div>
         <div class="form-row" style="grid-template-columns: 1fr 3fr; margin-top:-4px;">
-          <div><label>İskonto Tutarı (₺)</label><input type="number" id="fis-discount" step="0.01" placeholder="0.00" min="0"></div>
+          <div><label>İskonto Tutarı (₺)</label><input type="number" id="fis-discount" step="0.01" placeholder="0.00" min="0" oninput="window.priceCmpFisHint && priceCmpFisHint();"></div>
           <div style="font-size:11px; color:var(--steel); padding-bottom:10px; align-self:flex-end;">Toptancının bu kalem için uyguladığı toplam iskonto tutarı (yüzde değil, ₺). Ara toplamdan otomatik düşülür.</div>
         </div>
+        <div id="fis-price-compare-hint" style="display:none; background:#FFFBEB; border:1px solid #FCD34D; border-radius:6px; padding:9px 12px; margin:-4px 0 12px 0; font-size:12px; line-height:1.5; color:#78350F;"></div>
         <div id="fis-price-fields" style="display:none; background:#F1F5F9; padding:12px; border-radius:6px; margin-bottom:12px;">
           <p id="fis-price-note" style="font-size:11px; color:var(--info); margin:0 0 8px 0; font-weight:600;"></p>
           <div class="form-row" style="grid-template-columns:1fr; margin-bottom:10px;">
@@ -763,6 +765,45 @@
     </div>
 
     <!-- SİPARİŞ / SATIŞ SEPETİ TABI -->
+    <!-- TOPTANCI FİYAT KARŞILAŞTIRMA -->
+    <div id="tab-fiyat" class="tab-content">
+      <div class="form-card">
+        <h3 style="margin-top:0;font-family:'Oswald';">💱 Toptancı Fiyat Karşılaştırma</h3>
+        <p style="font-size:12px; color:var(--steel); margin-top:-6px;">Aynı malzemenin farklı toptancılardan geliş fiyatları, malzeme fişlerinden otomatik karşılaştırılır. Fiyat = iskonto düşülmüş net birim geliş fiyatı. Her toptancının <b>son alım</b> fiyatı esas alınır.</p>
+        <div class="form-row">
+          <div><label>Ürün / Toptancı Ara</label><input type="text" id="pc-search" placeholder="Ürün adı, kod veya toptancı..." oninput="pcSet('q', this.value)"></div>
+          <div><label>Dönem</label>
+            <select onchange="pcSet('period', this.value)">
+              <option value="30">Son 30 gün</option><option value="90">Son 90 gün</option>
+              <option value="180" selected>Son 180 gün</option><option value="365">Son 1 yıl</option><option value="0">Tüm zamanlar</option>
+            </select></div>
+        </div>
+        <div class="form-row">
+          <div><label>Minimum Fark</label>
+            <select onchange="pcSet('minDiff', this.value)">
+              <option value="0" selected>Tümü</option><option value="5">%5 ve üzeri</option><option value="10">%10 ve üzeri</option><option value="20">%20 ve üzeri</option>
+            </select></div>
+          <div><label>Sıralama</label>
+            <select onchange="pcSet('sort', this.value)">
+              <option value="diff" selected>Fark % (çoktan aza)</option><option value="overpay">Tahmini fazla ödeme (₺)</option>
+              <option value="abs">Fark tutarı (₺)</option><option value="name">Ürün adı (A-Z)</option>
+            </select></div>
+        </div>
+        <div class="form-row">
+          <div><label>Fiyat Tabanı</label>
+            <select onchange="pcSet('vat', this.value)"><option value="ex" selected>KDV hariç (net geliş)</option><option value="inc">KDV dahil</option></select></div>
+          <div style="display:flex; flex-direction:column; gap:6px; justify-content:flex-end; padding-bottom:6px;">
+            <label style="display:flex; align-items:center; gap:8px; text-transform:none; margin:0; font-size:13px;"><input type="checkbox" checked onchange="pcSet('merge', this.checked)" style="width:auto; margin:0;"> Aynı adlı ürünleri birleştir (farklı kodlu olsa da)</label>
+            <label style="display:flex; align-items:center; gap:8px; text-transform:none; margin:0; font-size:13px;"><input type="checkbox" checked onchange="pcSet('onlyMulti', this.checked)" style="width:auto; margin:0;"> Sadece birden fazla toptancıdan alınanlar</label>
+          </div>
+        </div>
+        <button class="btn btn-info btn-sm" onclick="pcExportExcel()">📥 Excel'e Aktar</button>
+      </div>
+      <div id="pc-summary"></div>
+      <div id="pc-score"></div>
+      <div id="pc-list"></div>
+    </div>
+
     <div id="tab-siparis" class="tab-content">
       <!-- AI SATIŞ ASİSTANI KUTUSU (BAŞLANGIÇ) -->
       <div class="panel-ai-box">
@@ -1969,5 +2010,6 @@
 <script src="app-core.js?v=29"></script>
 <script src="app-operations.js?v=30"></script>
 <script src="app-inventory.js?v=36"></script>
+<script src="app-pricecompare.js?v=1"></script>
 </body>
 </html>
