@@ -382,9 +382,19 @@ function endStandResize() {
   standResize = null;
 }
 
-function openStandDetail(letter) {
+// ============================================================
+// STAND DETAYI + RAF BÖLMESİNE ÜRÜN YERLEŞTİRME (yönetici + çalışan)
+// Bölmeye tıkla → ürün ara → "Yerleştir". Konum ürüne "A-3" biçiminde yazılır (düzenleme ekranındakiyle aynı alan).
+// ============================================================
+let slotPickerState = { letter: null, slot: null };
+
+function canPlaceInSlots() { return currentRole === 'admin' || currentRole === 'staff'; }
+
+function openStandDetail(letter, keepPicker) {
   const s = layoutData.stands[letter];
   if (!s) return;
+  slotPickerState.letter = letter;
+  if (!keepPicker) slotPickerState.slot = null;
   document.getElementById('stand-detail-title').textContent = `Stand ${letter}${s.label ? ' — ' + s.label : ''}`;
   const itemsInStand = productsInStand(letter);
   const bySlot = {};
@@ -394,20 +404,139 @@ function openStandDetail(letter) {
     bySlot[slotNum].push(p);
   });
 
-  let html = '<div class="slot-grid">';
+  const can = canPlaceInSlots();
+  let html = can
+    ? '<p style="font-size:12px; color:var(--steel); margin:0 0 4px;">👆 Bir bölmeye <b>tıklayarak</b> ürün yerleştirebilir, yerleştirdiğiniz ürünü çıkarabilirsiniz.</p>'
+    : '';
+  html += '<div class="slot-grid">';
   const slotCount = s.slotCount || 0;
   for (let i = 1; i <= slotCount; i++) {
     const items = bySlot[String(i)] || [];
+    const cls = 'slot-cell' + (items.length ? ' filled' : ' empty-slot') + (can ? ' clickable' : '') + (slotPickerState.slot === String(i) ? ' selected' : '');
     html += `
-      <div class="slot-cell ${items.length ? 'filled' : ''}">
-        <div class="slot-num">${letter}-${i}</div>
-        ${items.map(p => `<div class="slot-item">${p.name}</div>`).join('') || '<div class="slot-item" style="color:var(--steel-line);">boş</div>'}
+      <div class="${cls}" ${can ? `data-slot="${i}"` : ''}>
+        <div class="slot-num">${wsFilterEsc(letter)}-${i}</div>
+        ${items.map(p => `<div class="slot-item">${wsFilterEsc(p.name)}</div>`).join('') ||
+          (can ? '<div class="slot-item slot-add">＋ ekle</div>' : '<div class="slot-item" style="color:var(--steel-line);">boş</div>')}
+        ${(items.length && can) ? '<div class="slot-item slot-add">＋ / ✎</div>' : ''}
       </div>
     `;
   }
-  html += '</div>';
-  document.getElementById('stand-detail-body').innerHTML = html;
+  html += '</div><div id="slot-picker"></div>';
+  const body = document.getElementById('stand-detail-body');
+  body.innerHTML = html;
+  body.onclick = standDetailClick;
   document.getElementById('stand-detail-modal').style.display = 'block';
+  if (can && slotPickerState.slot) renderSlotPicker();
+}
+
+// Modal içindeki tüm tıklamalar (bölme seçme / yerleştir / çıkar) tek yerden yönetilir
+function standDetailClick(e) {
+  if (!canPlaceInSlots()) return;
+  const act = e.target.closest('[data-act]');
+  if (act) {
+    const code = act.getAttribute('data-code');
+    if (act.getAttribute('data-act') === 'place') placeProductInSlot(code);
+    else if (act.getAttribute('data-act') === 'remove') removeProductFromSlot(code);
+    return;
+  }
+  const cell = e.target.closest('.slot-cell[data-slot]');
+  if (cell) {
+    slotPickerState.slot = cell.getAttribute('data-slot');
+    openStandDetail(slotPickerState.letter, true);
+  }
+}
+
+function renderSlotPicker() {
+  const box = document.getElementById('slot-picker');
+  const { letter, slot } = slotPickerState;
+  if (!box || !letter || !slot) return;
+  const loc = `${letter}-${slot}`;
+  const inSlot = Object.values(productsData).filter(p => p.location === loc);
+  box.innerHTML = `
+    <div style="margin-top:14px; padding:12px; border:2px solid var(--safety); border-radius:10px; background:#FFFBEB;">
+      <div style="font-family:'Oswald',sans-serif; font-size:17px; margin-bottom:8px;">📍 ${wsFilterEsc(loc)} bölmesi</div>
+      ${inSlot.length ? `
+        <div style="font-size:11px; color:var(--steel); text-transform:uppercase; margin-bottom:4px;">Bu bölmedekiler</div>
+        ${inSlot.map(p => `
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:5px 0; border-bottom:1px dashed var(--steel-line);">
+            <span style="font-size:13px;">${wsFilterEsc(p.name)} <small style="color:var(--steel);">(stok ${p.qty ?? 0})</small></span>
+            <button type="button" class="btn btn-danger btn-sm" style="width:auto; padding:4px 10px;" data-act="remove" data-code="${wsFilterEsc(p.code)}">Çıkar</button>
+          </div>`).join('')}
+        <div style="height:10px;"></div>` : ''}
+      <label style="margin-bottom:4px;">Yerleştirilecek ürünü ara (ad, kod veya barkod)</label>
+      <input type="text" id="slot-picker-search" placeholder="Örn: vida, silikon, 8690..." oninput="renderSlotPickerResults()" autocomplete="off">
+      <div id="slot-picker-results" style="margin-top:8px;"></div>
+    </div>`;
+  renderSlotPickerResults();
+  const inp = document.getElementById('slot-picker-search');
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if (inp) setTimeout(() => inp.focus(), 50);
+}
+
+function renderSlotPickerResults() {
+  const out = document.getElementById('slot-picker-results');
+  if (!out) return;
+  const loc = `${slotPickerState.letter}-${slotPickerState.slot}`;
+  const q = ((document.getElementById('slot-picker-search') || {}).value || '').trim().toLocaleLowerCase('tr-TR');
+  const qNoSpace = q.replace(/\s+/g, '');
+  let list = Object.values(productsData).filter(p => p && p.code && p.location !== loc);
+  let title;
+  if (q) {
+    list = list.filter(p =>
+      String(p.name || '').toLocaleLowerCase('tr-TR').includes(q) ||
+      String(p.code || '').toLocaleLowerCase('tr-TR').includes(q) ||
+      (p.barcode && String(p.barcode).replace(/\s+/g, '').toLowerCase().includes(qNoSpace)));
+    title = list.length ? '' : '<div style="font-size:12px; color:var(--steel);">Eşleşen ürün yok.</div>';
+  } else {
+    list = list.filter(p => !p.location).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'tr'));
+    title = list.length ? '<div style="font-size:11px; color:var(--steel); text-transform:uppercase; margin-bottom:4px;">Yeri henüz atanmamış ürünler</div>' : '<div style="font-size:12px; color:var(--steel);">Aramak için ürün adı yazın.</div>';
+  }
+  const shown = list.slice(0, 15);
+  out.innerHTML = title + shown.map(p => `
+    <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:7px 0; border-top:1px solid var(--steel-line);">
+      <div style="min-width:0;">
+        <div style="font-size:13px; font-weight:600; overflow-wrap:anywhere;">${wsFilterEsc(p.name)}</div>
+        <div style="font-size:11px; color:var(--steel);">${wsFilterEsc(p.code)} · stok ${p.qty ?? 0} ${wsFilterEsc(p.unit || '')}${p.location ? ` · <b style="color:#B45309;">📍 şu an ${wsFilterEsc(p.location)}</b>` : ''}</div>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" style="width:auto; flex-shrink:0;" data-act="place" data-code="${wsFilterEsc(p.code)}">${p.location ? 'Taşı' : 'Yerleştir'}</button>
+    </div>`).join('') + (list.length > shown.length ? `<div style="font-size:11px; color:var(--steel); padding-top:6px;">…ve ${list.length - shown.length} ürün daha. Aramayı daraltın.</div>` : '');
+}
+
+function afterSlotChange() {
+  try { renderLayoutGrid(); } catch (e) {}
+  openStandDetail(slotPickerState.letter, true);
+}
+
+function placeProductInSlot(code) {
+  if (!canPlaceInSlots()) return;
+  const { letter, slot } = slotPickerState;
+  const p = productsData[code];
+  if (!p || !letter || !slot) return;
+  const loc = `${letter}-${slot}`;
+  const old = p.location || null;
+  if (old === loc) { showToast('Ürün zaten bu bölmede.'); return; }
+  if (old && !confirm(`"${p.name}" şu an ${old} konumunda.\n\n${loc} bölmesine taşınsın mı?`)) return;
+  db.child(code).child('location').set(loc).then(() => {
+    p.location = loc;
+    if (typeof logProductChange === 'function') logProductChange(code, p.name, [{ f: 'location', from: old, to: loc }]);
+    showToast(old ? `📍 "${p.name}" ${old} → ${loc} taşındı.` : `📍 "${p.name}" ${loc} bölmesine yerleştirildi.`);
+    afterSlotChange();
+  }).catch(err => alert('Ürün yerleştirilemedi: ' + ((err && err.message) || err)));
+}
+
+function removeProductFromSlot(code) {
+  if (!canPlaceInSlots()) return;
+  const p = productsData[code];
+  if (!p || !p.location) return;
+  if (!confirm(`"${p.name}" ${p.location} bölmesinden çıkarılsın mı? (Ürünün konumu "atanmamış" olur, stoğu değişmez.)`)) return;
+  const old = p.location;
+  db.child(code).child('location').remove().then(() => {
+    p.location = null;
+    if (typeof logProductChange === 'function') logProductChange(code, p.name, [{ f: 'location', from: old, to: null }]);
+    showToast(`"${p.name}" ${old} bölmesinden çıkarıldı.`);
+    afterSlotChange();
+  }).catch(err => alert('Ürün çıkarılamadı: ' + ((err && err.message) || err)));
 }
 
 function closeStandDetail() {
