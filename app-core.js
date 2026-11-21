@@ -1286,6 +1286,7 @@ registerDbListener('private', dbWholesalers, (snapshot) => {
 registerDbListener('private', dbGoodsReceipts, snapshot => {
   allGoodsReceiptsRaw = snapshot.val() || {};
   if (typeof rebuildProductWholesalerMap === 'function') rebuildProductWholesalerMap();
+  if (typeof priceCmpOnReceiptsChanged === 'function') priceCmpOnReceiptsChanged();
 });
 
 registerDbListener('private', dbGoodsReceipts, snapshot => {
@@ -1796,6 +1797,7 @@ const COMMAND_MODULES = [
   { label: 'Günlük Görevler', icon: '📋', tab: 'gorevler', keywords: 'gorev task yapilacaklar', role: 'staff' },
   { label: 'Toptancılar', icon: '🤝', tab: 'toptanci', keywords: 'toptanci tedarikci', role: 'admin' },
   { label: 'Malzeme Fişi', icon: '📥', tab: 'fis', keywords: 'fis mal girisi malzeme fisi', role: 'admin' },
+  { label: 'Fiyat Karşılaştırma', icon: '💱', tab: 'fiyat', keywords: 'fiyat karsilastirma toptanci fark ucuz pahali kiyas', role: 'admin' },
   { label: 'Satış / Sepet', icon: '🛒', tab: 'siparis', keywords: 'satis sepet siparis sat', role: 'staff' },
   { label: 'Yerleşim', icon: '🗺️', tab: 'yerlesim', keywords: 'yerlesim kroki stand harita magaza plani', role: 'staff' },
   { label: 'Raporlar', icon: '📊', tab: 'raporlar', keywords: 'rapor raporlar', role: 'staff' },
@@ -1950,6 +1952,8 @@ function updateAuthUI() {
   
   document.getElementById('nav-add-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-toptanci-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
+  const navFiyatBtn = document.getElementById('nav-fiyat-btn');
+  if (navFiyatBtn) navFiyatBtn.style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-borc-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   document.getElementById('nav-acikhesap-btn').style.display = (currentRole === 'admin') ? 'block' : 'none';
   const mergeProductsBtn = document.getElementById('merge-products-btn');
