@@ -4023,7 +4023,7 @@ function renderDuplicateReceiptDetail() {
   box.innerHTML = itemsTable + receiptChoices;
 }
 
-async function reverseWholesalerDebtForReceipt(rec, receiptId) {
+async function reverseWholesalerDebtForReceipt(rec, receiptId, reverseLabel) {
   if(!rec.addedToDebt || !rec.wholesalerKey || !rec.total) return;
   const wKey = rec.wholesalerKey;
   await dbWholesalers.child(wKey).child('balance').transaction(cur => (cur || 0) + (Number(rec.total)||0));
@@ -4039,13 +4039,188 @@ async function reverseWholesalerDebtForReceipt(rec, receiptId) {
       await dbWholesalers.child(wKey).child('transactions').child(matchKey).remove();
     } else {
       await dbWholesalers.child(wKey).child('transactions').push({
-        desc: 'Mükerrer Fiş İptali (Düzeltme): ' + (rec.fisNo || receiptId),
+        desc: (reverseLabel || 'Mükerrer Fiş İptali (Düzeltme)') + ': ' + (rec.fisNo || receiptId),
         amount: Number(rec.total)||0,
         type: 'odeme',
         date: new Date().toLocaleString('tr-TR')
       });
     }
   } catch(e) { console.error(e); }
+}
+
+
+// ============================================================
+// KAYITLI MALZEME FİŞİNİ SİLME (sadece yönetici)
+// Seçenekler: stok miktarlarını geri al · toptancı borcunu/ekstre satırını düzelt · sadece bu fişle açılmış yeni ürün kartlarını sil.
+// Not: fişle güncellenmiş geliş/satış fiyatları, KDV ve kâr oranları geri alınmaz (önceki değerler fişte tutulmuyor).
+// ============================================================
+const __deletingReceipts = {};
+
+function deleteGoodsReceipt(receiptId) {
+  if (currentRole !== 'admin') { alert('Yetkiniz yok!'); return; }
+  const entry = globalPastReceipts[receiptId];
+  if (!entry) { alert('Fiş bulunamadı. Sayfayı yenileyip tekrar deneyin.'); return; }
+  if (__deletingReceipts[receiptId]) return;
+  const rec = entry.receiptData || {};
+  const items = rec.items || [];
+
+  // Bu fişte yeni açılmış ve başka hiçbir fişte geçmeyen, stoğu hâlâ bu fişin miktarına eşit olan ürün kartları
+  const usedElsewhere = new Set();
+  Object.keys(allGoodsReceiptsRaw || {}).forEach(d => {
+    const day = allGoodsReceiptsRaw[d] || {};
+    Object.keys(day).forEach(rid => {
+      if (rid === receiptId) return;
+      ((day[rid] && day[rid].items) || []).forEach(it => { if (it && it.code) usedElsewhere.add(it.code); });
+    });
+  });
+  const seen = new Set();
+  const newCards = items.filter(it => {
+    if (!it || !it.code || seen.has(it.code)) return false;
+    seen.add(it.code);
+    const p = productsData[it.code];
+    return (it.isNew || it.justCreated) && p && !usedElsewhere.has(it.code) &&
+      Math.abs((Number(p.qty) || 0) - items.filter(x => x && x.code === it.code).reduce((s, x) => s + (Number(x.qty) || 0), 0)) < 0.001;
+  });
+
+  const canDebt = !!(rec.addedToDebt && rec.wholesalerKey && Number(rec.total) > 0);
+  const old = document.getElementById('receipt-delete-modal'); if (old) old.remove();
+  const m = document.createElement('div');
+  m.id = 'receipt-delete-modal';
+  m.className = 'modal-overlay';
+  m.style.display = 'flex';
+  m.innerHTML = `
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeReceiptDeleteModal()">X</button>
+      <h3 style="margin-top:0; font-family:'Oswald';">🗑️ Malzeme Fişini Sil</h3>
+      <div style="font-size:13px; margin-bottom:10px; padding:10px; background:#F8FAFC; border-radius:8px;">
+        <b>${wsFilterEsc(rec.wholesalerName || 'Toptancı')}</b> — ${wsFilterEsc(entry.date)} ${wsFilterEsc(rec.time || '')}<br>
+        ${rec.fisNo ? '📄 ' + wsFilterEsc(rec.fisNo) + ' · ' : ''}${items.length} kalem · <b>₺${formatMoney(rec.total || 0)}</b>
+      </div>
+      <label style="display:flex; gap:8px; align-items:flex-start; text-transform:none; margin:0 0 10px; font-size:13px;">
+        <input type="checkbox" id="rd-stock" checked style="width:auto; margin-top:3px;">
+        <span><b>Stok miktarlarını geri al</b><br><small style="color:var(--steel);">Her kalemin miktarı stoktan düşülür (stok 0'ın altına inmez). İşaretlemezseniz sadece fiş kaydı silinir, stoğa dokunulmaz.</small></span>
+      </label>
+      ${canDebt ? `
+      <label style="display:flex; gap:8px; align-items:flex-start; text-transform:none; margin:0 0 10px; font-size:13px;">
+        <input type="checkbox" id="rd-debt" checked style="width:auto; margin-top:3px;">
+        <span><b>Toptancı borcunu düzelt (₺${formatMoney(rec.total)})</b><br><small style="color:var(--steel);">Bu fiş borç olarak işlenmişti: bakiyeden düşülür ve ekstredeki "Malzeme Fişi" satırı kaldırılır.${rec.previousBalanceOnSlip != null ? ' Fişteki eski bakiye mutabakatı yapılmışsa o ekstre satırı kalır.' : ''}</small></span>
+      </label>` : `<div style="font-size:12px; color:var(--steel); margin-bottom:10px;">ℹ️ Bu fiş toptancı borcuna işlenmemiş; borca dokunulmaz.</div>`}
+      ${newCards.length ? `
+      <label style="display:flex; gap:8px; align-items:flex-start; text-transform:none; margin:0 0 10px; font-size:13px;">
+        <input type="checkbox" id="rd-cards" checked style="width:auto; margin-top:3px;">
+        <span><b>Bu fişle açılan ${newCards.length} yeni ürün kartını da sil</b><br><small style="color:var(--steel);">Sadece bu fişte geçen ve stoğu hâlâ fişteki miktara eşit ürünler: ${newCards.slice(0, 6).map(i => wsFilterEsc(i.name)).join(', ')}${newCards.length > 6 ? '…' : ''}</small></span>
+      </label>` : ''}
+      <div style="font-size:12px; color:#B45309; background:#FFFBEB; border:1px solid #FCD34D; border-radius:6px; padding:8px 10px; margin-bottom:12px;">
+        ⚠️ Fişle güncellenmiş geliş/satış fiyatı, KDV ve kâr oranları <b>geri alınmaz</b>. Bu işlem geri alınamaz.
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="btn btn-danger" id="rd-confirm-btn" style="width:auto;" onclick="confirmReceiptDelete('${wsFilterEsc(receiptId)}')">🗑️ Fişi Sil</button>
+        <button class="btn btn-dark" style="width:auto;" onclick="closeReceiptDeleteModal()">Vazgeç</button>
+      </div>
+    </div>`;
+  document.body.appendChild(m);
+  m.__newCards = newCards.map(i => i.code);
+}
+
+function closeReceiptDeleteModal() {
+  const m = document.getElementById('receipt-delete-modal');
+  if (m) m.remove();
+}
+
+async function confirmReceiptDelete(receiptId) {
+  if (currentRole !== 'admin') return;
+  const m = document.getElementById('receipt-delete-modal');
+  const entry = globalPastReceipts[receiptId];
+  if (!m || !entry || __deletingReceipts[receiptId]) return;
+  const rec = entry.receiptData || {};
+  const date = entry.date;
+  const opt = {
+    stock: !!(document.getElementById('rd-stock') || {}).checked,
+    debt: !!(document.getElementById('rd-debt') || {}).checked,
+    cards: !!(document.getElementById('rd-cards') || {}).checked
+  };
+  const cardCodes = new Set(opt.cards ? (m.__newCards || []) : []);
+  __deletingReceipts[receiptId] = true;
+  const btn = document.getElementById('rd-confirm-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Siliniyor...'; }
+
+  const problems = [];
+  const clamped = [];
+  let removedCards = 0, reversedItems = 0;
+  try {
+    // 1) Silinen fişin yedeği (veritabanı kuralı izin vermezse sessizce atlanır)
+    try {
+      await dbRoot.child('deleted_goods_receipts').child(receiptId).set({
+        deletedAt: new Date().toISOString(), deletedBy: getActorLabel(), date: date, receipt: JSON.parse(JSON.stringify(rec))
+      });
+    } catch (e) { console.warn('Silinen fiş yedeği yazılamadı:', e && e.message); }
+
+    // 2) Fiş kaydını ÖNCE sil: ara adımda hata olsa bile tekrar deneyince çifte geri alma olmaz
+    await dbGoodsReceipts.child(date).child(receiptId).remove();
+
+    // 3) Stok geri alma / ürün kartı silme
+    const qtyByCode = {};
+    (rec.items || []).forEach(it => {
+      if (!it || !it.code) return;
+      const q = Number(it.qty) || 0;
+      if (!qtyByCode[it.code]) qtyByCode[it.code] = { name: it.name, qty: 0 };
+      qtyByCode[it.code].qty += q;
+    });
+    for (const code of Object.keys(qtyByCode)) {
+      const info = qtyByCode[code];
+      try {
+        if (cardCodes.has(code)) {
+          await db.child(code).remove();
+          await dbProductImages.child(code).remove();
+          delete productsData[code];
+          removedCards++;
+          continue;
+        }
+        if (!opt.stock || !(info.qty > 0) || !productsData[code]) continue;
+        let applied = 0, was = 0;
+        const res = await db.child(code).child('qty').transaction(cur => {
+          if (cur === null) return cur;
+          was = Number(cur) || 0;
+          const next = Math.max(0, was - info.qty);
+          applied = was - next;
+          return next;
+        });
+        if (res && res.committed && applied > 0) {
+          if (productsData[code]) productsData[code].qty = (Number(productsData[code].qty) || 0) - applied;
+          logMovement(code, info.name, -applied, 'FİŞ SİLİNDİ: stok geri alındı (' + (rec.wholesalerName || 'toptancı') + ')');
+          reversedItems++;
+          if (applied + 0.0001 < info.qty) clamped.push(`${info.name} (fişte ${info.qty}, stokta ${was})`);
+        }
+      } catch (e) { problems.push(`${info.name}: ${(e && e.message) || e}`); }
+    }
+
+    // 4) Toptancı borcu / ekstre satırı
+    if (opt.debt) {
+      try { await reverseWholesalerDebtForReceipt(rec, receiptId, 'Fiş Silindi (Düzeltme)'); }
+      catch (e) { problems.push('Toptancı borcu düzeltilemedi: ' + ((e && e.message) || e)); }
+    }
+
+    dbNotifications.push({
+      text: `Malzeme Fişi SİLİNDİ: ${rec.wholesalerName || 'Toptancı'} (${date}${rec.fisNo ? ', ' + rec.fisNo : ''}, ₺${formatMoney(rec.total || 0)}).`,
+      time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }),
+      by: getActorLabel()
+    });
+
+    closeReceiptDeleteModal();
+    let msg = '🗑️ Fiş silindi.';
+    if (opt.stock) msg += ` ${reversedItems} kalemin stoğu geri alındı.`;
+    if (removedCards) msg += ` ${removedCards} yeni ürün kartı silindi.`;
+    showToast(msg);
+    if (clamped.length) alert('Bazı kalemlerde stok fişteki miktardan az olduğu için (arada satış yapılmış olabilir) stok 0\'a çekildi:\n\n' + clamped.join('\n'));
+    if (problems.length) alert('⚠️ Fiş silindi ancak bazı adımlar tamamlanamadı, lütfen kontrol edin:\n\n' + problems.join('\n'));
+    if (typeof renderGrid === 'function') renderGrid();
+  } catch (err) {
+    console.error(err);
+    alert('Fiş silinirken hata oluştu: ' + ((err && err.message) || err) + '\n\nBazı adımlar uygulanmış olabilir; lütfen fişler, stok ve toptancı bakiyesini kontrol edin.');
+    closeReceiptDeleteModal();
+  } finally {
+    delete __deletingReceipts[receiptId];
+  }
 }
 
 async function executeDuplicateReceiptMerge() {
