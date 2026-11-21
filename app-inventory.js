@@ -1738,12 +1738,7 @@ function printAllLabels() {
   const currentBaseUrl = window.location.href.split('?')[0];
 
   const search = document.getElementById('search').value.toLowerCase();
-  const toPrint = Object.values(productsData).filter(p => {
-    const pName = p.name ? p.name.toLowerCase() : '';
-    const pCat = p.category ? p.category.toLowerCase() : '';
-    const pCode = p.code ? p.code.toLowerCase() : '';
-    return (pName.includes(search) || pCat.includes(search) || pCode.includes(search));
-  });
+  const toPrint = Object.values(productsData).filter(p => productMatchesQuery(p, search));
 
   if(toPrint.length === 0) { alert("Yazdırılacak ürün bulunamadı!"); return; }
   if(toPrint.length > 50) { if(!confirm(`${toPrint.length} adet etiket yazdırılacak, onaylıyor musunuz?`)) return; }
