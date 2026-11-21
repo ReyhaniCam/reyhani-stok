@@ -1088,6 +1088,60 @@ async function saveExcelFile(wb, defaultFilename) {
   }
 }
 
+// ============================================================
+// ÇOK KELİMELİ, TÜRKÇE KARAKTER DUYARSIZ ÜRÜN ARAMASI
+// Yazılan her kelime, ürünün adı / ana grubu / kodu / barkodu / konumu / markası içinde HERHANGİ bir sırada ve
+// HERHANGİ bir yerde geçiyorsa ürün bulunur (ör. 5 kelimelik adın 1., 4. ve 5. kelimesini yazmak yeterli).
+// İ/I/ı/i, ş/s, ğ/g, ü/u, ö/o, ç/c farkı yok sayılır.
+// ============================================================
+function searchFoldTr(s) {
+  return String(s == null ? '' : s).toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ö/g, 'o').replace(/ç/g, 'c')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ').trim();
+}
+const __searchHayCache = new Map();
+function productSearchHay(p) {
+  const raw = [p.name, p.category, p.code, p.location, p.brand, p.barcode].map(v => v == null ? '' : v).join('\u0001');
+  const key = p.code || p.name || '';
+  const hit = __searchHayCache.get(key);
+  if (hit && hit.raw === raw) return hit;
+  const hay = searchFoldTr(raw.replace(/\u0001/g, ' '));
+  const o = { raw: raw, hay: hay, compact: hay.replace(/[^a-z0-9]/g, '') };
+  __searchHayCache.set(key, o);
+  return o;
+}
+function searchTokens(query) {
+  return searchFoldTr(query).split(' ').map(t => t.replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')).filter(Boolean);
+}
+function productMatchesQuery(p, query) {
+  const tokens = searchTokens(query);
+  if (!tokens.length) return true;
+  const h = productSearchHay(p);
+  return tokens.every(t => {
+    if (h.hay.includes(t)) return true;
+    const tc = t.replace(/[^a-z0-9]/g, '');   // "m6x20" ↔ "M6 x 20" gibi boşluk/işaret farkları
+    return tc.length >= 3 && h.compact.includes(tc);
+  });
+}
+function productSearchScore(p, query) {
+  const q = searchFoldTr(query), name = searchFoldTr(p.name || '');
+  let s = 0;
+  if (name === q) s += 5; else if (name.startsWith(q)) s += 4; else if (name.includes(q)) s += 3;
+  const words = name.split(' ');
+  searchTokens(query).forEach(t => { if (words.some(w => w.startsWith(t))) s += 1; });
+  return s;
+}
+// Eşleşen ürünleri alakaya göre sıralı döndürür
+function searchProducts(query, limit) {
+  const out = [];
+  Object.values(productsData || {}).forEach(p => {
+    if (p && productMatchesQuery(p, query)) out.push({ p: p, s: productSearchScore(p, query) });
+  });
+  out.sort((a, b) => b.s - a.s || String(a.p.name || '').localeCompare(String(b.p.name || ''), 'tr'));
+  return (limit ? out.slice(0, limit) : out).map(o => o.p);
+}
+
 function formatMoney(amount) {
   return Number(amount).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -1877,7 +1931,7 @@ function renderCommandPaletteResults() {
   // Ürün araması: sadece anlamlı bir sorgu varken (3600+ ürünü boşken listelememek için)
   if (q && q.length >= 2) {
     const all = Object.values(productsData || {});
-    const productMatches = all.filter(p => normalizeProductName((p.name || '') + ' ' + (p.code || '')).includes(q)).slice(0, 8);
+    const productMatches = searchProducts(q, 8);
 
     if (productMatches.length > 0) {
       html += `<div class="cmdk-section-title">Ürünler</div>`;
