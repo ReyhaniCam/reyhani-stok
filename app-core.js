@@ -1326,6 +1326,7 @@ registerDbListener('private', dbGoodsReceipts, snapshot => {
                  <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
                    <button class="btn btn-warning btn-sm" style="width:auto;" onclick="openReceiptEditModal('${receiptId}')">✏️ Listeyi Düzenle</button>
                    <button class="btn btn-info btn-sm" onclick="downloadReceiptById('${receiptId}')">İndir (Excel)</button>
+                   <button class="btn btn-danger btn-sm" style="width:auto;" onclick="deleteGoodsReceipt('${receiptId}')">🗑️ Fişi Sil</button>
                  </div>
                  ${rec.lastEditedAt ? `<div style="font-size:9px; color:var(--steel); margin-top:4px;">✏️ Düzenlendi (${rec.lastEditedBy || '-'})</div>` : ''}
               </div>
