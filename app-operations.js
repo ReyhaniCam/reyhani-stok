@@ -4936,8 +4936,16 @@ async function saveReceiptEdit() {
     }
 
     // 2) Değişen/eklenen alış fiyatlarını güncel maliyet olarak stoğa yansıt.
+    // Koruma: stoktaki geliş fiyatı bu fişin ESKİ fiyatından farklıysa (sonradan başka fişle/elle güncellenmiş)
+    // daha yeni bilgiyi ezmeyiz.
+    let skippedCost = 0;
     newItems.forEach(it => {
-      if(it.cost > 0) db.child(it.code).child('costPrice').set(it.cost);
+      if(!(it.cost > 0)) return;
+      const cur = Number(productsData[it.code] && productsData[it.code].costPrice) || 0;
+      const oldIt = oldItems.find(o => o.code === it.code);
+      const oldCost = oldIt ? (Number(oldIt.cost) || 0) : 0;
+      if(cur > 0 && oldIt && Math.abs(cur - oldCost) > 0.005 && Math.abs(cur - it.cost) > 0.005) { skippedCost++; return; }
+      db.child(it.code).child('costPrice').set(it.cost);
     });
 
     // 2b) "Fiyat/kâr güncelle" işaretlenmiş mevcut ürünler için KDV/kâr/satış fiyatını da stoğa yansıt.
@@ -4987,7 +4995,7 @@ async function saveReceiptEdit() {
       by: editedBy // hangi cihazdan/kim tarafından yapıldığı
     });
 
-    showToast("Fiş güncellendi, stok ve bakiye farka göre düzeltildi!");
+    showToast("Fiş güncellendi, stok ve bakiye farka göre düzeltildi!" + (skippedCost ? " (" + skippedCost + " ürünün stoktaki geliş fiyatı daha yeni olduğu için ezilmedi)" : ""));
     closeReceiptEditModal();
   } catch(err) {
     alert("Fiş güncellenirken hata oluştu: " + (err.message || err));
@@ -6556,4 +6564,161 @@ function renderKatalogSearchGroup(baseKey, baseLabel, items, kind) {
       ${isOpen ? `<div style="margin-top:4px;">${items.map(p => renderKatalogSearchRow(p, kind)).join('')}</div>` : ''}
     </div>
   `;
+}
+
+
+// ============================================================
+// FİŞ DÜZENLEME — TOPLU FİYAT DÜZELTME
+// Eski listeden girilmiş fiyatları: (1) yeni fiyat listesi (Excel/CSV) ile eşleştirerek ya da
+// (2) % zam/indirimle düzeltir; satış fiyatını alış + KDV + kâr ile yeniden hesaplar.
+// Sadece receiptEditItems'ı değiştirir; stoğa/borca yazma işi mevcut saveReceiptEdit()'te kalır.
+// ============================================================
+let reBulkFileRows = null;
+let reBulkPlan = [];
+
+function reBulkEsc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function reBulkNum(id) { const el = document.getElementById(id); return el ? parseTrNumber(el.value) : null; }
+
+function reBulkLoadFile(input) {
+  const f = input.files && input.files[0];
+  const st = document.getElementById('re-bulk-file-status');
+  const mapBox = document.getElementById('re-bulk-map');
+  reBulkFileRows = null; mapBox.style.display = 'none'; mapBox.innerHTML = ''; st.textContent = '';
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+      if (!rows.length) { st.style.color = 'var(--rust)'; st.textContent = 'Dosyada okunacak satır bulunamadı.'; return; }
+      reBulkFileRows = rows;
+      const headers = Object.keys(rows[0]);
+      const g = (arr) => guessColumnForField(headers, arr);
+      const bSel = g(['barkod', 'barcode', 'ean', 'stok kodu', 'ürün kodu', 'urun kodu', 'kod']);
+      const nSel = g(['ürün adı', 'urun adi', 'ürün ismi', 'urun ismi', 'stok adı', 'stok adi', 'malzeme', 'açıklama', 'aciklama', 'isim', 'ad']);
+      const pSel = g(['alış fiyat', 'alis fiyat', 'liste fiyat', 'birim fiyat', 'geliş', 'gelis', 'fiyat', 'price']);
+      const opts = (sel) => '<option value="">— yok —</option>' + headers.map(h => `<option value="${reBulkEsc(h)}" ${h === sel ? 'selected' : ''}>${reBulkEsc(h)}</option>`).join('');
+      mapBox.innerHTML = `<div class="form-row" style="grid-template-columns:repeat(3,1fr); margin-bottom:0;">
+        <div><label>Barkod / Kod sütunu</label><select id="re-bulk-col-barcode">${opts(bSel)}</select></div>
+        <div><label>Ürün adı sütunu</label><select id="re-bulk-col-name">${opts(nSel)}</select></div>
+        <div><label>Yeni alış fiyatı sütunu *</label><select id="re-bulk-col-price">${opts(pSel)}</select></div>
+      </div>`;
+      mapBox.style.display = 'block';
+      st.style.color = 'var(--success)'; st.textContent = `✔ ${rows.length} satır okundu. Sütunları kontrol edip Önizle'ye basın.`;
+    } catch (err) { st.style.color = 'var(--rust)'; st.textContent = 'Dosya okunamadı: ' + (err.message || err); }
+  };
+  reader.readAsArrayBuffer(f);
+}
+
+function reBulkBuildPlan() {
+  const colV = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const bc = colV('re-bulk-col-barcode'), nc = colV('re-bulk-col-name'), pc = colV('re-bulk-col-price');
+  const useFile = !!(reBulkFileRows && pc && (bc || nc));
+  const disc = Math.min(100, Math.max(0, reBulkNum('re-bulk-disc') || 0));
+  const adj = reBulkNum('re-bulk-adj');
+  const vatIn = reBulkNum('re-bulk-vat');
+  const profIn = reBulkNum('re-bulk-profit');
+  const doSale = !!document.getElementById('re-bulk-sale').checked;
+
+  const byBar = {}, byName = {};
+  if (useFile) {
+    reBulkFileRows.forEach(r => {
+      const price = parseTrNumber(r[pc]);
+      if (price === null || price <= 0) return;
+      if (bc) { const b = fisNormBarcode(r[bc]).toUpperCase(); if (b) { byBar[b] = price; byBar[b.replace(/^0+/, '')] = price; } }
+      if (nc) { const n = normalizeTr(String(r[nc] || '')); if (n) byName[n] = price; }
+    });
+  }
+
+  return receiptEditItems.map((it, idx) => {
+    const p = it.code ? productsData[it.code] : null;
+    const oldCost = Number(it.cost) || 0;
+    let newCost = oldCost, note = '', matched = false;
+    let listPrice = null;
+    if (useFile) {
+      const keys = [it.code, p && p.barcode].filter(Boolean).map(k => fisNormBarcode(k).toUpperCase());
+      for (const k of keys) {
+        if (byBar[k] !== undefined) { listPrice = byBar[k]; break; }
+        const sk = k.replace(/^0+/, '');
+        if (sk && byBar[sk] !== undefined) { listPrice = byBar[sk]; break; }
+      }
+      if (listPrice === null) { const n = normalizeTr(it.name || ''); if (n && byName[n] !== undefined) listPrice = byName[n]; }
+    }
+    if (listPrice !== null) { newCost = fisRound(listPrice * (1 - disc / 100), 4); matched = true; note = 'listeden'; }
+    else if (adj !== null && adj !== 0 && oldCost > 0) { newCost = fisRound(oldCost * (1 + adj / 100), 4); matched = true; note = '% değişim'; }
+    else if (useFile) note = '⚠ listede eşleşmedi';
+
+    const vat = vatIn !== null ? vatIn : ((it.vat != null && it.vat !== '') ? Number(it.vat) : ((p && p.vat != null && p.vat !== '') ? Number(p.vat) : 0));
+    const prof = profIn !== null ? profIn : ((it.targetProfit != null && it.targetProfit !== '') ? Number(it.targetProfit) : ((p && p.targetProfit != null && p.targetProfit !== '') ? Number(p.targetProfit) : null));
+    let newSale = null;
+    if (doSale && matched && prof !== null && newCost > 0) newSale = fisRound(newCost * (1 + vat / 100) * (1 + prof / 100), 2);
+    else if (doSale && matched && prof === null) note += (note ? ' · ' : '') + 'kâr % yok, satış değişmedi';
+    if (Number(it.discount) > 0 && matched) note += (note ? ' · ' : '') + '⚠ ₺ iskonto var, kontrol edin';
+
+    const curSale = p ? (Number(p.price) || 0) : (Number(it.price) || 0);
+    const changed = matched && (Math.abs(newCost - oldCost) > 0.00001 || (newSale !== null && Math.abs(newSale - curSale) > 0.004));
+    return { idx, name: it.name, oldCost, newCost, curSale, newSale, vat, prof, changed, note };
+  });
+}
+
+function reBulkPreview() {
+  const box = document.getElementById('re-bulk-preview');
+  const btn = document.getElementById('re-bulk-apply-btn');
+  if (!receiptEditItems.length) { box.innerHTML = '<p style="font-size:12px; color:var(--rust);">Fişte kalem yok.</p>'; btn.style.display = 'none'; return; }
+  const noFileChosen = reBulkFileRows && !document.getElementById('re-bulk-col-price')?.value;
+  if (noFileChosen) { box.innerHTML = '<p style="font-size:12px; color:var(--rust);">Lütfen yeni alış fiyatı sütununu seçin.</p>'; btn.style.display = 'none'; return; }
+
+  reBulkPlan = reBulkBuildPlan();
+  const changed = reBulkPlan.filter(x => x.changed);
+  if (!changed.length) {
+    box.innerHTML = '<p style="font-size:12px; color:var(--rust);">Değişecek kalem bulunamadı. Fiyat listesi yükleyin veya % zam/indirim girin.</p>' +
+      (reBulkPlan.some(x => x.note.includes('eşleşmedi')) ? '<p style="font-size:11px; color:var(--steel);">Eşleşmeyen kalemler için barkod/ad sütunlarını kontrol edin.</p>' : '');
+    btn.style.display = 'none'; return;
+  }
+  let oldSum = 0, newSum = 0;
+  reBulkPlan.forEach(x => {
+    const it = receiptEditItems[x.idx], q = Number(it.qty) || 0, d = Number(it.discount) || 0;
+    oldSum += Math.max(0, q * x.oldCost - d);
+    newSum += Math.max(0, q * (x.changed ? x.newCost : x.oldCost) - d);
+  });
+  const unmatched = reBulkPlan.filter(x => x.note.includes('eşleşmedi')).length;
+  const rowsHtml = reBulkPlan.map(x => {
+    const col = x.changed ? '' : 'opacity:.55;';
+    const costTxt = x.changed ? `₺${formatMoney(x.oldCost)} → <b>₺${formatMoney(x.newCost)}</b>` : `₺${formatMoney(x.oldCost)}`;
+    const saleTxt = x.newSale !== null ? `₺${formatMoney(x.curSale)} → <b>₺${formatMoney(x.newSale)}</b>` : `₺${formatMoney(x.curSale)}`;
+    return `<tr style="border-top:1px solid var(--steel-line); ${col}">
+      <td style="padding:4px;"><input type="checkbox" id="re-bulk-chk-${x.idx}" ${x.changed ? 'checked' : 'disabled'} style="width:auto;"></td>
+      <td style="padding:4px;">${reBulkEsc(x.name)}</td>
+      <td style="padding:4px; font-family:'IBM Plex Mono'; white-space:nowrap;">${costTxt}</td>
+      <td style="padding:4px; font-family:'IBM Plex Mono'; white-space:nowrap;">${saleTxt}</td>
+      <td style="padding:4px; font-size:10px; color:var(--steel);">${reBulkEsc(x.note)}</td></tr>`;
+  }).join('');
+  box.innerHTML = `<p style="font-size:12px; margin:0 0 6px;"><b>${changed.length}</b> kalem değişecek${unmatched ? `, <span style="color:var(--rust);">${unmatched} kalem eşleşmedi</span>` : ''}.
+      Fiş toplamı: ₺${formatMoney(oldSum)} → <b>₺${formatMoney(newSum)}</b> (fark ${newSum - oldSum >= 0 ? '+' : '−'}₺${formatMoney(Math.abs(newSum - oldSum))}).</p>
+    <div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; font-size:11px;">
+      <tr style="text-align:left; background:var(--bg);"><th style="padding:4px;"></th><th style="padding:4px;">Ürün</th><th style="padding:4px;">Alış (fiş)</th><th style="padding:4px;">Satış (stokta)</th><th style="padding:4px;">Not</th></tr>${rowsHtml}</table></div>`;
+  btn.style.display = 'inline-block';
+}
+
+function reBulkApply() {
+  if (!reBulkPlan.length) return;
+  let n = 0;
+  reBulkPlan.forEach(pl => {
+    const chk = document.getElementById('re-bulk-chk-' + pl.idx);
+    if (!pl.changed || !chk || !chk.checked) return;
+    const it = receiptEditItems[pl.idx]; if (!it) return;
+    it.cost = pl.newCost;
+    it.total = fisRound(Math.max(0, (Number(it.qty) || 0) * it.cost - (Number(it.discount) || 0)), 2);
+    if (pl.newSale !== null) {
+      it.vat = pl.vat; it.targetProfit = pl.prof;
+      if (it.isNew) { it.price = pl.newSale; }
+      else { it.newPrice = pl.newSale; it.updatePrices = true; }
+    }
+    n++;
+  });
+  reBulkPlan = [];
+  document.getElementById('re-bulk-preview').innerHTML = '';
+  document.getElementById('re-bulk-apply-btn').style.display = 'none';
+  renderReceiptEditItems();
+  showToast(`${n} kalem listeye işlendi. Stoğa ve borca yazmak için en alttaki "Değişiklikleri Kaydet"e basın.`);
 }
