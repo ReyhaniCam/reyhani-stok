@@ -1395,6 +1395,33 @@
     <h4 style="font-family:'Oswald'; font-size:14px; margin:16px 0 8px; color:var(--charcoal); border-bottom:2px solid var(--steel-line); padding-bottom:6px;">Fiş Kalemleri</h4>
     <div id="re-items-list" style="margin:0 0 20px;"></div>
 
+    <details id="re-bulk-box" style="margin:0 0 20px; background:#FFF7E0; border:1px solid #E0A800; border-radius:6px; padding:10px 12px;">
+      <summary style="cursor:pointer; font-weight:700; font-size:13px;">💲 Toplu Fiyat Düzeltme <span style="font-weight:400; font-size:11px; color:var(--steel);">(eski listeden girilmiş fiyatları tek seferde yenile)</span></summary>
+      <div style="margin-top:10px; font-size:11px; color:var(--steel); line-height:1.5;">
+        Yöntem 1: Toptancının <b>güncel fiyat listesini</b> (Excel/CSV) yükleyin; kalemler barkod/koda veya ada göre eşleşip alış fiyatı otomatik gelir.<br>
+        Yöntem 2: Dosya olmadan, tüm alış fiyatlarına <b>% zam/indirim</b> uygulayın. Her iki yöntemde de satış fiyatı KDV + kâr oranıyla yeniden hesaplanabilir.
+        Önce <b>Önizle</b>, kontrol edin, sonra <b>Listeye İşle</b>; en altta <b>Değişiklikleri Kaydet</b>'e basana kadar hiçbir şey stoğa/borca yazılmaz.
+      </div>
+      <div style="margin-top:10px;"><input type="file" accept=".xlsx,.xls,.csv" onchange="reBulkLoadFile(this)"></div>
+      <div id="re-bulk-file-status" style="font-size:11px; margin-top:4px;"></div>
+      <div id="re-bulk-map" style="display:none; margin-top:8px;"></div>
+      <div class="form-row" style="grid-template-columns:repeat(4,1fr); margin-top:12px;">
+        <div><label>Liste fiyatından iskonto %</label><input type="number" id="re-bulk-disc" step="0.01" placeholder="0"></div>
+        <div><label>% zam (+) / indirim (−) <span style="text-transform:none; font-size:9px;">(listede olmayan kalemlere)</span></label><input type="number" id="re-bulk-adj" step="0.01" placeholder="Örn: 8"></div>
+        <div><label>KDV % <span style="text-transform:none; font-size:9px;">(boş = ürünün kendi KDV'si)</span></label><input type="number" id="re-bulk-vat" step="0.01" placeholder="Örn: 20"></div>
+        <div><label>Kâr % <span style="text-transform:none; font-size:9px;">(boş = ürünün kendi kârı)</span></label><input type="number" id="re-bulk-profit" step="0.01" placeholder="Örn: 25"></div>
+      </div>
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:10px;">
+        <input type="checkbox" id="re-bulk-sale" checked style="width:auto;">
+        <label style="margin:0; text-transform:none; font-size:11px;">Satış fiyatını da yeniden hesapla (alış + KDV + kâr) ve stokta güncelle</label>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-dark btn-sm" style="width:auto;" onclick="reBulkPreview()">🔍 Önizle</button>
+        <button type="button" class="btn btn-success btn-sm" id="re-bulk-apply-btn" style="width:auto; display:none;" onclick="reBulkApply()">✔ Seçilenleri Listeye İşle</button>
+      </div>
+      <div id="re-bulk-preview" style="margin-top:12px;"></div>
+    </details>
+
     <h4 style="font-family:'Oswald'; font-size:14px; margin:0 0 8px; color:var(--charcoal); border-bottom:2px solid var(--steel-line); padding-bottom:6px;">Kaleme Ekle</h4>
     <div class="form-row" style="grid-template-columns: 2fr 1fr 1fr;">
       <div>
