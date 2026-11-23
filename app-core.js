@@ -1294,7 +1294,7 @@ function toggleQR(code) {
   const isHidden = box.classList.contains('hidden');
   if (isHidden && box.childElementCount === 0) {
     const currentBaseUrl = window.location.href.split('?')[0];
-    new QRCode(box, { text: `${currentBaseUrl}?item=${code}`, width: 68, height: 68 });
+    new QRCode(box, { text: `${currentBaseUrl}?item=${code}`, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
   }
   box.classList.toggle('hidden');
 }
