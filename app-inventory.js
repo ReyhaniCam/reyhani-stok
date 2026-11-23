@@ -1647,7 +1647,7 @@ function printQR(code) {
     </div>
   `;
   
-  new QRCode(document.getElementById(`print-qr-${p.code}`), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128 });
+  new QRCode(document.getElementById(`print-qr-${p.code}`), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
   
   document.body.className = 'printing-label';
   setTimeout(() => {
@@ -1755,7 +1755,7 @@ function printAllLabels() {
       </div>
     `;
     printArea.appendChild(div);
-    new QRCode(div.querySelector('.sticker-qr'), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128 });
+    new QRCode(div.querySelector('.sticker-qr'), { text: `${currentBaseUrl}?item=${p.code}`, width: 128, height: 128, correctLevel: QRCode.CorrectLevel.M });
   });
 
   document.body.className = 'printing-label';
@@ -1786,30 +1786,73 @@ async function exportBackup() {
 // QR SCANNER
 // ============================================================
 
+// Okunan metinden ürün kodunu çıkarır: QR ise "...?item=KOD" (URL-encoded olabilir, sonunda &/# olabilir),
+// barkod ise düz sayı/metin. Boşluk/görünmez karakterleri temizler.
+function extractScannedCode(text) {
+  let t = String(text || '').trim();
+  const m = t.match(/[?&]item=([^&#]*)/i);
+  if (m) { t = m[1]; try { t = decodeURIComponent(t); } catch (e) {} }
+  return fisNormBarcode(t);
+}
+
+// Bulma sırası: ürün kodu → büyük harf → ürüne kayıtlı "barcode" alanı → başındaki sıfır farkı (UPC-A/EAN-13)
+function findProductForScan(code) {
+  if (!code) return null;
+  return productsData[code] || productsData[code.toUpperCase()] || fisFindProductByBarcode(code) || null;
+}
+
+let _scanBusy = false;
 function startScanner() {
-  if(html5QrcodeScanner) return;
-  html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false);
-  html5QrcodeScanner.render((text) => {
-    let code = text;
-    if(text.includes('?item=')) {
-      code = text.split('?item=')[1];
-    }
-    document.getElementById('scan-result').innerHTML = `<p style="color:var(--success);font-weight:bold;">Okundu: ${code}</p>`;
-    
-    if (productsData[code]) {
-      switchTab('stok');
-      document.getElementById('search').value = code;
-      renderGrid();
-    } else {
-      document.getElementById('scan-result').innerHTML += `<p style="color:var(--rust);">Ürün sistemde bulunamadı.</p>`;
-    }
-  }, (err) => {});
+  if (html5QrcodeScanner) return;
+  html5QrcodeScanner = new Html5Qrcode("reader");
+  _scanBusy = false;
+  let last = '', count = 0;
+  const F = Html5QrcodeSupportedFormats;
+  html5QrcodeScanner.start(
+    { facingMode: "environment" },
+    {
+      fps: 10,
+      qrbox: { width: 280, height: 160 },   // 1D barkod için yatay dikdörtgen; QR de bu alanda okunur
+      formatsToSupport: [F.QR_CODE, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39],
+      videoConstraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+    },
+    (decodedText, decodedResult) => {
+      if (_scanBusy) return;
+      const raw = String(decodedText || '').trim();
+      if (!raw) return;
+      const fmt = (decodedResult && decodedResult.result && decodedResult.result.format && decodedResult.result.format.formatName) || '';
+      // Yanlış/eksik okunan EAN-UPC'leri ele (kontrol basamağı) ve 1D barkodda aynı değeri 2 kez bekle
+      if (/^(EAN_13|EAN_8|UPC_A)$/.test(fmt) && !isValidGtinChecksum(raw)) { last = ''; count = 0; return; }
+      if (fmt !== 'QR_CODE') {
+        if (raw === last) count++; else { last = raw; count = 1; }
+        if (count < 2) return;
+      }
+      _scanBusy = true;
+      const code = extractScannedCode(raw);
+      const box = document.getElementById('scan-result');
+      const prod = findProductForScan(code);
+      if (prod) {
+        box.innerHTML = `<p style="color:var(--success);font-weight:bold;">Okundu: ${code} → ${prod.name}</p>`;
+        switchTab('stok');
+        document.getElementById('search').value = prod.code;
+        renderGrid();
+      } else {
+        box.innerHTML = `<p style="color:var(--rust);font-weight:bold;">Okundu: ${code}</p><p style="color:var(--rust);">Ürün sistemde bulunamadı (bu barkod hiçbir ürüne tanımlı değil).</p>`;
+        setTimeout(() => { _scanBusy = false; last = ''; count = 0; }, 1500);
+      }
+    },
+    () => {}
+  ).catch((err) => {
+    html5QrcodeScanner = null;
+    document.getElementById('scan-result').innerHTML = `<p style="color:var(--rust);">Kamera açılamadı: ${err}</p>`;
+  });
 }
 
 function stopScanner() {
-  if(html5QrcodeScanner) {
-    html5QrcodeScanner.clear().catch(e => console.error(e));
+  if (html5QrcodeScanner) {
+    const sc = html5QrcodeScanner;
     html5QrcodeScanner = null;
+    sc.stop().then(() => sc.clear()).catch(() => {});
   }
 }
 
